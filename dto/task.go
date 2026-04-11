@@ -34,6 +34,7 @@ type TaskDto struct {
 	CreatedAt  int64           `json:"created_at"`
 	UpdatedAt  int64           `json:"updated_at"`
 	TaskID     string          `json:"task_id"`
+	RequestID  string          `json:"request_id,omitempty"`
 	Platform   string          `json:"platform"`
 	UserId     int             `json:"user_id"`
 	Group      string          `json:"group"`
@@ -54,4 +55,14 @@ type TaskDto struct {
 
 type FetchReq struct {
 	IDs []string `json:"ids"`
+}
+
+type ResolveTaskRequest struct {
+	TaskIDs        []string `json:"task_ids"`
+	RequestIDs     []string `json:"request_ids"`
+	Action         string   `json:"action,omitempty"`
+	MediaType      string   `json:"media_type,omitempty"`
+	StartTimestamp int64    `json:"start_timestamp,omitempty"`
+	EndTimestamp   int64    `json:"end_timestamp,omitempty"`
+	Limit          int      `json:"limit,omitempty"`
 }

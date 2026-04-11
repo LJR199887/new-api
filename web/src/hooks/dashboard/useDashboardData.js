@@ -85,6 +85,25 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const now = new Date();
   const isAdminUser = isAdmin();
 
+  const normalizeStaleTimestamp = useCallback((value) => {
+    const text = typeof value === 'string' ? value.trim() : '';
+    return text ? text.slice(0, 16) : '';
+  }, []);
+
+  const buildDashboardStaleKey = useCallback(
+    (scope, extra = {}) =>
+      [
+        'dashboard',
+        scope,
+        isAdminUser ? 'admin' : 'user',
+        extra.username || '',
+        normalizeStaleTimestamp(extra.start_timestamp),
+        normalizeStaleTimestamp(extra.end_timestamp),
+        extra.defaultTime || '',
+      ].join(':'),
+    [isAdminUser, normalizeStaleTimestamp],
+  );
+
   // ========== Panel enable flags ==========
   const apiInfoEnabled = statusState?.status?.api_info_enabled ?? true;
   const announcementsEnabled =
@@ -170,7 +189,15 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         url = `/api/data/self/?start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&default_time=${dataExportDefaultTime}`;
       }
 
-      const res = await API.get(url);
+      const res = await API.get(url, {
+        skipErrorHandler: true,
+        staleCacheKey: buildDashboardStaleKey('quota', {
+          username,
+          start_timestamp,
+          end_timestamp,
+          defaultTime: dataExportDefaultTime,
+        }),
+      });
       const { success, message, data } = res.data;
       if (success) {
         setQuotaData(data);
@@ -188,6 +215,11 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         showError(message);
         return [];
       }
+    } catch (error) {
+      if (error?.response?.status !== 429) {
+        showError(error.message);
+      }
+      return [];
     } finally {
       setLoading(false);
     }
@@ -196,7 +228,10 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const loadUptimeData = useCallback(async () => {
     setUptimeLoading(true);
     try {
-      const res = await API.get('/api/uptime/status');
+      const res = await API.get('/api/uptime/status', {
+        skipErrorHandler: true,
+        staleCacheKey: buildDashboardStaleKey('uptime'),
+      });
       const { success, message, data } = res.data;
       if (success) {
         setUptimeData(data || []);
@@ -207,19 +242,30 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         showError(message);
       }
     } catch (err) {
-      console.error(err);
+      if (err?.response?.status !== 429) {
+        console.error(err);
+      }
     } finally {
       setUptimeLoading(false);
     }
   }, [activeUptimeTab]);
 
   const getUserData = useCallback(async () => {
-    let res = await API.get(`/api/user/self`);
-    const { success, message, data } = res.data;
-    if (success) {
-      userDispatch({ type: 'login', payload: data });
-    } else {
-      showError(message);
+    try {
+      let res = await API.get(`/api/user/self`, {
+        skipErrorHandler: true,
+        staleCacheKey: buildDashboardStaleKey('user-self'),
+      });
+      const { success, message, data } = res.data;
+      if (success) {
+        userDispatch({ type: 'login', payload: data });
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      if (error?.response?.status !== 429) {
+        showError(error.message);
+      }
     }
   }, [userDispatch]);
 

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -97,10 +99,11 @@ func (m Properties) Value() (driver.Value, error) {
 }
 
 type TaskPrivateData struct {
-	Key            string `json:"key,omitempty"`
-	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
-	RequestId      string `json:"request_id,omitempty"`
-	ResultURL      string `json:"result_url,omitempty"` // 任务成功后的结果 URL（视频地址等）
+	Key             string `json:"key,omitempty"`
+	UpstreamTaskID  string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
+	RequestId       string `json:"request_id,omitempty"`
+	ClientRequestId string `json:"client_request_id,omitempty"`
+	ResultURL       string `json:"result_url,omitempty"` // 任务成功后的结果 URL（视频地址等）
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
 	BillingSource  string              `json:"billing_source,omitempty"`  // "wallet" 或 "subscription"
 	SubscriptionId int                 `json:"subscription_id,omitempty"` // 订阅 ID，用于订阅退款
@@ -134,6 +137,13 @@ func (t *Task) GetResultURL() string {
 		return t.PrivateData.ResultURL
 	}
 	return t.FailReason
+}
+
+func (t *Task) GetRequestID() string {
+	if requestID := strings.TrimSpace(t.PrivateData.ClientRequestId); requestID != "" {
+		return requestID
+	}
+	return strings.TrimSpace(t.PrivateData.RequestId)
 }
 
 // GenerateTaskID 生成对外暴露的 task_xxxx 格式 ID
@@ -345,6 +355,95 @@ func GetByTaskIds(userId int, taskIds []any) ([]*Task, error) {
 		return nil, err
 	}
 	return task, nil
+}
+
+func TaskGetUserTasksByIdentifiers(userId int, taskIDs []string, requestIDs []string, queryParams SyncTaskQueryParams, limit int) []*Task {
+	_ = queryParams
+	resultMap := make(map[string]*Task)
+
+	appendTask := func(task *Task) {
+		if task == nil {
+			return
+		}
+		taskID := strings.TrimSpace(task.TaskID)
+		if taskID == "" {
+			return
+		}
+		if _, exists := resultMap[taskID]; exists {
+			return
+		}
+		resultMap[taskID] = task
+	}
+
+	normalizedTaskIDs := make([]string, 0, len(taskIDs))
+	for _, taskID := range taskIDs {
+		trimmed := strings.TrimSpace(taskID)
+		if trimmed != "" {
+			normalizedTaskIDs = append(normalizedTaskIDs, trimmed)
+		}
+	}
+
+	if len(normalizedTaskIDs) > 0 {
+		var exactTasks []*Task
+		if err := DB.Where("user_id = ?", userId).
+			Where("task_id IN ?", normalizedTaskIDs).
+			Find(&exactTasks).Error; err == nil {
+			for _, task := range exactTasks {
+				appendTask(task)
+			}
+		}
+	}
+
+	normalizedRequestIDs := make(map[string]struct{}, len(requestIDs))
+	for _, requestID := range requestIDs {
+		trimmed := strings.TrimSpace(requestID)
+		if trimmed != "" {
+			normalizedRequestIDs[trimmed] = struct{}{}
+		}
+	}
+
+	if len(normalizedRequestIDs) > 0 {
+		if limit <= 0 {
+			limit = 2000
+		} else if limit < 2000 {
+			limit = 2000
+		}
+		var requestTasks []*Task
+		if err := DB.Where("user_id = ?", userId).
+			Order("id desc").
+			Limit(limit).
+			Find(&requestTasks).Error; err == nil {
+			for _, task := range requestTasks {
+				candidateRequestIDs := []string{
+					strings.TrimSpace(task.PrivateData.ClientRequestId),
+					strings.TrimSpace(task.PrivateData.RequestId),
+				}
+				matched := false
+				for _, requestID := range candidateRequestIDs {
+					if requestID == "" {
+						continue
+					}
+					if _, ok := normalizedRequestIDs[requestID]; ok {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+				appendTask(task)
+			}
+		}
+	}
+
+	result := make([]*Task, 0, len(resultMap))
+	for _, task := range resultMap {
+		result = append(result, task)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SubmitTime > result[j].SubmitTime
+	})
+	return result
 }
 
 func (Task *Task) Insert() error {
