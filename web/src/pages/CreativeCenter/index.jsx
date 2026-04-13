@@ -125,6 +125,10 @@ const GENERIC_VIDEO_SIZE_OPTIONS = [
 const GENERIC_VIDEO_SECONDS_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30].map(
   (value) => ({ label: `${value}s`, value: String(value) }),
 );
+const GROK_IMAGINE_VIDEO_SECONDS_OPTIONS = [6, 8, 10].map((value) => ({
+  label: `${value}s`,
+  value: String(value),
+}));
 const GENERIC_VIDEO_QUALITY_OPTIONS = [
   { label: '480p', value: '480p' },
   { label: '720p', value: '720p' },
@@ -526,12 +530,26 @@ const createPersistedVideoTaskItem = (item, index = 0) => {
   const normalizedStatus = normalizeVideoTaskStatus(
     item?.status || (mediaUrl ? 'completed' : 'submitted'),
   );
+  const resolvedStatus =
+    mediaUrl
+      ? 'completed'
+      : normalizedStatus === 'completed'
+        ? 'failed'
+        : normalizedStatus;
   return {
     id: item?.id || createCreativeRecordId(`video-task-${index}`),
     requestId,
     taskId,
     submittedAt,
-    status: mediaUrl ? 'completed' : normalizedStatus,
+    status: resolvedStatus,
+    ...(resolvedStatus === 'failed'
+      ? {
+          error:
+            item?.error ||
+            item?.content ||
+            '任务生成失败',
+        }
+      : {}),
     ...(mediaUrl ? { resultUrl: mediaUrl } : {}),
   };
 };
@@ -1606,8 +1624,9 @@ const parseTaskDtoVideoState = (task) => {
   const taskId = String(task?.task_id || task?.taskId || '').trim();
   const url = getTaskDtoResultUrl(task);
   const normalizedStatus = normalizeVideoTaskStatus(task?.status || '');
-  const isCompleted = Boolean(url) || normalizedStatus === 'completed';
-  const isFailed = normalizedStatus === 'failed';
+  const completedWithoutVideo = !url && normalizedStatus === 'completed';
+  const isCompleted = Boolean(url);
+  const isFailed = normalizedStatus === 'failed' || completedWithoutVideo;
   const progress =
     parseProgressValue(task?.progress) ?? (isCompleted || isFailed ? 100 : 0);
   const submitTime = normalizeCreativeTimestampToSeconds(
@@ -1634,7 +1653,9 @@ const parseTaskDtoVideoState = (task) => {
     url,
     content: '',
     error:
-      typeof task?.fail_reason === 'string'
+      completedWithoutVideo
+        ? '任务生成失败'
+        : typeof task?.fail_reason === 'string'
         ? task.fail_reason
         : typeof task?.failReason === 'string'
           ? task.failReason
@@ -1654,14 +1675,15 @@ const buildResolvedVideoTaskPatch = (queryTaskId, nextTaskState) => (currentTask
   const resolvedUrl =
     typeof nextTaskState?.url === 'string' ? nextTaskState.url.trim() : '';
   const currentMediaUrl = getVideoTaskMediaUrl(currentTask);
-  const isCompleted = normalizedStatus === 'completed' || Boolean(resolvedUrl);
-  const isFailed = normalizedStatus === 'failed';
+  const finalUrl = resolvedUrl || currentMediaUrl;
+  const completedWithoutVideo = normalizedStatus === 'completed' && !finalUrl;
+  const isCompleted = Boolean(finalUrl);
+  const isFailed = normalizedStatus === 'failed' || completedWithoutVideo;
   const nextStatus = isCompleted
     ? 'completed'
     : isFailed
       ? 'failed'
       : normalizedStatus;
-  const finalUrl = isCompleted ? resolvedUrl || currentMediaUrl : '';
 
   return {
     taskId: queryTaskId || currentTask?.taskId || '',
@@ -1880,11 +1902,19 @@ const normalizeVideoTaskItem = (item, index = 0) => {
   const normalizedStatus = normalizeVideoTaskStatus(
     item?.status || (resolvedVideoUrl ? 'completed' : 'submitted'),
   );
+  const completedWithoutVideo =
+    !resolvedVideoUrl && normalizedStatus === 'completed';
   const recoveredTaskId = getRecoverableVideoTaskId(item);
   const progress =
     parseProgressValue(item?.progress) ??
-    ((resolvedVideoUrl || normalizedStatus === 'completed') ? 100 : 0);
-  const resolvedStatus = resolvedVideoUrl ? 'completed' : normalizedStatus;
+    ((resolvedVideoUrl || completedWithoutVideo || normalizedStatus === 'failed')
+      ? 100
+      : 0);
+  const resolvedStatus = resolvedVideoUrl
+    ? 'completed'
+    : completedWithoutVideo
+      ? 'failed'
+      : normalizedStatus;
 
   return {
     id: item?.id || createCreativeRecordId(`video-task-${index}`),
@@ -1893,7 +1923,9 @@ const normalizeVideoTaskItem = (item, index = 0) => {
     url: resolvedVideoUrl,
     content: item?.content || '',
     progress,
-    error: item?.error || '',
+    error:
+      item?.error ||
+      (completedWithoutVideo ? '任务生成失败' : ''),
     resultUrl: item?.resultUrl || '',
     resultContent: item?.resultContent || '',
     requestId: item?.requestId || '',
@@ -2049,6 +2081,10 @@ const normalizeVideoHistoryRecords = (snapshot) => {
   }
 
   if (Array.isArray(payload?.tasks) && payload.tasks.length > 0) {
+    const tasks = payload.tasks.map((item, taskIndex) =>
+      normalizeVideoTaskItem(item, taskIndex),
+    );
+    const summary = summarizeVideoTasks(tasks);
     return [
       {
         id: createCreativeRecordId('video-history'),
@@ -2062,12 +2098,15 @@ const normalizeVideoHistoryRecords = (snapshot) => {
               )
               .filter(Boolean)
           : [],
-        status: 'completed',
-        tasks: payload.tasks.map((item, taskIndex) => normalizeVideoTaskItem(item, taskIndex)),
-        error: '',
+        status: summary.status,
+        tasks,
+        error:
+          summary.completedCount === tasks.length && summary.successCount === 0
+            ? '全部视频任务都生成失败了，请稍后重试。'
+            : '',
         total: payload.tasks.length,
-        completedCount: payload.tasks.length,
-        successCount: payload.tasks.length,
+        completedCount: summary.completedCount,
+        successCount: summary.successCount,
         createdAt: snapshot?.updated_at || Date.now(),
         updatedAt: snapshot?.updated_at || Date.now(),
       },
@@ -3218,6 +3257,9 @@ export default function App() {
   const isVideoModel =
     typeof currentModelName === 'string' && currentModelName.includes('video');
   const isGrokImagineVideoModel = currentModelName === 'grok-imagine-1.0-video';
+  const currentVideoSecondsOptions = isGrokImagineVideoModel
+    ? GROK_IMAGINE_VIDEO_SECONDS_OPTIONS
+    : GENERIC_VIDEO_SECONDS_OPTIONS;
   const currentImageUploadLimit = getCreativeCenterImageUploadLimit(currentModelName);
   const currentAdobeImageAspectRatioOptions =
     getAdobeImageAspectRatioOptions(currentModelName);
@@ -3541,11 +3583,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           next.videoSize = '1280x720';
         }
         if (
-          !GENERIC_VIDEO_SECONDS_OPTIONS.some(
+          !currentVideoSecondsOptions.some(
             (option) => option.value === next.videoSeconds,
           )
         ) {
-          next.videoSeconds = '10';
+          next.videoSeconds = currentVideoSecondsOptions[0]?.value || '10';
         }
         if (
           !GENERIC_VIDEO_QUALITY_OPTIONS.some(
@@ -8040,11 +8082,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         menuKey='videoSeconds'
                         icon={<Clock size={14} />}
                         label={`时长 ${getOptionLabel(
-                          GENERIC_VIDEO_SECONDS_OPTIONS,
+                          currentVideoSecondsOptions,
                           params.videoSeconds,
                         )}`}
                         value={params.videoSeconds}
-                        options={GENERIC_VIDEO_SECONDS_OPTIONS}
+                        options={currentVideoSecondsOptions}
                         openMenu={openMenu}
                         setOpenMenu={setOpenMenu}
                         onSelect={(value) =>
