@@ -75,6 +75,7 @@ const ADOBE_VIDEO_MODELS = new Set([
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-1.0-edit': 3,
   'grok-imagine-1.0-video': 7,
+  'nano-banana': 4,
   'nano-banana2': 6,
   'nano-banana-pro': 6,
   'veo31-fast': 2,
@@ -1199,6 +1200,12 @@ const buildCreativeCenterModelPriceLabel = (
     activeGroup,
     groupRatioMap,
   );
+  const activePricingGroup =
+    activeGroup &&
+    Array.isArray(pricingModel.enable_groups) &&
+    pricingModel.enable_groups.includes(activeGroup)
+      ? activeGroup
+      : null;
   const prices = [];
   const appendPrice = (value) => {
     const numericValue = Number(value);
@@ -1230,15 +1237,31 @@ const buildCreativeCenterModelPriceLabel = (
         Number(pricingModel.audio_completion_ratio),
     );
   } else if (pricingModel.quota_type === 1) {
-    appendPrice(Number(pricingModel.model_price) * groupRatio);
+    const groupModelPrice =
+      activePricingGroup && pricingModel.group_model_price?.[activePricingGroup] !== undefined
+        ? Number(pricingModel.group_model_price[activePricingGroup])
+        : null;
+    appendPrice(
+      groupModelPrice !== null
+        ? groupModelPrice
+        : Number(pricingModel.model_price) * groupRatio,
+    );
   } else if (pricingModel.quota_type === 2) {
-    Object.values(pricingModel.model_price_by_seconds || {}).forEach((value) => {
-      appendPrice(Number(value) * groupRatio);
-    });
-  } else if (pricingModel.quota_type === 3) {
-    Object.values(pricingModel.model_price_by_resolution || {}).forEach(
+    const groupSecondsPriceMap = activePricingGroup
+      ? pricingModel.group_model_price_by_seconds?.[activePricingGroup]
+      : null;
+    Object.values(groupSecondsPriceMap || pricingModel.model_price_by_seconds || {}).forEach(
       (value) => {
-        appendPrice(Number(value) * groupRatio);
+        appendPrice(Number(value) * (groupSecondsPriceMap ? 1 : groupRatio));
+      },
+    );
+  } else if (pricingModel.quota_type === 3) {
+    const groupResolutionPriceMap = activePricingGroup
+      ? pricingModel.group_model_price_by_resolution?.[activePricingGroup]
+      : null;
+    Object.values(groupResolutionPriceMap || pricingModel.model_price_by_resolution || {}).forEach(
+      (value) => {
+        appendPrice(Number(value) * (groupResolutionPriceMap ? 1 : groupRatio));
       },
     );
   }
@@ -1665,6 +1688,11 @@ const parseTaskDtoVideoState = (task) => {
 
 const isTerminalVideoTaskStatus = (status) => {
   const normalizedStatus = normalizeVideoTaskStatus(status);
+  return normalizedStatus === 'completed' || normalizedStatus === 'failed';
+};
+
+const isTerminalImageTaskStatus = (status) => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
   return normalizedStatus === 'completed' || normalizedStatus === 'failed';
 };
 
@@ -2241,6 +2269,7 @@ const collectRecoverableImageCandidatesFromSnapshot = (snapshot) => {
     .filter(
       (item) =>
         !item.hasMedia &&
+        !isTerminalImageTaskStatus(item.status) &&
         Boolean(item.requestId),
     )
     .sort((left, right) => right.sortTimestamp - left.sortTimestamp);
@@ -5752,6 +5781,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           queryTaskId: getRecoverableImageTaskId(image),
           requestId: String(image?.requestId || '').trim(),
           hasMedia: Boolean(getImageTaskMediaUrl(image)),
+          status: String(image?.status || '').trim().toLowerCase(),
           recordModelName: String(record?.modelName || '').trim().toLowerCase(),
           recordCreatedAt: Number(record?.createdAt) || 0,
           recordUpdatedAt: Number(record?.updatedAt) || 0,
@@ -5762,7 +5792,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             0,
         })),
       )
-      .filter((candidate) => !candidate.hasMedia && Boolean(candidate.queryTaskId || candidate.requestId));
+      .filter(
+        (candidate) =>
+          !candidate.hasMedia &&
+          !isTerminalImageTaskStatus(candidate.status) &&
+          Boolean(candidate.queryTaskId || candidate.requestId),
+      );
 
     if (candidates.length === 0) {
       return undefined;

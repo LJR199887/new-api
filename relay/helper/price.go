@@ -123,6 +123,83 @@ func extractSecondsFromRequest(request dto.Request) (int, bool) {
 	return 0, false
 }
 
+func extractSecondsFromTaskRequest(req relaycommon.TaskSubmitReq) (int, bool) {
+	if req.Duration > 0 {
+		return req.Duration, true
+	}
+	if seconds, ok := extractPositiveIntValue(req.Seconds); ok {
+		return seconds, true
+	}
+	for _, key := range []string{"durationSeconds", "duration_seconds", "duration", "seconds"} {
+		if seconds, ok := extractPositiveIntValue(req.Metadata[key]); ok {
+			return seconds, true
+		}
+	}
+	return 0, false
+}
+
+func GroupPriceCandidateGroups(info *relaycommon.RelayInfo) []string {
+	if info == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	groups := make([]string, 0, 2)
+	for _, group := range []string{info.UserGroup, info.UsingGroup} {
+		group = strings.TrimSpace(group)
+		if group == "" || seen[group] {
+			continue
+		}
+		seen[group] = true
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func ResolveGroupModelPrice(info *relaycommon.RelayInfo) (float64, string, bool) {
+	for _, group := range GroupPriceCandidateGroups(info) {
+		if price, ok := ratio_setting.GetGroupModelPrice(group, info.OriginModelName); ok {
+			return price, group, true
+		}
+	}
+	return 0, "", false
+}
+
+func ResolveGroupModelPriceBySeconds(info *relaycommon.RelayInfo, seconds int) (float64, string, bool) {
+	for _, group := range GroupPriceCandidateGroups(info) {
+		if price, ok := ratio_setting.GetGroupModelPriceBySeconds(group, info.OriginModelName, seconds); ok {
+			return price, group, true
+		}
+	}
+	return 0, "", false
+}
+
+func ResolveGroupModelPriceBySecondsMin(info *relaycommon.RelayInfo) (float64, string, bool) {
+	for _, group := range GroupPriceCandidateGroups(info) {
+		if price, ok := ratio_setting.GetGroupModelPriceBySecondsMin(group, info.OriginModelName); ok {
+			return price, group, true
+		}
+	}
+	return 0, "", false
+}
+
+func ResolveGroupModelPriceByResolution(info *relaycommon.RelayInfo, resolution string) (float64, string, bool) {
+	for _, group := range GroupPriceCandidateGroups(info) {
+		if price, ok := ratio_setting.GetGroupModelPriceByResolution(group, info.OriginModelName, resolution); ok {
+			return price, group, true
+		}
+	}
+	return 0, "", false
+}
+
+func ResolveGroupModelPriceByResolutionMin(info *relaycommon.RelayInfo) (float64, string, bool) {
+	for _, group := range GroupPriceCandidateGroups(info) {
+		if price, ok := ratio_setting.GetGroupModelPriceByResolutionMin(group, info.OriginModelName); ok {
+			return price, group, true
+		}
+	}
+	return 0, "", false
+}
+
 func resolveSecondsBasedModelPrice(info *relaycommon.RelayInfo) (float64, bool) {
 	if info == nil || info.Request == nil {
 		return 0, false
@@ -132,6 +209,32 @@ func resolveSecondsBasedModelPrice(info *relaycommon.RelayInfo) (float64, bool) 
 		return 0, false
 	}
 	return ratio_setting.GetModelPriceBySeconds(info.OriginModelName, seconds)
+}
+
+func resolveGroupSecondsBasedModelPrice(info *relaycommon.RelayInfo) (float64, string, bool) {
+	if info == nil || info.Request == nil {
+		return 0, "", false
+	}
+	seconds, ok := extractSecondsFromRequest(info.Request)
+	if !ok {
+		return 0, "", false
+	}
+	return ResolveGroupModelPriceBySeconds(info, seconds)
+}
+
+func resolveGroupTaskSecondsBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, string, bool) {
+	if c == nil || info == nil {
+		return 0, "", false
+	}
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return 0, "", false
+	}
+	seconds, ok := extractSecondsFromTaskRequest(req)
+	if !ok {
+		return 0, "", false
+	}
+	return ResolveGroupModelPriceBySeconds(info, seconds)
 }
 
 func resolveResolutionBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, bool) {
@@ -151,6 +254,32 @@ func resolveResolutionBasedModelPrice(c *gin.Context, info *relaycommon.RelayInf
 		}
 	}
 	return 0, false
+}
+
+func resolveGroupResolutionBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, string, bool) {
+	if info == nil {
+		return 0, "", false
+	}
+	if info.Request != nil {
+		if resolution := extractResolutionKeyFromRequest(info.Request); resolution != "" {
+			return ResolveGroupModelPriceByResolution(info, resolution)
+		}
+	}
+	if c != nil {
+		if req, err := relaycommon.GetTaskRequest(c); err == nil {
+			if resolution := extractResolutionKeyFromTaskRequest(req); resolution != "" {
+				return ResolveGroupModelPriceByResolution(info, resolution)
+			}
+		}
+	}
+	return 0, "", false
+}
+
+func fixedPriceQuota(modelPrice float64, groupRatio float64, groupPriceOverride bool) int {
+	if groupPriceOverride {
+		return int(modelPrice * common.QuotaPerUnit)
+	}
+	return int(modelPrice * common.QuotaPerUnit * groupRatio)
 }
 
 // HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present
@@ -183,7 +312,49 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
-	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
+	groupRatioInfo := HandleGroupRatio(c, info)
+
+	var groupPriceOverride bool
+	var groupPriceOverrideGroup string
+	modelPrice, groupPriceOverrideGroup, usePrice := resolveGroupSecondsBasedModelPrice(info)
+	if usePrice {
+		groupPriceOverride = true
+	}
+	if !usePrice {
+		if resolutionPrice, overrideGroup, ok := resolveGroupResolutionBasedModelPrice(c, info); ok {
+			modelPrice = resolutionPrice
+			groupPriceOverrideGroup = overrideGroup
+			usePrice = true
+			groupPriceOverride = true
+		}
+	}
+	if !usePrice {
+		if groupModelPrice, overrideGroup, ok := ResolveGroupModelPrice(info); ok {
+			modelPrice = groupModelPrice
+			groupPriceOverrideGroup = overrideGroup
+			usePrice = true
+			groupPriceOverride = true
+		}
+	}
+	if !usePrice {
+		if secondsPrice, overrideGroup, ok := ResolveGroupModelPriceBySecondsMin(info); ok {
+			modelPrice = secondsPrice
+			groupPriceOverrideGroup = overrideGroup
+			usePrice = true
+			groupPriceOverride = true
+		}
+	}
+	if !usePrice {
+		if resolutionPrice, overrideGroup, ok := ResolveGroupModelPriceByResolutionMin(info); ok {
+			modelPrice = resolutionPrice
+			groupPriceOverrideGroup = overrideGroup
+			usePrice = true
+			groupPriceOverride = true
+		}
+	}
+	if !usePrice {
+		modelPrice, usePrice = ratio_setting.GetModelPrice(info.OriginModelName, false)
+	}
 	if !usePrice {
 		if secondsPrice, ok := resolveSecondsBasedModelPrice(info); ok {
 			modelPrice = secondsPrice
@@ -208,8 +379,6 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 			usePrice = true
 		}
 	}
-
-	groupRatioInfo := HandleGroupRatio(c, info)
 
 	var preConsumedQuota int
 	var modelRatio float64
@@ -254,7 +423,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		if meta.ImagePriceRatio != 0 {
 			modelPrice = modelPrice * meta.ImagePriceRatio
 		}
-		preConsumedQuota = int(modelPrice * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		preConsumedQuota = fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
 	}
 
 	// check if free model pre-consume is disabled
@@ -277,20 +446,22 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	}
 
 	priceData := types.PriceData{
-		FreeModel:            freeModel,
-		ModelPrice:           modelPrice,
-		ModelRatio:           modelRatio,
-		CompletionRatio:      completionRatio,
-		GroupRatioInfo:       groupRatioInfo,
-		UsePrice:             usePrice,
-		CacheRatio:           cacheRatio,
-		ImageRatio:           imageRatio,
-		AudioRatio:           audioRatio,
-		AudioCompletionRatio: audioCompletionRatio,
-		CacheCreationRatio:   cacheCreationRatio,
-		CacheCreation5mRatio: cacheCreationRatio5m,
-		CacheCreation1hRatio: cacheCreationRatio1h,
-		QuotaToPreConsume:    preConsumedQuota,
+		FreeModel:               freeModel,
+		ModelPrice:              modelPrice,
+		ModelRatio:              modelRatio,
+		CompletionRatio:         completionRatio,
+		GroupRatioInfo:          groupRatioInfo,
+		UsePrice:                usePrice,
+		GroupPriceOverride:      groupPriceOverride,
+		GroupPriceOverrideGroup: groupPriceOverrideGroup,
+		CacheRatio:              cacheRatio,
+		ImageRatio:              imageRatio,
+		AudioRatio:              audioRatio,
+		AudioCompletionRatio:    audioCompletionRatio,
+		CacheCreationRatio:      cacheCreationRatio,
+		CacheCreation5mRatio:    cacheCreationRatio5m,
+		CacheCreation1hRatio:    cacheCreationRatio1h,
+		QuotaToPreConsume:       preConsumedQuota,
 	}
 
 	if common.DebugEnabled {
@@ -304,7 +475,47 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
 
-	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
+	groupPriceOverride := false
+	groupPriceOverrideGroup := ""
+	modelPrice, groupPriceOverrideGroup, success := resolveGroupTaskSecondsBasedModelPrice(c, info)
+	if success {
+		groupPriceOverride = true
+	}
+	if !success {
+		if resolutionPrice, overrideGroup, ok := resolveGroupResolutionBasedModelPrice(c, info); ok {
+			modelPrice = resolutionPrice
+			groupPriceOverrideGroup = overrideGroup
+			success = true
+			groupPriceOverride = true
+		}
+	}
+	if !success {
+		if groupModelPrice, overrideGroup, ok := ResolveGroupModelPrice(info); ok {
+			modelPrice = groupModelPrice
+			groupPriceOverrideGroup = overrideGroup
+			success = true
+			groupPriceOverride = true
+		}
+	}
+	if !success {
+		if secondsPrice, overrideGroup, ok := ResolveGroupModelPriceBySecondsMin(info); ok {
+			modelPrice = secondsPrice
+			groupPriceOverrideGroup = overrideGroup
+			success = true
+			groupPriceOverride = true
+		}
+	}
+	if !success {
+		if resolutionPrice, overrideGroup, ok := ResolveGroupModelPriceByResolutionMin(info); ok {
+			modelPrice = resolutionPrice
+			groupPriceOverrideGroup = overrideGroup
+			success = true
+			groupPriceOverride = true
+		}
+	}
+	if !success {
+		modelPrice, success = ratio_setting.GetModelPrice(info.OriginModelName, true)
+	}
 	if !success {
 		if resolutionPrice, ok := resolveResolutionBasedModelPrice(c, info); ok {
 			modelPrice = resolutionPrice
@@ -345,7 +556,7 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 		}
 
 	}
-	quota := int(modelPrice * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+	quota := fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
 
 	// 免费模型检测（与 ModelPriceHelper 对齐）
 	freeModel := false
@@ -357,11 +568,13 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 	}
 
 	priceData := types.PriceData{
-		FreeModel:      freeModel,
-		ModelPrice:     modelPrice,
-		Quota:          quota,
-		BaseQuota:      quota,
-		GroupRatioInfo: groupRatioInfo,
+		FreeModel:               freeModel,
+		ModelPrice:              modelPrice,
+		Quota:                   quota,
+		BaseQuota:               quota,
+		GroupRatioInfo:          groupRatioInfo,
+		GroupPriceOverride:      groupPriceOverride,
+		GroupPriceOverrideGroup: groupPriceOverrideGroup,
 	}
 	return priceData, nil
 }
