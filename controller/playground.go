@@ -712,21 +712,6 @@ func PlaygroundVideoSubmit(c *gin.Context) {
 	RelayTask(c)
 }
 
-func PlaygroundAsyncVideoSubmit(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-	if newAPIError = setupPlaygroundTokenContext(c, "playground-video", c.GetString("group")); newAPIError != nil {
-		return
-	}
-	RelayAsyncVideoGenerations(c)
-}
-
 func PlaygroundImageGenerations(c *gin.Context) {
 	var newAPIError *types.NewAPIError
 	defer func() {
@@ -739,21 +724,6 @@ func PlaygroundImageGenerations(c *gin.Context) {
 	newAPIError = relayPlaygroundImage(c, "playground-image", constant.TaskActionImageGenerate)
 }
 
-func PlaygroundAsyncImageGenerations(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-	if newAPIError = setupPlaygroundTokenContext(c, "playground-image", c.GetString("group")); newAPIError != nil {
-		return
-	}
-	RelayAsyncImageGenerations(c)
-}
-
 func PlaygroundImageEdits(c *gin.Context) {
 	var newAPIError *types.NewAPIError
 	defer func() {
@@ -764,21 +734,6 @@ func PlaygroundImageEdits(c *gin.Context) {
 		}
 	}()
 	newAPIError = relayPlaygroundImage(c, "playground-image-edit", constant.TaskActionImageEdit)
-}
-
-func PlaygroundAsyncImageEdits(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-	if newAPIError = setupPlaygroundTokenContext(c, "playground-image-edit", c.GetString("group")); newAPIError != nil {
-		return
-	}
-	RelayAsyncImageEdits(c)
 }
 
 func PlaygroundVideoFetch(c *gin.Context) {
@@ -796,36 +751,6 @@ func PlaygroundVideoFetch(c *gin.Context) {
 	RelayTaskFetch(c)
 }
 
-func PlaygroundAsyncVideoFetch(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-	if newAPIError = setupPlaygroundTokenContext(c, "playground-video-fetch", c.GetString("group")); newAPIError != nil {
-		return
-	}
-	RelayAsyncVideoFetch(c)
-}
-
-func PlaygroundAsyncImageFetch(c *gin.Context) {
-	var newAPIError *types.NewAPIError
-	defer func() {
-		if newAPIError != nil {
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
-		}
-	}()
-	if newAPIError = setupPlaygroundTokenContext(c, "playground-image-fetch", c.GetString("group")); newAPIError != nil {
-		return
-	}
-	RelayAsyncImageFetch(c)
-}
-
 func setupPlaygroundTokenContext(c *gin.Context, tokenName string, tokenGroup string) *types.NewAPIError {
 	userId := c.GetInt("id")
 	userCache, err := model.GetUserCache(userId)
@@ -840,11 +765,9 @@ func setupPlaygroundTokenContext(c *gin.Context, tokenName string, tokenGroup st
 		tokenGroup = userCache.Group
 	}
 	tempToken := &model.Token{
-		UserId:         userId,
-		Name:           tokenName,
-		Key:            fmt.Sprintf("playground_%d_%s", userId, tokenName),
-		Group:          tokenGroup,
-		UnlimitedQuota: true,
+		UserId: userId,
+		Name:   tokenName,
+		Group:  tokenGroup,
 	}
 	_ = middleware.SetupContextForToken(c, tempToken)
 	return nil

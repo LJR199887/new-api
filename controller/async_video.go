@@ -15,7 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -96,34 +95,7 @@ func RelayAsyncVideoFetch(c *gin.Context) {
 		respondAsyncVideoOpenAIError(c, http.StatusNotFound, "task_not_exist", types.ErrorCodeInvalidRequest)
 		return
 	}
-	if shouldRefreshAsyncVideoTask(task) {
-		if err := service.RefreshVideoTask(c.Request.Context(), task); err != nil {
-			common.SysLog("refresh async video task failed: " + err.Error())
-		}
-		task, exist, err = model.GetByTaskId(c.GetInt("id"), taskID)
-		if err != nil {
-			respondAsyncVideoOpenAIError(c, http.StatusInternalServerError, err.Error(), types.ErrorCodeQueryDataError)
-			return
-		}
-		if !exist || task == nil {
-			respondAsyncVideoOpenAIError(c, http.StatusNotFound, "task_not_exist", types.ErrorCodeInvalidRequest)
-			return
-		}
-	}
 	c.JSON(http.StatusOK, buildAsyncVideoTaskResponse(task))
-}
-
-func shouldRefreshAsyncVideoTask(task *model.Task) bool {
-	if task == nil {
-		return false
-	}
-	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
-		return false
-	}
-	if task.ChannelId <= 0 {
-		return false
-	}
-	return strings.TrimSpace(task.PrivateData.UpstreamTaskID) != ""
 }
 
 func readAsyncVideoTaskRequest(c *gin.Context, bodyBytes []byte) relaycommon.TaskSubmitReq {
@@ -235,17 +207,7 @@ func runAsyncVideoJob(job asyncVideoJob) {
 	ctx.Set(common.KeyBodyStorage, bodyStorage)
 	defer common.CleanupBodyStorage(ctx)
 
-	updateAsyncVideoTaskRunning(task)
 	RelayTask(ctx)
-
-	responseBody := recorder.Body.Bytes()
-	statusCode := recorder.Code
-	if statusCode == 0 {
-		statusCode = http.StatusOK
-	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		updateAsyncVideoTaskFailure(task, responseBody, extractPlaygroundTaskErrorMessage(responseBody, "async video request failed"))
-	}
 }
 
 func updateAsyncVideoTaskFailure(task *model.Task, responseBody []byte, failReason string) {
@@ -262,18 +224,6 @@ func updateAsyncVideoTaskFailure(task *model.Task, responseBody []byte, failReas
 	}
 	if err := task.Update(); err != nil {
 		common.SysError("update async video task failure error: " + err.Error())
-	}
-}
-
-func updateAsyncVideoTaskRunning(task *model.Task) {
-	if task == nil || task.Status != model.TaskStatusSubmitted {
-		return
-	}
-	task.Status = model.TaskStatusInProgress
-	task.Progress = taskcommon.ProgressInProgress
-	task.StartTime = time.Now().Unix()
-	if err := task.Update(); err != nil {
-		common.SysError("update async video task running error: " + err.Error())
 	}
 }
 
