@@ -2,6 +2,7 @@ package sora
 
 import (
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -156,7 +157,7 @@ func TestNormalizeSoraVideoRequestKeepsExplicitDurationAndAspectRatio(t *testing
 	}
 }
 
-func TestBuildRequestBodyConvertsSoraInputReferenceToMessages(t *testing.T) {
+func TestBuildRequestBodyConvertsSoraInputReferenceToImageURL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -206,25 +207,30 @@ func TestBuildRequestBodyConvertsSoraInputReferenceToMessages(t *testing.T) {
 	if _, exists := payload["input_reference"]; exists {
 		t.Fatalf("expected input_reference to be removed from upstream payload")
 	}
-	messages, ok := payload["messages"].([]any)
-	if !ok || len(messages) != 1 {
-		t.Fatalf("expected one message, got %#v", payload["messages"])
+	if got := payload["image_url"]; got != "data:image/png;base64,aGVsbG8=" {
+		t.Fatalf("expected image_url to be populated, got %#v", got)
 	}
-	message, ok := messages[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected message object, got %#v", messages[0])
+}
+
+func TestNormalizeSoraVideoRequestAcceptsSora2Alias(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "sora2",
+		"prompt":       "make an ad",
+		"duration":     float64(4),
+		"aspect_ratio": "16:9",
+		"image":        "https://example.com/input.jpg",
 	}
-	content, ok := message["content"].([]any)
-	if !ok || len(content) != 2 {
-		t.Fatalf("expected message content with text and image, got %#v", message["content"])
+
+	normalizeSoraVideoRequest(body, "sora2")
+
+	if got := body["image_url"]; got != "https://example.com/input.jpg" {
+		t.Fatalf("expected image to be normalized to image_url, got %#v", got)
 	}
-	textItem, ok := content[0].(map[string]any)
-	if !ok || textItem["type"] != "text" || textItem["text"] != "make it cinematic" {
-		t.Fatalf("unexpected text content item %#v", content[0])
+	if _, exists := body["image"]; exists {
+		t.Fatalf("expected image to be removed after normalization")
 	}
-	imageItem, ok := content[1].(map[string]any)
-	if !ok || imageItem["type"] != "image_url" {
-		t.Fatalf("unexpected image content item %#v", content[1])
+	if got, ok := body["async"].(bool); !ok || !got {
+		t.Fatalf("expected async=true, got %#v", body["async"])
 	}
 }
 
@@ -358,5 +364,81 @@ func TestParseTaskResultAcceptsFloatProgress(t *testing.T) {
 	}
 	if taskInfo.Url != "https://cdn.example/video.mp4" {
 		t.Fatalf("expected video url, got %s", taskInfo.Url)
+	}
+}
+
+func TestParseTaskResultMapsRunningToInProgress(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"running","progress":1.0,"created":1776350152}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "IN_PROGRESS" {
+		t.Fatalf("expected in-progress status, got %s", taskInfo.Status)
+	}
+	if taskInfo.CreatedAt != 1776350152 {
+		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
+func TestParseTaskResultReadsVideoURLFromDataArray(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"completed","progress":100.0,"data":[{"url":"https://cdn.example/from-data.mp4"}]}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "SUCCESS" {
+		t.Fatalf("expected success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/from-data.mp4" {
+		t.Fatalf("expected data array video url, got %s", taskInfo.Url)
+	}
+}
+
+func TestParseTaskResultFailsCompletedWithoutURL(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"completed","progress":100.0}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "FAILURE" {
+		t.Fatalf("expected failure status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Reason == "" {
+		t.Fatalf("expected failure reason")
+	}
+}
+
+func TestDoResponsePrefersTaskIDForUpstreamPolling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &http.Response{
+		StatusCode: http.StatusAccepted,
+		Body: io.NopCloser(strings.NewReader(`{
+			"id":"vidgen-abc123",
+			"object":"video.generation",
+			"created":1776410000,
+			"model":"sora2",
+			"status":"queued",
+			"task_id":"abc123def456",
+			"progress":0
+		}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_123",
+		},
+	}
+
+	upstreamID, _, taskErr := adaptor.DoResponse(c, resp, info)
+	if taskErr != nil {
+		t.Fatalf("DoResponse returned error: %v", taskErr)
+	}
+	if upstreamID != "abc123def456" {
+		t.Fatalf("expected upstream task_id to be preferred, got %s", upstreamID)
 	}
 }
