@@ -18,7 +18,6 @@ import (
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
-
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
@@ -87,7 +86,10 @@ func usesVideoGenerationsTaskPath(path string) bool {
 
 func isVideoGenerationsTaskModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(model, "veo") || strings.Contains(model, "/veo")
+	return strings.HasPrefix(model, "veo") ||
+		strings.Contains(model, "/veo") ||
+		strings.HasPrefix(model, "sora-2") ||
+		strings.HasPrefix(model, "sora2")
 }
 
 func usesVideoGenerationsTaskEndpoint(path string, modelNames ...string) bool {
@@ -281,6 +283,97 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	}
 }
 
+func isSoraVideoModel(upstreamModel string) bool {
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	return strings.HasPrefix(upstreamModel, "sora-2")
+}
+
+func soraSizeFromAspectRatio(value string) string {
+	switch strings.TrimSpace(value) {
+	case "16:9":
+		return "1280x720"
+	case "9:16":
+		return "720x1280"
+	default:
+		return ""
+	}
+}
+
+func soraAspectRatioFromSize(value string) string {
+	switch strings.TrimSpace(value) {
+	case "1280x720", "1792x1024":
+		return "16:9"
+	case "720x1280", "1024x1792":
+		return "9:16"
+	default:
+		return ""
+	}
+}
+
+func soraDurationBodyValue(value string) interface{} {
+	if duration, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+		return duration
+	}
+	return strings.TrimSpace(value)
+}
+
+func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
+	if !isSoraVideoModel(upstreamModel) {
+		return
+	}
+
+	duration := stringifyBodyValue(bodyMap["duration"])
+	aspectRatio := stringifyBodyValue(bodyMap["aspect_ratio"])
+	seconds := stringifyBodyValue(bodyMap["seconds"])
+	size := stringifyBodyValue(bodyMap["size"])
+	prompt := stringifyBodyValue(bodyMap["prompt"])
+	inputReference := stringifyBodyValue(bodyMap["input_reference"])
+
+	if duration == "" {
+		if seconds != "" {
+			duration = seconds
+		} else {
+			duration = "4"
+		}
+	}
+	if aspectRatio == "" {
+		if mapped := soraAspectRatioFromSize(size); mapped != "" {
+			aspectRatio = mapped
+		} else {
+			aspectRatio = "9:16"
+		}
+	}
+
+	bodyMap["duration"] = soraDurationBodyValue(duration)
+	bodyMap["aspect_ratio"] = aspectRatio
+	bodyMap["async"] = true
+	delete(bodyMap, "seconds")
+	delete(bodyMap, "size")
+
+	if _, exists := bodyMap["messages"]; !exists && inputReference != "" {
+		content := make([]map[string]interface{}, 0, 2)
+		if prompt != "" {
+			content = append(content, map[string]interface{}{
+				"type": "text",
+				"text": prompt,
+			})
+		}
+		content = append(content, map[string]interface{}{
+			"type": "image_url",
+			"image_url": map[string]interface{}{
+				"url": inputReference,
+			},
+		})
+		bodyMap["messages"] = []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": content,
+			},
+		}
+	}
+	delete(bodyMap, "input_reference")
+}
+
 func extractVideoURL(respBody []byte) string {
 	for _, path := range []string{
 		"url",
@@ -382,7 +475,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			bodyMap["model"] = info.UpstreamModelName
 			normalizeGrokVideoRequest(bodyMap, info.UpstreamModelName)
+			normalizeSoraVideoRequest(bodyMap, info.UpstreamModelName)
 			if newBody, err := common.Marshal(bodyMap); err == nil {
+				c.Request.Header.Set("Content-Type", "application/json")
 				return bytes.NewReader(newBody), nil
 			}
 		}
@@ -398,7 +493,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		writer := multipart.NewWriter(&buf)
 		writer.WriteField("model", info.UpstreamModelName)
 		hasSeconds := false
+		hasDuration := false
 		durationValue := ""
+		hasSize := false
+		sizeValue := ""
+		hasAspectRatio := false
+		aspectRatioValue := ""
 		for key, values := range formData.Value {
 			if key == "model" {
 				continue
@@ -406,8 +506,26 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if key == "seconds" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
 				hasSeconds = true
 			}
+			if key == "duration" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
+				hasDuration = true
+			}
 			if key == "duration" && len(values) > 0 && durationValue == "" {
 				durationValue = strings.TrimSpace(values[0])
+			}
+			if key == "size" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
+				hasSize = true
+				if sizeValue == "" {
+					sizeValue = strings.TrimSpace(values[0])
+				}
+			}
+			if key == "aspect_ratio" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
+				hasAspectRatio = true
+			}
+			if key == "aspect_ratio" && len(values) > 0 && aspectRatioValue == "" {
+				aspectRatioValue = strings.TrimSpace(values[0])
+			}
+			if isSoraVideoModel(info.UpstreamModelName) && (key == "seconds" || key == "size") {
+				continue
 			}
 			for _, v := range values {
 				writer.WriteField(key, v)
@@ -415,6 +533,24 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		}
 		if info.UpstreamModelName == "grok-imagine-1.0-video" && !hasSeconds && durationValue != "" {
 			writer.WriteField("seconds", durationValue)
+		}
+		if isSoraVideoModel(info.UpstreamModelName) {
+			if !hasDuration {
+				if durationValue == "" {
+					durationValue = "4"
+				}
+				writer.WriteField("duration", durationValue)
+			}
+			if !hasAspectRatio {
+				if aspectRatioValue == "" && hasSize {
+					aspectRatioValue = soraAspectRatioFromSize(sizeValue)
+				}
+				if aspectRatioValue == "" {
+					aspectRatioValue = "9:16"
+				}
+				writer.WriteField("aspect_ratio", aspectRatioValue)
+			}
+			writer.WriteField("async", "true")
 		}
 		for fieldName, fileHeaders := range formData.File {
 			for _, fh := range fileHeaders {

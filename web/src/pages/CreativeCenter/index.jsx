@@ -78,6 +78,8 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'nano-banana': 4,
   'nano-banana2': 6,
   'nano-banana-pro': 6,
+  'sora2': 1,
+  'sora2-pro': 1,
   'veo31-fast': 2,
   'veo31-ref': 3,
 };
@@ -3419,7 +3421,7 @@ export default function App() {
     currentModelName === 'veo31' ||
     currentModelName === 'veo31-ref' ||
     currentModelName === 'veo31-fast';
-  const isChatCompletionVideoModel = isAdobeSoraModel;
+  const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending = (isChatTab && isGenerating) || isUploadingImage;
   const isVideoModel =
@@ -6865,43 +6867,74 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               currentUploadedImageUrls,
             );
             const shouldUseImageEditEndpoint =
-              isGrokImageEditModel || currentUploadedImageUrls.length > 0;
-            const payload = {
-              model: currentModelName,
-              group: activeGroup,
-              prompt:
-                shouldUseImageEditEndpoint && !currentPrompt
-                  ? 'Edit the provided media.'
-                  : currentPrompt,
-              n: 1,
-              response_format: 'url',
-              request_id: requestId,
-              seed: requestSeed,
-              seeds: [requestSeed],
-              user: requestUser,
-            };
-            if (!isGrokImageEditModel && basePayload.size) {
-              payload.size = basePayload.size;
-            }
-            if (shouldUseImageEditEndpoint) {
-              if (currentUploadedImageUrls.length === 1) {
-                payload.image = currentUploadedImageUrls[0];
-              } else if (currentUploadedImageUrls.length > 1) {
-                payload.image = currentUploadedImageUrls;
+              !isAdobeImageModel &&
+              (isGrokImageEditModel || currentUploadedImageUrls.length > 0);
+            const payload = isAdobeImageModel
+              ? {
+                  model: currentModelName,
+                  group: activeGroup,
+                  prompt:
+                    currentPrompt ||
+                    (currentUploadedImageUrls.length > 0
+                      ? 'Edit the provided media.'
+                      : ''),
+                  output_resolution:
+                    basePayload.output_resolution ||
+                    currentParamsSnapshot.outputResolution ||
+                    '2K',
+                  request_id: requestId,
+                  seed: requestSeed,
+                  seeds: [requestSeed],
+                  user: requestUser,
+                }
+              : {
+                  model: currentModelName,
+                  group: activeGroup,
+                  prompt:
+                    shouldUseImageEditEndpoint && !currentPrompt
+                      ? 'Edit the provided media.'
+                      : currentPrompt,
+                  n: 1,
+                  response_format: 'url',
+                  request_id: requestId,
+                  seed: requestSeed,
+                  seeds: [requestSeed],
+                  user: requestUser,
+                };
+
+            if (isAdobeImageModel) {
+              if (basePayload.aspect_ratio) {
+                payload.aspect_ratio = basePayload.aspect_ratio;
+              } else if (basePayload.size) {
+                payload.size = basePayload.size;
+              }
+              if (currentUploadedImageUrls.length > 0) {
+                payload.image_urls = currentUploadedImageUrls;
               }
             } else {
-              if (currentUploadedImageUrls[0]) {
-                payload.image = currentUploadedImageUrls[0];
+              if (!isGrokImageEditModel && basePayload.size) {
+                payload.size = basePayload.size;
               }
-            }
-            if (basePayload.extra_body) {
-              payload.extra_body = basePayload.extra_body;
-            }
-            if (basePayload.aspect_ratio) {
-              payload.aspect_ratio = basePayload.aspect_ratio;
-            }
-            if (basePayload.output_resolution) {
-              payload.output_resolution = basePayload.output_resolution;
+              if (shouldUseImageEditEndpoint) {
+                if (currentUploadedImageUrls.length === 1) {
+                  payload.image = currentUploadedImageUrls[0];
+                } else if (currentUploadedImageUrls.length > 1) {
+                  payload.image = currentUploadedImageUrls;
+                }
+              } else {
+                if (currentUploadedImageUrls[0]) {
+                  payload.image = currentUploadedImageUrls[0];
+                }
+              }
+              if (basePayload.extra_body) {
+                payload.extra_body = basePayload.extra_body;
+              }
+              if (basePayload.aspect_ratio) {
+                payload.aspect_ratio = basePayload.aspect_ratio;
+              }
+              if (basePayload.output_resolution) {
+                payload.output_resolution = basePayload.output_resolution;
+              }
             }
 
             patchImageTask(recordId, taskId, {
@@ -6920,10 +6953,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 progress: 5,
               });
             }
-            const data = await postCreativeRequest(
-              shouldUseImageEditEndpoint
+            const imageSubmitEndpoint = isAdobeImageModel
+              ? API_ENDPOINTS.IMAGE_ASYNC_GENERATIONS
+              : shouldUseImageEditEndpoint
                 ? API_ENDPOINTS.IMAGE_ASYNC_EDITS
-                : API_ENDPOINTS.IMAGE_ASYNC_GENERATIONS,
+                : API_ENDPOINTS.IMAGE_ASYNC_GENERATIONS;
+            const data = await postCreativeRequest(
+              imageSubmitEndpoint,
               payload,
               {
                 'X-Request-Id': requestId,
@@ -7156,20 +7192,26 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               return;
             }
 
-            const payload = {
-              model: currentModelName,
-              group: activeGroup,
-              prompt: currentPrompt,
-              request_id: requestId,
-              seed: requestSeed,
-              seeds: [requestSeed],
-              user: requestUser,
-              metadata: {
-                creative_request_id: requestUser,
-                creative_seed: requestSeed,
-                creative_index: index + 1,
-              },
-            };
+            const payload = isAdobeSoraModel
+              ? {
+                  model: currentModelName,
+                  prompt: currentPrompt,
+                  async: true,
+                }
+              : {
+                  model: currentModelName,
+                  group: activeGroup,
+                  prompt: currentPrompt,
+                  request_id: requestId,
+                  seed: requestSeed,
+                  seeds: [requestSeed],
+                  user: requestUser,
+                  metadata: {
+                    creative_request_id: requestUser,
+                    creative_seed: requestSeed,
+                    creative_index: index + 1,
+                  },
+                };
             [
               'size',
               'seconds',
@@ -7186,7 +7228,25 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload[key] = basePayload[key];
               }
             });
-            if (
+            if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
+              payload.messages = [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: currentPrompt,
+                    },
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: currentUploadedImageUrls[0],
+                      },
+                    },
+                  ],
+                },
+              ];
+            } else if (
               currentModelName === 'grok-imagine-1.0-video' &&
               currentUploadedImageUrls.length > 0
             ) {
