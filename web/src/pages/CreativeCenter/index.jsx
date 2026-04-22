@@ -60,7 +60,9 @@ const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
   'nano-banana-pro',
+  'gpt-image2',
 ]);
+const GPT_IMAGE2_MODEL = 'gpt-image2';
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana2',
   'nano-banana-pro',
@@ -78,6 +80,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'nano-banana': 4,
   'nano-banana2': 6,
   'nano-banana-pro': 6,
+  'gpt-image2': 6,
   'sora2': 1,
   'sora2-pro': 1,
   'veo31-fast': 2,
@@ -105,6 +108,15 @@ const CHAT_ADOBE_IMAGE_ASPECT_RATIO_OPTIONS = [
   { label: '9:16', value: '9:16' },
   { label: '4:3', value: '4:3' },
   { label: '3:4', value: '3:4' },
+];
+const GPT_IMAGE2_SIZE_OPTIONS = [
+  { label: '1:1', value: '1:1' },
+  { label: '16:9', value: '16:9' },
+  { label: '9:16', value: '9:16' },
+  { label: '4:3', value: '4:3' },
+  { label: '3:4', value: '3:4' },
+  { label: '3:2', value: '3:2' },
+  { label: '2:3', value: '2:3' },
 ];
 const ADOBE_AUTO_IMAGE_SIZE_OPTIONS = [
   { label: '1024x1024', value: '1024x1024' },
@@ -1078,15 +1090,42 @@ const revokeCreativeCenterPreviewURL = (previewUrl) => {
   }
 };
 
-const getAdobeImageAspectRatioOptions = (modelName) =>
-  ADOBE_CHAT_IMAGE_MODELS.has(modelName)
+const isGPTImage2Model = (modelName) => modelName === GPT_IMAGE2_MODEL;
+
+const getAdobeImageAspectRatioOptions = (modelName) => {
+  if (isGPTImage2Model(modelName)) {
+    return GPT_IMAGE2_SIZE_OPTIONS;
+  }
+  return ADOBE_CHAT_IMAGE_MODELS.has(modelName)
     ? CHAT_ADOBE_IMAGE_ASPECT_RATIO_OPTIONS
     : DEFAULT_ADOBE_IMAGE_ASPECT_RATIO_OPTIONS;
+};
+
+const supportsAdobeImageOutputResolution = (modelName) =>
+  !isGPTImage2Model(modelName);
 
 const supportsAdobeAutoImageSize = (modelName) =>
   getAdobeImageAspectRatioOptions(modelName).some(
     (option) => option.value === 'auto',
   );
+
+const buildGPTImage2ReferenceMessages = (prompt, imageUrls = []) => {
+  const normalizedPrompt = prompt?.trim() || 'Edit the provided media.';
+  return [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: normalizedPrompt },
+        ...imageUrls
+          .filter((url) => typeof url === 'string' && url.trim())
+          .map((url) => ({
+            type: 'image_url',
+            image_url: { url: url.trim() },
+          })),
+      ],
+    },
+  ];
+};
 
 const getCreativeCenterImageUploadLimit = (modelName) => {
   const normalizedModelName = typeof modelName === 'string' ? modelName.trim() : '';
@@ -1568,14 +1607,14 @@ const createCreativeRecordId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const getImageTaskMediaUrl = (item) => {
-  if (typeof item?.url === 'string' && item.url.trim()) {
-    return item.url.trim();
-  }
   if (typeof item?.resultUrl === 'string' && item.resultUrl.trim()) {
     return item.resultUrl.trim();
   }
   if (typeof item?.result_url === 'string' && item.result_url.trim()) {
     return item.result_url.trim();
+  }
+  if (typeof item?.url === 'string' && item.url.trim()) {
+    return item.url.trim();
   }
   return '';
 };
@@ -2808,38 +2847,48 @@ const DropSelectButton = ({
   setOpenMenu,
   onSelect,
   widthClass = 'w-40',
-}) => (
-  <DropButton
-    icon={icon}
-    label={label}
-    open={openMenu === menuKey}
-    onClick={() => setOpenMenu(openMenu === menuKey ? null : menuKey)}
-  >
-    {openMenu === menuKey && (
-      <div className={`absolute bottom-[110%] left-0 z-20 mb-2 ${widthClass} rounded-[1.25rem] border border-blue-100/50 bg-white/95 backdrop-blur-3xl p-1.5 shadow-[0_12px_40px_-10px_rgba(59,130,246,0.15)] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200`}>
-        <div className='relative flex flex-col'>
-          {options.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => {
-                onSelect(option.value);
-                setOpenMenu(null);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all duration-200 ${
-                value === option.value
-                  ? 'bg-blue-50 text-blue-600 shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-blue-500'
-              }`}
-            >
-              <span>{option.label}</span>
-              {value === option.value && <Check size={14} className="text-blue-500" />}
-            </button>
-          ))}
+}) => {
+  if (!Array.isArray(options) || options.length === 0) {
+    return null;
+  }
+
+  return (
+    <DropButton
+      icon={icon}
+      label={label}
+      open={openMenu === menuKey}
+      onClick={() => setOpenMenu(openMenu === menuKey ? null : menuKey)}
+    >
+      {openMenu === menuKey && (
+        <div
+          className={`absolute bottom-[110%] left-0 z-20 mb-2 ${widthClass} rounded-[1.25rem] border border-blue-100/50 bg-white/95 backdrop-blur-3xl p-1.5 shadow-[0_12px_40px_-10px_rgba(59,130,246,0.15)] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200`}
+        >
+          <div className='relative flex flex-col'>
+            {options.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => {
+                  onSelect(option.value);
+                  setOpenMenu(null);
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-bold transition-all duration-200 ${
+                  value === option.value
+                    ? 'bg-blue-50 text-blue-600 shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-blue-500'
+                }`}
+              >
+                <span>{option.label}</span>
+                {value === option.value && (
+                  <Check size={14} className='text-blue-500' />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-    )}
-  </DropButton>
-);
+      )}
+    </DropButton>
+  );
+};
 
 export default function App() {
   const [userState] = useContext(UserContext);
@@ -3418,6 +3467,7 @@ export default function App() {
   const isGrokImageGenerationModel =
     GROK_IMAGE_GENERATION_MODELS.has(currentModelName);
   const isAdobeImageModel = ADOBE_IMAGE_MODELS.has(currentModelName);
+  const isCurrentGPTImage2Model = isGPTImage2Model(currentModelName);
   const isAdobeVideoModel = ADOBE_VIDEO_MODELS.has(currentModelName);
   const isAdobeSoraModel =
     currentModelName === 'sora2' || currentModelName === 'sora2-pro';
@@ -3556,7 +3606,9 @@ export default function App() {
         ) {
           snapshot.autoImageSize = sourceParams.autoImageSize;
         }
-        snapshot.outputResolution = sourceParams.outputResolution || '2K';
+        if (supportsAdobeImageOutputResolution(modelName)) {
+          snapshot.outputResolution = sourceParams.outputResolution || '2K';
+        }
       }
     }
 
@@ -3601,7 +3653,7 @@ export default function App() {
     }
     if (Array.isArray(record?.images) && record.images.length > 0) {
       summary.push(
-        `${record.images.filter((item) => item?.status === 'completed' && item?.url).length}张`,
+        `${record.images.filter((item) => item?.status === 'completed' && getImageTaskMediaUrl(item)).length}张`,
       );
     }
 
@@ -3739,12 +3791,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         ) {
           next.autoImageSize = '1024x1024';
         }
-        if (
-          !ADOBE_OUTPUT_RESOLUTION_OPTIONS.some(
-            (option) => option.value === next.outputResolution,
-          )
-        ) {
-          next.outputResolution = '2K';
+        if (supportsAdobeImageOutputResolution(currentModelName)) {
+          if (
+            !ADOBE_OUTPUT_RESOLUTION_OPTIONS.some(
+              (option) => option.value === next.outputResolution,
+            )
+          ) {
+            next.outputResolution = '2K';
+          }
         }
       }
 
@@ -4394,12 +4448,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     `${record.modelName || 'creative-image'}-${recordIndex + 1}-${imageIndex + 1}.png`;
 
   const getCompletedImageItems = (record) =>
-    Array.isArray(record?.images) ? record.images.filter((item) => Boolean(item?.url)) : [];
+    Array.isArray(record?.images)
+      ? record.images.filter((item) => Boolean(getImageTaskMediaUrl(item)))
+      : [];
 
   const getSelectedImageItems = (record) => {
     const selectedIds = new Set(selectedImageTaskIds[record.id] || []);
     return Array.isArray(record?.images)
-      ? record.images.filter((item) => item?.url && selectedIds.has(item.id))
+      ? record.images.filter(
+          (item) => getImageTaskMediaUrl(item) && selectedIds.has(item.id),
+        )
       : [];
   };
 
@@ -4453,7 +4511,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       const originalIndex = record.images.findIndex((candidate) => candidate.id === item.id);
       window.setTimeout(() => {
         triggerDownload(
-          item.url,
+          getImageTaskMediaUrl(item),
           buildImageDownloadFilename(
             record,
             recordIndex,
@@ -6915,10 +6973,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                     (currentUploadedImageUrls.length > 0
                       ? 'Edit the provided media.'
                       : ''),
-                  output_resolution:
-                    basePayload.output_resolution ||
-                    currentParamsSnapshot.outputResolution ||
-                    '2K',
                   request_id: requestId,
                   seed: requestSeed,
                   seeds: [requestSeed],
@@ -6940,13 +6994,36 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 };
 
             if (isAdobeImageModel) {
-              if (basePayload.aspect_ratio) {
-                payload.aspect_ratio = basePayload.aspect_ratio;
-              } else if (basePayload.size) {
-                payload.size = basePayload.size;
-              }
-              if (currentUploadedImageUrls.length > 0) {
-                payload.image_urls = currentUploadedImageUrls;
+              if (isCurrentGPTImage2Model) {
+                payload.output_resolution = '1K';
+                payload.aspect_ratio =
+                  basePayload.aspect_ratio ||
+                  (currentParamsSnapshot.aspectRatio === 'auto'
+                    ? ''
+                    : currentParamsSnapshot.aspectRatio) ||
+                  '1:1';
+                if (currentUploadedImageUrls.length > 0) {
+                  payload.messages = buildGPTImage2ReferenceMessages(
+                    currentPrompt,
+                    currentUploadedImageUrls,
+                  );
+                }
+              } else {
+                if (basePayload.size) {
+                  payload.size = basePayload.size;
+                }
+                payload.output_resolution =
+                  basePayload.output_resolution ||
+                  currentParamsSnapshot.outputResolution ||
+                  '2K';
+                if (basePayload.aspect_ratio) {
+                  payload.aspect_ratio = basePayload.aspect_ratio;
+                } else if (basePayload.size) {
+                  payload.size = basePayload.size;
+                }
+                if (currentUploadedImageUrls.length > 0) {
+                  payload.image_urls = currentUploadedImageUrls;
+                }
               }
             } else {
               if (!isGrokImageEditModel && basePayload.size) {
@@ -7831,15 +7908,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                 </div>
                                 {record.images.length > 0 ? (
                                   <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
-                                    {record.images.map((imageItem, imageIndex) => (
+                                    {record.images.map((imageItem, imageIndex) => {
+                                      const imageUrl = getImageTaskMediaUrl(imageItem);
+                                      return (
                                       <div
                                         key={imageItem.id || `${record.id}-loading-${imageIndex}`}
                                         className='group relative overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-sm'
                                       >
-                                        {imageItem.url ? (
+                                        {imageUrl ? (
                                           <>
                                             <img
-                                              src={buildCreativeCenterImageDisplayUrl(imageItem.url)}
+                                              key={imageUrl}
+                                              src={buildCreativeCenterImageDisplayUrl(imageUrl)}
                                               alt={`Generating Art ${imageIndex + 1}`}
                                               loading='lazy'
                                               decoding='async'
@@ -7866,7 +7946,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                               <button
                                                 onClick={() =>
                                                   setPreviewImage({
-                                                    url: imageItem.url,
+                                                    url: imageUrl,
                                                     title: `${record.prompt || '图片预览'} · 第 ${imageIndex + 1} 张`,
                                                   })
                                                 }
@@ -7878,7 +7958,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                               <button
                                                 onClick={() =>
                                                   triggerDownload(
-                                                    imageItem.url,
+                                                    imageUrl,
                                                     buildImageDownloadFilename(record, recordIndex, imageIndex),
                                                   )
                                                 }
@@ -7916,7 +7996,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           </div>
                                         )}
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 ) : null}
                               </div>
@@ -7926,15 +8007,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                               </div>
                             ) : (
                               <div className='mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
-                                {record.images.map((imageItem, imageIndex) => (
+                                {record.images.map((imageItem, imageIndex) => {
+                                  const imageUrl = getImageTaskMediaUrl(imageItem);
+                                  return (
                                   <div
                                     key={imageItem.id || `${record.id}-${imageIndex}`}
                                     className='group relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/50'
                                   >
-                                    {imageItem.url ? (
+                                    {imageUrl ? (
                                       <>
                                         <img
-                                          src={buildCreativeCenterImageDisplayUrl(imageItem.url)}
+                                          key={imageUrl}
+                                          src={buildCreativeCenterImageDisplayUrl(imageUrl)}
                                           alt={`Generated Art ${imageIndex + 1}`}
                                           loading='lazy'
                                           decoding='async'
@@ -7961,7 +8045,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           <button
                                             onClick={() =>
                                               setPreviewImage({
-                                                url: imageItem.url,
+                                                url: imageUrl,
                                                 title: `${record.prompt || '图片预览'} · 第 ${imageIndex + 1} 张`,
                                               })
                                             }
@@ -7973,7 +8057,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           <button
                                             onClick={() =>
                                               triggerDownload(
-                                                imageItem.url,
+                                                imageUrl,
                                                 buildImageDownloadFilename(record, recordIndex, imageIndex),
                                               )
                                             }
@@ -8008,7 +8092,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                       </div>
                                     )}
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ))}
 
@@ -8642,7 +8727,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         icon={<ImageIcon size={14} />}
                         label={`分辨率 ${params.outputResolution}`}
                         value={params.outputResolution}
-                        options={ADOBE_OUTPUT_RESOLUTION_OPTIONS}
+                        options={
+                          isCurrentGPTImage2Model
+                            ? []
+                            : ADOBE_OUTPUT_RESOLUTION_OPTIONS
+                        }
                         openMenu={openMenu}
                         setOpenMenu={setOpenMenu}
                         onSelect={(value) =>
