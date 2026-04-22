@@ -81,6 +81,25 @@ func TestGetAndValidOpenAIImageRequestRejectsGPTImage2InvalidOutputResolution(t 
 	require.Contains(t, err.Error(), "output_resolution must be 1K")
 }
 
+func TestGetAndValidOpenAIImageRequestConvertsGPTImage2ImageToMessages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := `{
+		"model":"gpt-image2",
+		"prompt":"make a campaign image",
+		"aspect_ratio":"1:1",
+		"image":"https://example.com/source.png"
+	}`
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/v1/images/generations", strings.NewReader(body))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	req, err := GetAndValidOpenAIImageRequest(ctx, relayconstant.RelayModeImagesGenerations)
+
+	require.NoError(t, err)
+	require.Empty(t, req.Image)
+	require.Equal(t, "https://example.com/source.png", gjson.GetBytes(req.Messages, "0.content.1.image_url.url").String())
+}
+
 func TestGetAndValidOpenAIImageRequestRejectsGPTImage2TooManyJSONImages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	body := `{

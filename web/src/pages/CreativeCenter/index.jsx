@@ -1607,14 +1607,14 @@ const createCreativeRecordId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const getImageTaskMediaUrl = (item) => {
-  if (typeof item?.url === 'string' && item.url.trim()) {
-    return item.url.trim();
-  }
   if (typeof item?.resultUrl === 'string' && item.resultUrl.trim()) {
     return item.resultUrl.trim();
   }
   if (typeof item?.result_url === 'string' && item.result_url.trim()) {
     return item.result_url.trim();
+  }
+  if (typeof item?.url === 'string' && item.url.trim()) {
+    return item.url.trim();
   }
   return '';
 };
@@ -3653,7 +3653,7 @@ export default function App() {
     }
     if (Array.isArray(record?.images) && record.images.length > 0) {
       summary.push(
-        `${record.images.filter((item) => item?.status === 'completed' && item?.url).length}张`,
+        `${record.images.filter((item) => item?.status === 'completed' && getImageTaskMediaUrl(item)).length}张`,
       );
     }
 
@@ -4448,12 +4448,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     `${record.modelName || 'creative-image'}-${recordIndex + 1}-${imageIndex + 1}.png`;
 
   const getCompletedImageItems = (record) =>
-    Array.isArray(record?.images) ? record.images.filter((item) => Boolean(item?.url)) : [];
+    Array.isArray(record?.images)
+      ? record.images.filter((item) => Boolean(getImageTaskMediaUrl(item)))
+      : [];
 
   const getSelectedImageItems = (record) => {
     const selectedIds = new Set(selectedImageTaskIds[record.id] || []);
     return Array.isArray(record?.images)
-      ? record.images.filter((item) => item?.url && selectedIds.has(item.id))
+      ? record.images.filter(
+          (item) => getImageTaskMediaUrl(item) && selectedIds.has(item.id),
+        )
       : [];
   };
 
@@ -4507,7 +4511,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       const originalIndex = record.images.findIndex((candidate) => candidate.id === item.id);
       window.setTimeout(() => {
         triggerDownload(
-          item.url,
+          getImageTaskMediaUrl(item),
           buildImageDownloadFilename(
             record,
             recordIndex,
@@ -7904,15 +7908,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                 </div>
                                 {record.images.length > 0 ? (
                                   <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
-                                    {record.images.map((imageItem, imageIndex) => (
+                                    {record.images.map((imageItem, imageIndex) => {
+                                      const imageUrl = getImageTaskMediaUrl(imageItem);
+                                      return (
                                       <div
                                         key={imageItem.id || `${record.id}-loading-${imageIndex}`}
                                         className='group relative overflow-hidden rounded-[1.5rem] border border-blue-100 bg-white shadow-sm'
                                       >
-                                        {imageItem.url ? (
+                                        {imageUrl ? (
                                           <>
                                             <img
-                                              src={buildCreativeCenterImageDisplayUrl(imageItem.url)}
+                                              key={imageUrl}
+                                              src={buildCreativeCenterImageDisplayUrl(imageUrl)}
                                               alt={`Generating Art ${imageIndex + 1}`}
                                               loading='lazy'
                                               decoding='async'
@@ -7939,7 +7946,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                               <button
                                                 onClick={() =>
                                                   setPreviewImage({
-                                                    url: imageItem.url,
+                                                    url: imageUrl,
                                                     title: `${record.prompt || '图片预览'} · 第 ${imageIndex + 1} 张`,
                                                   })
                                                 }
@@ -7951,7 +7958,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                               <button
                                                 onClick={() =>
                                                   triggerDownload(
-                                                    imageItem.url,
+                                                    imageUrl,
                                                     buildImageDownloadFilename(record, recordIndex, imageIndex),
                                                   )
                                                 }
@@ -7989,7 +7996,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           </div>
                                         )}
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 ) : null}
                               </div>
@@ -7999,15 +8007,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                               </div>
                             ) : (
                               <div className='mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
-                                {record.images.map((imageItem, imageIndex) => (
+                                {record.images.map((imageItem, imageIndex) => {
+                                  const imageUrl = getImageTaskMediaUrl(imageItem);
+                                  return (
                                   <div
                                     key={imageItem.id || `${record.id}-${imageIndex}`}
                                     className='group relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-lg shadow-slate-200/50'
                                   >
-                                    {imageItem.url ? (
+                                    {imageUrl ? (
                                       <>
                                         <img
-                                          src={buildCreativeCenterImageDisplayUrl(imageItem.url)}
+                                          key={imageUrl}
+                                          src={buildCreativeCenterImageDisplayUrl(imageUrl)}
                                           alt={`Generated Art ${imageIndex + 1}`}
                                           loading='lazy'
                                           decoding='async'
@@ -8034,7 +8045,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           <button
                                             onClick={() =>
                                               setPreviewImage({
-                                                url: imageItem.url,
+                                                url: imageUrl,
                                                 title: `${record.prompt || '图片预览'} · 第 ${imageIndex + 1} 张`,
                                               })
                                             }
@@ -8046,7 +8057,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                           <button
                                             onClick={() =>
                                               triggerDownload(
-                                                imageItem.url,
+                                                imageUrl,
                                                 buildImageDownloadFilename(record, recordIndex, imageIndex),
                                               )
                                             }
@@ -8081,7 +8092,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                       </div>
                                     )}
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             ))}
 
