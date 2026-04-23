@@ -29,23 +29,6 @@ import {
 } from '../../../helpers';
 import { useTranslation } from 'react-i18next';
 
-const GROUP_SPECIAL_USABLE_GROUP_FIELD = 'GroupSpecialUsableGroup';
-const GROUP_SPECIAL_USABLE_GROUP_OPTION_KEY =
-  'group_ratio_setting.group_special_usable_group';
-
-const OPTION_KEY_BY_FIELD = {
-  [GROUP_SPECIAL_USABLE_GROUP_FIELD]: GROUP_SPECIAL_USABLE_GROUP_OPTION_KEY,
-};
-
-const getOptionKey = (field) => OPTION_KEY_BY_FIELD[field] || field;
-
-const normalizeOptionValue = (value) => {
-  if (typeof value === 'boolean') return String(value);
-  if (typeof value === 'string') return value;
-  if (value === undefined || value === null) return '';
-  return JSON.stringify(value);
-};
-
 export default function GroupRatioSettings(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -56,7 +39,7 @@ export default function GroupRatioSettings(props) {
     GroupModelPrice: '',
     GroupModelPriceBySeconds: '',
     GroupModelPriceByResolution: '',
-    [GROUP_SPECIAL_USABLE_GROUP_FIELD]: '',
+    'group_ratio_setting.group_special_usable_group': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
   });
@@ -73,11 +56,11 @@ export default function GroupRatioSettings(props) {
             return showWarning(t('你似乎并没有修改什么'));
 
           const requestQueue = updateArray.map((item) => {
-            const value = normalizeOptionValue(inputs[item.key]);
-            return API.put('/api/option/', {
-              key: getOptionKey(item.key),
-              value,
-            });
+            const value =
+              typeof inputs[item.key] === 'boolean'
+                ? String(inputs[item.key])
+                : inputs[item.key];
+            return API.put('/api/option/', { key: item.key, value });
           });
 
           setLoading(true);
@@ -119,14 +102,9 @@ export default function GroupRatioSettings(props) {
 
   useEffect(() => {
     const currentInputs = {};
-    const inputKeys = Object.keys(inputs);
     for (let key in props.options) {
-      const field =
-        key === GROUP_SPECIAL_USABLE_GROUP_OPTION_KEY
-          ? GROUP_SPECIAL_USABLE_GROUP_FIELD
-          : key;
-      if (inputKeys.includes(field)) {
-        currentInputs[field] = props.options[key];
+      if (Object.keys(inputs).includes(key)) {
+        currentInputs[key] = props.options[key];
       }
     }
     setInputs(currentInputs);
@@ -291,7 +269,7 @@ export default function GroupRatioSettings(props) {
               extraText={t(
                 '键为用户分组名称，值为操作映射对象。内层键以"+:"开头表示添加指定分组（键值为分组名称，值为描述），以"-:"开头表示移除指定分组（键值为分组名称），不带前缀的键直接添加该分组。例如：{"vip": {"+:premium": "高级分组", "special": "特殊分组", "-:default": "默认分组"}}，表示 vip 分组的用户可以使用 premium 和 special 分组，同时移除 default 分组的访问权限',
               )}
-              field={GROUP_SPECIAL_USABLE_GROUP_FIELD}
+              field={'group_ratio_setting.group_special_usable_group'}
               autosize={{ minRows: 6, maxRows: 12 }}
               trigger='blur'
               stopValidateWithError
@@ -304,7 +282,7 @@ export default function GroupRatioSettings(props) {
               onChange={(value) =>
                 setInputs({
                   ...inputs,
-                  [GROUP_SPECIAL_USABLE_GROUP_FIELD]: value,
+                  'group_ratio_setting.group_special_usable_group': value,
                 })
               }
             />
