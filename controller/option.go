@@ -112,24 +112,15 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
-	switch value := option.Value.(type) {
-	case string:
-		option.Value = value
+	switch option.Value.(type) {
 	case bool:
-		option.Value = common.Interface2String(value)
+		option.Value = common.Interface2String(option.Value.(bool))
 	case float64:
-		option.Value = common.Interface2String(value)
+		option.Value = common.Interface2String(option.Value.(float64))
 	case int:
-		option.Value = common.Interface2String(value)
-	case nil:
-		option.Value = ""
+		option.Value = common.Interface2String(option.Value.(int))
 	default:
-		bytes, err := common.Marshal(value)
-		if err != nil {
-			option.Value = fmt.Sprintf("%v", value)
-		} else {
-			option.Value = string(bytes)
-		}
+		option.Value = fmt.Sprintf("%v", option.Value)
 	}
 	switch option.Key {
 	case "GitHubOAuthEnabled":
