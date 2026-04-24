@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -338,6 +339,63 @@ func inviteUser(inviterId int) (err error) {
 	user.AffQuota += common.QuotaForInviter
 	user.AffHistoryQuota += common.QuotaForInviter
 	return DB.Save(user).Error
+}
+
+func calculateInviterRechargeReward(quota int) int {
+	if quota <= 0 || common.QuotaForInviterRechargeRatio <= 0 {
+		return 0
+	}
+	return int(decimal.NewFromInt(int64(quota)).
+		Mul(decimal.NewFromFloat(common.QuotaForInviterRechargeRatio)).
+		Div(decimal.NewFromInt(100)).
+		IntPart())
+}
+
+func rewardInviterForRechargeTx(tx *gorm.DB, userId int, quota int) (int, int, error) {
+	if tx == nil {
+		return 0, 0, errors.New("nil transaction")
+	}
+
+	rewardQuota := calculateInviterRechargeReward(quota)
+	if rewardQuota <= 0 {
+		return 0, 0, nil
+	}
+
+	var user User
+	if err := tx.Select("id", "inviter_id").Where("id = ?", userId).First(&user).Error; err != nil {
+		return 0, 0, err
+	}
+	if user.InviterId == 0 {
+		return 0, 0, nil
+	}
+
+	err := tx.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]interface{}{
+		"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
+		"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+	}).Error
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return user.InviterId, rewardQuota, nil
+}
+
+func RewardInviterForRecharge(userId int, quota int) (int, int, error) {
+	if quota <= 0 {
+		return 0, 0, nil
+	}
+
+	var inviterId int
+	var rewardQuota int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var err error
+		inviterId, rewardQuota, err = rewardInviterForRechargeTx(tx, userId, quota)
+		return err
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return inviterId, rewardQuota, nil
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
