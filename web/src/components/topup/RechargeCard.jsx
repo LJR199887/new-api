@@ -597,6 +597,11 @@ const RechargeCard = ({
                     className='inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 font-semibold text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-800'
                     onClick={openTopUpLink}
                   >
+                    <img
+                      src='https://img688.com/file/1777011977526_ChatGPT_Image_2026年4月24日_14_25_33.png'
+                      alt={t('购买兑换码')}
+                      className='mr-1.5 h-3.5 w-3.5 rounded-sm object-cover'
+                    />
                     {t('购买兑换码')}
                   </button>
                 </div>
