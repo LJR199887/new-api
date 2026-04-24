@@ -304,6 +304,22 @@ func isSoraVideoModel(upstreamModel string) bool {
 	return strings.HasPrefix(upstreamModel, "sora-2") || strings.HasPrefix(upstreamModel, "sora2")
 }
 
+func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo")
+}
+
+func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	if !strings.HasPrefix(upstreamModel, "veo") {
+		return ""
+	}
+	if strings.Contains(upstreamModel, "ref") {
+		return "image"
+	}
+	return "frame"
+}
+
 func soraSizeFromAspectRatio(value string) string {
 	switch strings.TrimSpace(value) {
 	case "16:9":
@@ -333,8 +349,29 @@ func soraDurationBodyValue(value string) interface{} {
 	return strings.TrimSpace(value)
 }
 
+func hasMultipartFieldValue(values map[string][]string, key string) bool {
+	items := values[key]
+	for _, item := range items {
+		if strings.TrimSpace(item) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func firstNonEmptyMultipartValue(values map[string][]string, keys ...string) string {
+	for _, key := range keys {
+		for _, value := range values[key] {
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
 func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
-	if !isSoraVideoModel(upstreamModel) {
+	if !usesImageURLVideoGenerationsModel(upstreamModel) {
 		return
 	}
 
@@ -345,6 +382,7 @@ func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	imageURL := stringifyBodyValue(bodyMap["image_url"])
 	inputReference := stringifyBodyValue(bodyMap["input_reference"])
 	image := stringifyBodyValue(bodyMap["image"])
+	referenceMode := stringifyBodyValue(bodyMap["reference_mode"])
 
 	if duration == "" {
 		if seconds != "" {
@@ -381,6 +419,12 @@ func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	}
 	if imageURL != "" {
 		bodyMap["image_url"] = imageURL
+	}
+	if referenceMode == "" && imageURL != "" {
+		referenceMode = defaultVideoGenerationsReferenceMode(upstreamModel)
+	}
+	if referenceMode != "" {
+		bodyMap["reference_mode"] = referenceMode
 	}
 	delete(bodyMap, "input_reference")
 	delete(bodyMap, "image")
@@ -539,7 +583,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if key == "aspect_ratio" && len(values) > 0 && aspectRatioValue == "" {
 				aspectRatioValue = strings.TrimSpace(values[0])
 			}
-			if isSoraVideoModel(info.UpstreamModelName) && (key == "seconds" || key == "size") {
+			if usesImageURLVideoGenerationsModel(info.UpstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
 			for _, v := range values {
@@ -549,7 +593,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		if info.UpstreamModelName == "grok-imagine-1.0-video" && !hasSeconds && durationValue != "" {
 			writer.WriteField("seconds", durationValue)
 		}
-		if isSoraVideoModel(info.UpstreamModelName) {
+		if usesImageURLVideoGenerationsModel(info.UpstreamModelName) {
 			if !hasDuration {
 				if durationValue == "" {
 					durationValue = "4"
@@ -566,6 +610,16 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				writer.WriteField("aspect_ratio", aspectRatioValue)
 			}
 			writer.WriteField("async", "true")
+			if firstAsyncImageValue := firstNonEmptyMultipartValue(formData.Value, "image_url", "input_reference", "image"); firstAsyncImageValue != "" {
+				if firstAsyncImageValue != "" && !hasMultipartFieldValue(formData.Value, "image_url") {
+					writer.WriteField("image_url", firstAsyncImageValue)
+				}
+				if !hasMultipartFieldValue(formData.Value, "reference_mode") {
+					if referenceMode := defaultVideoGenerationsReferenceMode(info.UpstreamModelName); referenceMode != "" {
+						writer.WriteField("reference_mode", referenceMode)
+					}
+				}
+			}
 		}
 		for fieldName, fileHeaders := range formData.File {
 			for _, fh := range fileHeaders {
