@@ -24,7 +24,6 @@ import {
   Tag,
   Card,
   Button,
-  Banner,
   Skeleton,
   Form,
   Space,
@@ -550,16 +549,7 @@ const RechargeCard = ({
               )}
             </div>
           </Form>
-        ) : (
-          <Banner
-            type='info'
-            description={t(
-              '管理员未开启在线充值功能，请联系管理员开启或使用兑换码充值。',
-            )}
-            className='!rounded-xl'
-            closeIcon={null}
-          />
-        )}
+        ) : null}
       </Card>
 
       {/* 兑换码充值 */}
@@ -598,17 +588,18 @@ const RechargeCard = ({
             style={{ width: '100%' }}
             extraText={
               topUpLink && (
-                <Text type='tertiary'>
-                  {t('在找兑换码？')}
-                  <Text
-                    type='secondary'
-                    underline
-                    className='cursor-pointer'
+                <div className='flex flex-wrap items-center gap-2 text-sm'>
+                  <Text type='tertiary'>
+                    {t('联系管理员充值或者使用兑换码充值。')}
+                  </Text>
+                  <button
+                    type='button'
+                    className='inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 font-semibold text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-800'
                     onClick={openTopUpLink}
                   >
                     {t('购买兑换码')}
-                  </Text>
-                </Text>
+                  </button>
+                </div>
               )
             }
           />
