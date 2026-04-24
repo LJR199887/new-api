@@ -598,7 +598,7 @@ const RechargeCard = ({
                     onClick={openTopUpLink}
                   >
                     <img
-                      src='https://img688.com/file/1777011977526_ChatGPT_Image_2026年4月24日_14_25_33.png'
+                      src='https://img688.com/file/1777013056575_ChatGPT_Image_2026年4月24日_14_43_35.png'
                       alt={t('购买兑换码')}
                       className='mr-1.5 h-[70px] w-[70px] rounded-sm object-cover'
                     />
