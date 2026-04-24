@@ -123,6 +123,8 @@ func Redeem(key string, userId int) (quota int, err error) {
 		return 0, errors.New("无效的 user id")
 	}
 	redemption := &Redemption{}
+	var inviterId int
+	var inviterRewardQuota int
 
 	keyCol := "`key`"
 	if common.UsingPostgreSQL {
@@ -130,6 +132,7 @@ func Redeem(key string, userId int) (quota int, err error) {
 	}
 	common.RandomSleep()
 	err = DB.Transaction(func(tx *gorm.DB) error {
+		now := common.GetTimestamp()
 		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(keyCol+" = ?", key).First(redemption).Error
 		if err != nil {
 			return errors.New("无效的兑换码")
@@ -137,17 +140,34 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.Status != common.RedemptionCodeStatusEnabled {
 			return errors.New("该兑换码已被使用")
 		}
-		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
+		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < now {
 			return errors.New("该兑换码已过期")
 		}
 		err = tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
 		if err != nil {
 			return err
 		}
-		redemption.RedeemedTime = common.GetTimestamp()
+		redemption.RedeemedTime = now
 		redemption.Status = common.RedemptionCodeStatusUsed
 		redemption.UsedUserId = userId
 		err = tx.Save(redemption).Error
+		if err != nil {
+			return err
+		}
+		topUp := &TopUp{
+			UserId:        userId,
+			Amount:        int64(redemption.Quota),
+			Money:         0,
+			TradeNo:       fmt.Sprintf("redeem_%d_%d", redemption.Id, userId),
+			PaymentMethod: "redemption",
+			CreateTime:    now,
+			CompleteTime:  now,
+			Status:        common.TopUpStatusSuccess,
+		}
+		if err := tx.Create(topUp).Error; err != nil {
+			return err
+		}
+		inviterId, inviterRewardQuota, err = rewardInviterForRechargeTx(tx, userId, redemption.Quota)
 		return err
 	})
 	if err != nil {
@@ -155,6 +175,9 @@ func Redeem(key string, userId int) (quota int, err error) {
 		return 0, ErrRedeemFailed
 	}
 	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	if inviterId > 0 && inviterRewardQuota > 0 {
+		RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请好友兑换码充值奖励 %s，充值用户 ID %d", logger.LogQuota(inviterRewardQuota), userId))
+	}
 	return redemption.Quota, nil
 }
 
