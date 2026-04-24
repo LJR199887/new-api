@@ -32,9 +32,8 @@ import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
-import { Coins } from 'lucide-react';
 import { IconSearch } from '@douyinfe/semi-icons';
-import { API, timestamp2string } from '../../../helpers';
+import { API, timestamp2string, renderQuota } from '../../../helpers';
 import { isAdmin } from '../../../helpers/utils';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 const { Text } = Typography;
@@ -52,6 +51,7 @@ const PAYMENT_METHOD_MAP = {
   stripe: 'Stripe',
   creem: 'Creem',
   waffo: 'Waffo',
+  redemption: '兑换码',
   alipay: '支付宝',
   wxpay: '微信',
 };
@@ -185,12 +185,7 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
               </Tag>
             );
           }
-          return (
-            <span className='flex items-center gap-1'>
-              <Coins size={16} />
-              <Text>{amount}</Text>
-            </span>
-          );
+          return <Text>{renderQuota(amount)}</Text>;
         },
       },
       {

@@ -20,6 +20,11 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Modal, Typography, Input, InputNumber } from '@douyinfe/semi-ui';
 import { CreditCard } from 'lucide-react';
+import {
+  quotaToDisplayAmount,
+  displayAmountToQuota,
+} from '../../../helpers/quota';
+import { getCurrencyConfig } from '../../../helpers/render';
 
 const TransferModal = ({
   t,
@@ -32,6 +37,21 @@ const TransferModal = ({
   transferAmount,
   setTransferAmount,
 }) => {
+  const currencyConfig = getCurrencyConfig();
+  const useTokenDisplay = currencyConfig.type === 'TOKENS';
+  const minTransferQuota = getQuotaPerUnit();
+  const maxTransferQuota = userState?.user?.aff_quota || 0;
+  const transferDisplayAmount =
+    transferAmount === '' || transferAmount == null
+      ? ''
+      : Number(quotaToDisplayAmount(transferAmount).toFixed(2));
+  const minTransferDisplayAmount = Number(
+    quotaToDisplayAmount(minTransferQuota).toFixed(2),
+  );
+  const maxTransferDisplayAmount = Number(
+    quotaToDisplayAmount(maxTransferQuota).toFixed(2),
+  );
+
   return (
     <Modal
       title={
@@ -62,10 +82,17 @@ const TransferModal = ({
             {t('划转额度')} · {t('最低') + renderQuota(getQuotaPerUnit())}
           </Typography.Text>
           <InputNumber
-            min={getQuotaPerUnit()}
-            max={userState?.user?.aff_quota || 0}
-            value={transferAmount}
-            onChange={(value) => setTransferAmount(value)}
+            min={minTransferDisplayAmount}
+            max={maxTransferDisplayAmount}
+            value={transferDisplayAmount}
+            precision={useTokenDisplay ? 0 : 2}
+            step={useTokenDisplay ? 1 : 0.01}
+            prefix={useTokenDisplay ? undefined : currencyConfig.symbol}
+            onChange={(value) =>
+              setTransferAmount(
+                value === '' || value == null ? '' : displayAmountToQuota(value),
+              )
+            }
             className='w-full !rounded-lg'
           />
         </div>

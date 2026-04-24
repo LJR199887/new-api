@@ -36,6 +36,7 @@ export default function SettingsCreditLimit(props) {
     PreConsumedQuota: '',
     QuotaForInviter: '',
     QuotaForInvitee: '',
+    QuotaForInviterRechargeRatio: '',
     'quota_setting.enable_free_model_pre_consume': true,
   });
   const refForm = useRef();
@@ -148,7 +149,7 @@ export default function SettingsCreditLimit(props) {
                 />
               </Col>
             </Row>
-            <Row>
+            <Row gutter={16}>
               <Col xs={24} sm={12} md={8} lg={8} xl={6}>
                 <Form.InputNumber
                   label={t('新用户使用邀请码奖励额度')}
@@ -162,6 +163,27 @@ export default function SettingsCreditLimit(props) {
                     setInputs({
                       ...inputs,
                       QuotaForInvitee: String(value),
+                    })
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  label={t('邀请充值奖励比例')}
+                  field={'QuotaForInviterRechargeRatio'}
+                  step={0.1}
+                  min={0}
+                  max={100}
+                  precision={2}
+                  suffix={'%'}
+                  extraText={t(
+                    '好友每次充值成功后，按实际到账额度的百分比奖励邀请人，例如 10 表示奖励 10%',
+                  )}
+                  placeholder={t('例如：10')}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      QuotaForInviterRechargeRatio: String(value ?? 0),
                     })
                   }
                 />
