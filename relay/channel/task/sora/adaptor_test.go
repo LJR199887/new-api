@@ -234,6 +234,102 @@ func TestNormalizeSoraVideoRequestAcceptsSora2Alias(t *testing.T) {
 	}
 }
 
+func TestNormalizeSoraVideoRequestAcceptsVeoImageURLFormat(t *testing.T) {
+	body := map[string]interface{}{
+		"model":          "veo31-fast",
+		"prompt":         "Create a smooth cinematic motion",
+		"duration":       float64(4),
+		"aspect_ratio":   "16:9",
+		"resolution":     "720p",
+		"image_url":      "https://example.com/a.png",
+		"reference_mode": "",
+	}
+
+	normalizeSoraVideoRequest(body, "veo31-fast")
+
+	if got := body["image_url"]; got != "https://example.com/a.png" {
+		t.Fatalf("expected image_url to be preserved, got %#v", got)
+	}
+	if got := body["reference_mode"]; got != "frame" {
+		t.Fatalf("expected veo31-fast reference_mode=frame, got %#v", got)
+	}
+	if got, ok := body["async"].(bool); !ok || !got {
+		t.Fatalf("expected async=true, got %#v", body["async"])
+	}
+}
+
+func TestNormalizeSoraVideoRequestDefaultsVeoRefToImageMode(t *testing.T) {
+	body := map[string]interface{}{
+		"model":   "veo31-ref",
+		"prompt":  "Animate this still image",
+		"image":   "https://example.com/source.png",
+		"seconds": "4",
+		"size":    "1280x720",
+	}
+
+	normalizeSoraVideoRequest(body, "veo31-ref")
+
+	if got := body["image_url"]; got != "https://example.com/source.png" {
+		t.Fatalf("expected image to be normalized to image_url, got %#v", got)
+	}
+	if got := body["reference_mode"]; got != "image" {
+		t.Fatalf("expected veo31-ref reference_mode=image, got %#v", got)
+	}
+	if got := body["duration"]; got != 4 {
+		t.Fatalf("expected seconds to backfill duration, got %#v", got)
+	}
+	if got := body["aspect_ratio"]; got != "16:9" {
+		t.Fatalf("expected size to backfill aspect_ratio, got %#v", got)
+	}
+}
+
+func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "veo31-fast",
+		"prompt": "Create a smooth cinematic motion",
+		"duration": 4,
+		"aspect_ratio": "16:9",
+		"resolution": "720p",
+		"image_url": "https://example.com/a.png"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "veo31-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["image_url"]; got != "https://example.com/a.png" {
+		t.Fatalf("expected image_url to be forwarded, got %#v", got)
+	}
+	if got := payload["reference_mode"]; got != "frame" {
+		t.Fatalf("expected reference_mode=frame, got %#v", got)
+	}
+	if got, ok := payload["async"].(bool); !ok || !got {
+		t.Fatalf("expected async=true, got %#v", payload["async"])
+	}
+}
+
 func TestBuildRequestURLUsesVideoGenerationsPath(t *testing.T) {
 	adaptor := &TaskAdaptor{baseURL: "https://upstream.example"}
 	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
