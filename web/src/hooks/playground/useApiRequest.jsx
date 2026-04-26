@@ -33,10 +33,15 @@ import {
 } from '../../helpers';
 
 const GROK_IMAGE_GENERATION_MODELS = new Set([
-  'grok-imagine-1.0',
+  'grok-imagine-image',
   'grok-imagine-1.0-fast',
 ]);
-const GROK_IMAGE_EDIT_MODELS = new Set(['grok-imagine-1.0-edit']);
+const GROK_IMAGE_EDIT_MODELS = new Set([
+  'grok-imagine-image-edit',
+]);
+const GROK_IMAGINE_VIDEO_MODELS = new Set([
+  'grok-imagine-video',
+]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -254,10 +259,11 @@ export const useApiRequest = (
       const prompt = getTextFromMessageContent(lastUserMessage?.content);
       const images = getImagesFromMessageContent(lastUserMessage?.content);
       const size = payload?.size || payload?.videoSize;
-      const seconds = payload?.seconds || payload?.videoSeconds;
+      const rawSeconds = payload?.seconds || payload?.videoSeconds;
       const quality = payload?.quality || payload?.videoQuality;
       const preset = payload?.preset || payload?.videoPreset;
-      const isGrokImagineVideoModel = payload?.model === 'grok-imagine-1.0-video';
+      const isGrokImagineVideoModel =
+        GROK_IMAGINE_VIDEO_MODELS.has(payload?.model);
       const resolutionName =
         payload?.resolution_name ||
         (isGrokImagineVideoModel ? formatVideoQuality(quality) : '');
@@ -265,7 +271,10 @@ export const useApiRequest = (
       const requestPayload = {
         model: payload.model,
         prompt,
-        seconds,
+        seconds:
+          isGrokImagineVideoModel && !['6', '10'].includes(String(rawSeconds))
+            ? '10'
+            : rawSeconds,
         size,
         quality: normalizeVideoQuality(quality),
         preset,

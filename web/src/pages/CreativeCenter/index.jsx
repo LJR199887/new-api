@@ -47,14 +47,19 @@ const tabs = [
 ];
 
 const GROK_IMAGINE_IMAGE_MODELS = new Set([
-  'grok-imagine-1.0',
+  'grok-imagine-image',
   'grok-imagine-1.0-fast',
-  'grok-imagine-1.0-edit',
+  'grok-imagine-image-edit',
 ]);
-const GROK_IMAGE_EDIT_MODELS = new Set(['grok-imagine-1.0-edit']);
+const GROK_IMAGE_EDIT_MODELS = new Set([
+  'grok-imagine-image-edit',
+]);
 const GROK_IMAGE_GENERATION_MODELS = new Set([
-  'grok-imagine-1.0',
+  'grok-imagine-image',
   'grok-imagine-1.0-fast',
+]);
+const GROK_IMAGINE_VIDEO_MODELS = new Set([
+  'grok-imagine-video',
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
@@ -75,14 +80,15 @@ const ADOBE_VIDEO_MODELS = new Set([
   'veo31-fast',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
-  'grok-imagine-1.0-edit': 3,
-  'grok-imagine-1.0-video': 7,
+  'grok-imagine-image-edit': 3,
+  'grok-imagine-video': 7,
   'nano-banana': 4,
   'nano-banana2': 6,
   'nano-banana-pro': 6,
   'gpt-image2': 6,
   'sora2': 1,
   'sora2-pro': 1,
+  'veo31': 2,
   'veo31-fast': 2,
   'veo31-ref': 3,
 };
@@ -140,7 +146,7 @@ const GENERIC_VIDEO_SIZE_OPTIONS = [
 const GENERIC_VIDEO_SECONDS_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30].map(
   (value) => ({ label: `${value}s`, value: String(value) }),
 );
-const GROK_IMAGINE_VIDEO_SECONDS_OPTIONS = [6, 8, 10].map((value) => ({
+const GROK_IMAGINE_VIDEO_SECONDS_OPTIONS = [10, 6].map((value) => ({
   label: `${value}s`,
   value: String(value),
 }));
@@ -223,7 +229,8 @@ const CREATIVE_CENTER_VIDEO_TASK_ACTIONS = new Set([
   'remixGenerate',
 ]);
 const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
-  'grok-imagine-1.0-video',
+  'grok-imagine-video',
+  'veo31',
   'veo31-fast',
   'veo31-ref',
 ]);
@@ -3480,7 +3487,8 @@ export default function App() {
   const isSubmitPending = (isChatTab && isGenerating) || isUploadingImage;
   const isVideoModel =
     typeof currentModelName === 'string' && currentModelName.includes('video');
-  const isGrokImagineVideoModel = currentModelName === 'grok-imagine-1.0-video';
+  const isGrokImagineVideoModel =
+    GROK_IMAGINE_VIDEO_MODELS.has(currentModelName);
   const currentVideoSecondsOptions = isGrokImagineVideoModel
     ? GROK_IMAGINE_VIDEO_SECONDS_OPTIONS
     : GENERIC_VIDEO_SECONDS_OPTIONS;
@@ -3588,7 +3596,8 @@ export default function App() {
       modelName === 'veo31-fast';
     const isCurrentVideoModel =
       typeof modelName === 'string' && modelName.includes('video');
-    const isCurrentGrokImagineVideoModel = modelName === 'grok-imagine-1.0-video';
+    const isCurrentGrokImagineVideoModel =
+      GROK_IMAGINE_VIDEO_MODELS.has(modelName);
 
     if (tabKey === 'image') {
       if (isCurrentGrokImagineImageModel && !isCurrentGrokImageEditModel) {
@@ -3629,9 +3638,6 @@ export default function App() {
           sourceParams.aspectRatio || getAdobeVideoDefaultAspectRatio(modelName);
         if (isCurrentAdobeVeoModel) {
           snapshot.videoResolution = sourceParams.videoResolution || '1080p';
-        }
-        if (modelName === 'veo31') {
-          snapshot.referenceMode = sourceParams.referenceMode || 'frame';
         }
       }
     }
@@ -7354,7 +7360,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
               payload.image_url = currentUploadedImageUrls[0];
             } else if (
-              currentModelName === 'grok-imagine-1.0-video' &&
+              GROK_IMAGINE_VIDEO_MODELS.has(currentModelName) &&
               currentUploadedImageUrls.length > 0
             ) {
               payload.image_reference = currentUploadedImageUrls;
@@ -8867,7 +8873,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         />
                       )}
 
-                      {currentModelName === 'veo31' && (
+                      {false && currentModelName === 'veo31' && (
                         <DropSelectButton
                           menuKey='referenceMode'
                           icon={<Layers size={14} />}

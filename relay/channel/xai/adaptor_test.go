@@ -21,7 +21,7 @@ func TestConvertImageRequestBuildsMultipartForEditImage(t *testing.T) {
 	converted, err := adaptor.ConvertImageRequest(ctx, &relaycommon.RelayInfo{
 		RelayMode: relayconstant.RelayModeImagesEdits,
 	}, dto.ImageRequest{
-		Model:          "grok-imagine-1.0-edit",
+		Model:          "grok-imagine-image-edit",
 		Prompt:         "make it watercolor",
 		N:              lo.ToPtr(uint(2)),
 		Image:          []byte(`{"url":"data:image/png;base64,aGVsbG8="}`),
@@ -36,7 +36,7 @@ func TestConvertImageRequestBuildsMultipartForEditImage(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", converted)
 	}
-	if payload["model"] != "grok-imagine-1.0-edit" {
+	if payload["model"] != "grok-imagine-image-edit" {
 		t.Fatalf("unexpected model: %v", payload["model"])
 	}
 	if payload["prompt"] != "make it watercolor" {
@@ -66,7 +66,7 @@ func TestConvertImageRequestSupportsMultipleEditImages(t *testing.T) {
 	converted, err := adaptor.ConvertImageRequest(nil, &relaycommon.RelayInfo{
 		RelayMode: relayconstant.RelayModeImagesEdits,
 	}, dto.ImageRequest{
-		Model:          "grok-imagine-1.0-edit",
+		Model:          "grok-imagine-image-edit",
 		Prompt:         "blend both references",
 		Image:          []byte(`["https://example.com/1.png","https://example.com/2.png"]`),
 		ResponseFormat: "url",
@@ -98,7 +98,7 @@ func TestConvertImageRequestPreservesSize(t *testing.T) {
 	adaptor := &Adaptor{}
 
 	converted, err := adaptor.ConvertImageRequest(nil, nil, dto.ImageRequest{
-		Model:          "grok-imagine-1.0",
+		Model:          "grok-imagine-image",
 		Prompt:         "draw a city skyline",
 		Size:           "1536x1024",
 		ResponseFormat: "url",
@@ -113,6 +113,9 @@ func TestConvertImageRequestPreservesSize(t *testing.T) {
 	}
 	if xaiReq.Size != "1536x1024" {
 		t.Fatalf("unexpected size: %s", xaiReq.Size)
+	}
+	if xaiReq.Model != "grok-imagine-image" {
+		t.Fatalf("unexpected model: %s", xaiReq.Model)
 	}
 }
 
@@ -166,11 +169,12 @@ func TestResolveImagePayloadSupportsPlainURLObject(t *testing.T) {
 	}
 }
 
-func TestModelListIncludesGrokImagineOnePointZeroVariants(t *testing.T) {
+func TestModelListIncludesGrokImagineVariants(t *testing.T) {
 	expected := []string{
-		"grok-imagine-1.0",
+		"grok-imagine-image",
+		"grok-imagine-image-edit",
+		"grok-imagine-video",
 		"grok-imagine-1.0-fast",
-		"grok-imagine-1.0-edit",
 	}
 
 	for _, model := range expected {

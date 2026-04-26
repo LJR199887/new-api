@@ -57,11 +57,18 @@ const SettingsPanel = ({
     return size;
   };
   const grokImagineImageModels = new Set([
-    'grok-imagine-1.0',
+    'grok-imagine-image',
     'grok-imagine-1.0-fast',
   ]);
-  const grokImagineImageEditModels = new Set(['grok-imagine-1.0-edit']);
-  const restrictedImageUploadModels = new Set(['grok-imagine-1.0']);
+  const grokImagineImageEditModels = new Set([
+    'grok-imagine-image-edit',
+  ]);
+  const restrictedImageUploadModels = new Set([
+    'grok-imagine-image',
+  ]);
+  const grokImagineVideoModels = new Set([
+    'grok-imagine-video',
+  ]);
   const adobeImageModels = new Set([
     'nano-banana',
     'nano-banana2',
@@ -90,7 +97,7 @@ const SettingsPanel = ({
     inputs.model === 'veo31-fast';
   const isVideoModel =
     typeof inputs.model === 'string' && inputs.model.includes('video');
-  const isGrokImagineVideoModel = inputs.model === 'grok-imagine-1.0-video';
+  const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const imageSizeOptions = [
     { label: '1:1 方图 (1024x1024)', value: '1024x1024' },
     { label: '3:2 横图 (1792x1024)', value: '1792x1024' },
@@ -119,7 +126,10 @@ const SettingsPanel = ({
     { label: '9:16', value: '720x1280' },
     { label: '1:1', value: '1024x1024' },
   ];
-  const videoSecondsOptions = [6, 8, 10, 12, 15, 20, 25, 30].map((v) => ({
+  const videoSecondsOptions = (isGrokImagineVideoModel
+    ? [10, 6]
+    : [6, 8, 10, 12, 15, 20, 25, 30]
+  ).map((v) => ({
     label: `${v}s`,
     value: String(v),
   }));
@@ -205,10 +215,6 @@ const SettingsPanel = ({
   const adobeVideoResolutionOptions = [
     { label: '1080p', value: '1080p' },
     { label: '720p', value: '720p' },
-  ];
-  const adobeReferenceModeOptions = [
-    { label: 'Frame', value: 'frame' },
-    { label: 'Image', value: 'image' },
   ];
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const currentAdobeAspectRatioOptions = isGPTImage2Model
@@ -582,20 +588,6 @@ const SettingsPanel = ({
                     optionList={adobeVideoResolutionOptions}
                     value={inputs.videoResolution || '1080p'}
                     onChange={(value) => onInputChange('videoResolution', value)}
-                    disabled={customRequestMode}
-                  />
-                </div>
-              )}
-              {inputs.model === 'veo31' && (
-                <div>
-                  <Typography.Text strong className='text-sm'>
-                    Reference Mode
-                  </Typography.Text>
-                  <Select
-                    className='!rounded-lg mt-2'
-                    optionList={adobeReferenceModeOptions}
-                    value={inputs.referenceMode || 'frame'}
-                    onChange={(value) => onInputChange('referenceMode', value)}
                     disabled={customRequestMode}
                   />
                 </div>

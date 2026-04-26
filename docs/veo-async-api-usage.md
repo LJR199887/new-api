@@ -1,8 +1,9 @@
 # Veo 异步视频 API 下游调用文档
 
-本文档面向下游系统调用 `veo31-fast` / `veo31-ref` 视频模型，统一使用异步任务模式。
+本文档面向下游系统调用 `veo31` / `veo31-fast` / `veo31-ref` 视频模型，统一使用异步任务模式。
 
 适用模型：
+- `veo31`
 - `veo31-fast`
 - `veo31-ref`
 
@@ -51,12 +52,12 @@ Veo 图生视频推荐直接使用上游实际格式：
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `veo31-fast` 或 `veo31-ref` |
+| `model` | string | 是 | `veo31`、`veo31-fast` 或 `veo31-ref` |
 | `prompt` | string | 是 | 视频生成提示词 |
 | `duration` | number | 否 | 视频时长，常用 `4` |
 | `aspect_ratio` | string | 否 | 比例，常用 `16:9` / `9:16` |
 | `resolution` | string | 否 | 分辨率档位，如 `720p` / `1080p` |
-| `reference_mode` | string | 否 | 参考图模式，`veo31-fast` 建议 `frame`，`veo31-ref` 建议 `image` |
+| `reference_mode` | string | 否 | 参考图模式，`veo31` / `veo31-fast` 建议 `frame`，`veo31-ref` 建议 `image` |
 | `async` | boolean | 否 | 建议显式传 `true` |
 | `image_url` | string | 否 | 图生视频参考图 URL；不传则为文生视频 |
 
@@ -73,6 +74,7 @@ Veo 图生视频推荐直接使用上游实际格式：
 
 如果没有显式传 `reference_mode`，服务端会自动补默认值：
 
+- `veo31` -> `frame`
 - `veo31-fast` -> `frame`
 - `veo31-ref` -> `image`
 
@@ -95,13 +97,13 @@ Veo 图生视频推荐直接使用上游实际格式：
 
 ## 5. 图生视频
 
-### 5.1 veo31-fast
+### 5.1 veo31 / veo31-fast
 
-推荐使用 `reference_mode=frame`：
+`veo31` 和 `veo31-fast` 请求格式一致，推荐使用 `reference_mode=frame`：
 
 ```json
 {
-  "model": "veo31-fast",
+  "model": "veo31",
   "prompt": "Create a smooth cinematic motion",
   "duration": 4,
   "aspect_ratio": "16:9",

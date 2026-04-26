@@ -2,8 +2,10 @@ package sora
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -239,8 +241,21 @@ func appendGrokVideoImageReference(target []interface{}, value interface{}) []in
 	return target
 }
 
+func isGrokImagineVideoModel(upstreamModel string) bool {
+	return common.NormalizeGrokImagineModelName(upstreamModel) == "grok-imagine-video"
+}
+
+func normalizeGrokVideoSeconds(value string) string {
+	switch strings.TrimSpace(value) {
+	case "6", "10":
+		return strings.TrimSpace(value)
+	default:
+		return "10"
+	}
+}
+
 func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
-	if upstreamModel != "grok-imagine-1.0-video" {
+	if !isGrokImagineVideoModel(upstreamModel) {
 		return
 	}
 
@@ -270,7 +285,7 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 		bodyMap["quality"] = quality
 	}
 	if seconds == "" && duration != "" {
-		bodyMap["seconds"] = duration
+		bodyMap["seconds"] = normalizeGrokVideoSeconds(duration)
 	}
 	imageReferences := make([]interface{}, 0)
 	imageReferences = appendGrokVideoImageReference(imageReferences, bodyMap["image_reference"])
@@ -287,6 +302,13 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	if preset != "" {
 		bodyMap["preset"] = preset
 	}
+	if seconds == "" {
+		seconds = stringifyBodyValue(bodyMap["seconds"])
+	}
+	bodyMap["seconds"] = normalizeGrokVideoSeconds(seconds)
+	if size := grokVideoSizeValue(bodyMap); size != "" {
+		bodyMap["size"] = size
+	}
 	if resolutionName != "" || preset != "" {
 		videoConfig := map[string]interface{}{}
 		if resolutionName != "" {
@@ -297,6 +319,174 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 		}
 		bodyMap["video_config"] = videoConfig
 	}
+}
+
+func grokVideoSizeValue(bodyMap map[string]interface{}) string {
+	size := stringifyBodyValue(bodyMap["size"])
+	if size == "" {
+		if videoConfig, ok := bodyMap["video_config"].(map[string]interface{}); ok {
+			size = stringifyBodyValue(videoConfig["size"])
+		}
+	}
+	if size != "" {
+		return size
+	}
+	width := stringifyBodyValue(bodyMap["width"])
+	height := stringifyBodyValue(bodyMap["height"])
+	if width != "" && height != "" {
+		return width + "x" + height
+	}
+	return ""
+}
+
+func firstGrokVideoFieldValue(bodyMap map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value := stringifyBodyValue(bodyMap[key]); value != "" {
+			return value
+		}
+	}
+	if videoConfig, ok := bodyMap["video_config"].(map[string]interface{}); ok {
+		for _, key := range keys {
+			if value := stringifyBodyValue(videoConfig[key]); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func appendGrokVideoReferenceSource(target []string, value interface{}) []string {
+	if len(target) >= 5 || value == nil {
+		return target
+	}
+	switch v := value.(type) {
+	case string:
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			target = append(target, trimmed)
+		}
+	case []string:
+		for _, item := range v {
+			target = appendGrokVideoReferenceSource(target, item)
+			if len(target) >= 5 {
+				break
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			target = appendGrokVideoReferenceSource(target, item)
+			if len(target) >= 5 {
+				break
+			}
+		}
+	case map[string]interface{}:
+		target = appendGrokVideoReferenceSource(target, v["url"])
+		target = appendGrokVideoReferenceSource(target, v["image"])
+		target = appendGrokVideoReferenceSource(target, v["image_url"])
+	case map[string]string:
+		target = appendGrokVideoReferenceSource(target, v["url"])
+		target = appendGrokVideoReferenceSource(target, v["image"])
+		target = appendGrokVideoReferenceSource(target, v["image_url"])
+	}
+	return target
+}
+
+func collectGrokVideoReferenceSources(bodyMap map[string]interface{}) []string {
+	sources := make([]string, 0, 5)
+	for _, key := range []string{"input_reference", "input_reference[]", "image_reference", "image_reference[]", "image", "image[]", "images", "images[]", "image_url"} {
+		sources = appendGrokVideoReferenceSource(sources, bodyMap[key])
+		if len(sources) >= 5 {
+			break
+		}
+	}
+	return sources
+}
+
+func grokVideoReferenceFilename(contentType string, index int) string {
+	extensions, _ := mime.ExtensionsByType(contentType)
+	ext := ".png"
+	if len(extensions) > 0 {
+		ext = extensions[0]
+	}
+	if ext == ".jpe" {
+		ext = ".jpg"
+	}
+	return fmt.Sprintf("reference-%d%s", index+1, ext)
+}
+
+func grokVideoReferenceBytes(source string) ([]byte, string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return nil, "", fmt.Errorf("empty reference source")
+	}
+
+	var contentType string
+	var base64Data string
+	var err error
+	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
+		contentType, base64Data, err = service.GetImageFromUrl(source)
+	} else {
+		contentType, base64Data, err = service.DecodeBase64FileData(source)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	raw, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode reference image failed: %w", err)
+	}
+	if contentType == "" || contentType == "application/octet-stream" {
+		contentType = http.DetectContentType(raw)
+	}
+	return raw, contentType, nil
+}
+
+func writeGrokVideoReferenceFiles(writer *multipart.Writer, sources []string) error {
+	for index, source := range sources {
+		raw, contentType, err := grokVideoReferenceBytes(source)
+		if err != nil {
+			return fmt.Errorf("prepare grok video reference %d failed: %w", index+1, err)
+		}
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="input_reference[]"; filename="%s"`, grokVideoReferenceFilename(contentType, index)))
+		header.Set("Content-Type", contentType)
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write(raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func buildGrokVideoMultipartBody(bodyMap map[string]interface{}, upstreamModelName string) (io.Reader, string, error) {
+	normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	fields := map[string]string{
+		"model":           upstreamModelName,
+		"prompt":          firstGrokVideoFieldValue(bodyMap, "prompt", "input"),
+		"seconds":         normalizeGrokVideoSeconds(firstGrokVideoFieldValue(bodyMap, "seconds", "duration")),
+		"size":            grokVideoSizeValue(bodyMap),
+		"resolution_name": firstGrokVideoFieldValue(bodyMap, "resolution_name"),
+		"preset":          firstGrokVideoFieldValue(bodyMap, "preset"),
+	}
+	for _, key := range []string{"model", "prompt", "seconds", "size", "resolution_name", "preset"} {
+		if value := strings.TrimSpace(fields[key]); value != "" {
+			if err := writer.WriteField(key, value); err != nil {
+				return nil, "", err
+			}
+		}
+	}
+	if err := writeGrokVideoReferenceFiles(writer, collectGrokVideoReferenceSources(bodyMap)); err != nil {
+		return nil, "", err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+	return &buf, writer.FormDataContentType(), nil
 }
 
 func isSoraVideoModel(upstreamModel string) bool {
@@ -368,6 +558,15 @@ func firstNonEmptyMultipartValue(values map[string][]string, keys ...string) str
 		}
 	}
 	return ""
+}
+
+func isGrokVideoReferenceFileField(fieldName string) bool {
+	switch strings.TrimSpace(fieldName) {
+	case "image", "image[]", "images", "images[]", "image_reference", "image_reference[]", "input_reference", "input_reference[]":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
@@ -492,7 +691,11 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if seconds == 0 {
 		seconds = req.Duration
 	}
-	if seconds <= 0 {
+	if isGrokImagineVideoModel(info.UpstreamModelName) {
+		if seconds != 6 && seconds != 10 {
+			seconds = 10
+		}
+	} else if seconds <= 0 {
 		seconds = 4
 	}
 
@@ -532,9 +735,18 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if strings.HasPrefix(contentType, "application/json") {
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
-			bodyMap["model"] = info.UpstreamModelName
-			normalizeGrokVideoRequest(bodyMap, info.UpstreamModelName)
-			normalizeSoraVideoRequest(bodyMap, info.UpstreamModelName)
+			upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
+			bodyMap["model"] = upstreamModelName
+			if isGrokImagineVideoModel(upstreamModelName) {
+				body, formContentType, err := buildGrokVideoMultipartBody(bodyMap, upstreamModelName)
+				if err != nil {
+					return nil, err
+				}
+				c.Request.Header.Set("Content-Type", formContentType)
+				return body, nil
+			}
+			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+			normalizeSoraVideoRequest(bodyMap, upstreamModelName)
 			if newBody, err := common.Marshal(bodyMap); err == nil {
 				c.Request.Header.Set("Content-Type", "application/json")
 				return bytes.NewReader(newBody), nil
@@ -550,7 +762,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		}
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
-		writer.WriteField("model", info.UpstreamModelName)
+		upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
+		isGrokVideo := isGrokImagineVideoModel(upstreamModelName)
+		writer.WriteField("model", upstreamModelName)
 		hasSeconds := false
 		hasDuration := false
 		durationValue := ""
@@ -560,6 +774,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		aspectRatioValue := ""
 		for key, values := range formData.Value {
 			if key == "model" {
+				continue
+			}
+			if isGrokVideo && (key == "duration" || key == "async" || key == "video_config") {
+				if key == "duration" && len(values) > 0 && durationValue == "" {
+					durationValue = strings.TrimSpace(values[0])
+				}
 				continue
 			}
 			if key == "seconds" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
@@ -583,17 +803,17 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if key == "aspect_ratio" && len(values) > 0 && aspectRatioValue == "" {
 				aspectRatioValue = strings.TrimSpace(values[0])
 			}
-			if usesImageURLVideoGenerationsModel(info.UpstreamModelName) && (key == "seconds" || key == "size") {
+			if usesImageURLVideoGenerationsModel(upstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
 			for _, v := range values {
 				writer.WriteField(key, v)
 			}
 		}
-		if info.UpstreamModelName == "grok-imagine-1.0-video" && !hasSeconds && durationValue != "" {
+		if isGrokImagineVideoModel(upstreamModelName) && !hasSeconds && durationValue != "" {
 			writer.WriteField("seconds", durationValue)
 		}
-		if usesImageURLVideoGenerationsModel(info.UpstreamModelName) {
+		if usesImageURLVideoGenerationsModel(upstreamModelName) {
 			if !hasDuration {
 				if durationValue == "" {
 					durationValue = "4"
@@ -615,13 +835,17 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					writer.WriteField("image_url", firstAsyncImageValue)
 				}
 				if !hasMultipartFieldValue(formData.Value, "reference_mode") {
-					if referenceMode := defaultVideoGenerationsReferenceMode(info.UpstreamModelName); referenceMode != "" {
+					if referenceMode := defaultVideoGenerationsReferenceMode(upstreamModelName); referenceMode != "" {
 						writer.WriteField("reference_mode", referenceMode)
 					}
 				}
 			}
 		}
 		for fieldName, fileHeaders := range formData.File {
+			targetFieldName := fieldName
+			if isGrokVideo && isGrokVideoReferenceFileField(fieldName) {
+				targetFieldName = "input_reference[]"
+			}
 			for _, fh := range fileHeaders {
 				f, err := fh.Open()
 				if err != nil {
@@ -640,7 +864,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					}
 				}
 				h := make(textproto.MIMEHeader)
-				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fieldName, fh.Filename))
+				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, targetFieldName, fh.Filename))
 				h.Set("Content-Type", ct)
 				part, err := writer.CreatePart(h)
 				if err != nil {

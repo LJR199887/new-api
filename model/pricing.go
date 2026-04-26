@@ -104,7 +104,7 @@ func GetModelSupportEndpointTypes(model string) []constant.EndpointType {
 func buildGroupModelPriceMap(source map[string]map[string]map[string]float64, model string) map[string]map[string]float64 {
 	result := make(map[string]map[string]float64)
 	for group, modelMap := range source {
-		priceMap, ok := modelMap[model]
+		priceMap, ok := findMapValueByModelCandidates(modelMap, model)
 		if !ok || len(priceMap) == 0 {
 			continue
 		}
@@ -122,7 +122,7 @@ func buildGroupModelPriceMap(source map[string]map[string]map[string]float64, mo
 func buildGroupModelPriceValueMap(source map[string]map[string]float64, model string) map[string]float64 {
 	result := make(map[string]float64)
 	for group, modelMap := range source {
-		price, ok := modelMap[model]
+		price, ok := findMapValueByModelCandidates(modelMap, model)
 		if !ok {
 			continue
 		}
@@ -132,6 +132,35 @@ func buildGroupModelPriceValueMap(source map[string]map[string]float64, model st
 		return nil
 	}
 	return result
+}
+
+func pricingModelNameCandidates(model string) []string {
+	rawCandidates := common.GetGrokImagineModelNameCandidates(model)
+	if len(rawCandidates) == 0 {
+		rawCandidates = []string{model}
+	}
+	candidates := make([]string, 0, len(rawCandidates))
+	seen := map[string]bool{}
+	for _, candidate := range rawCandidates {
+		candidate = ratio_setting.FormatMatchingModelName(candidate)
+		if candidate == "" || seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		candidates = append(candidates, candidate)
+	}
+	return candidates
+}
+
+func findMapValueByModelCandidates[T any](modelMap map[string]T, model string) (T, bool) {
+	for _, candidate := range pricingModelNameCandidates(model) {
+		value, ok := modelMap[candidate]
+		if ok {
+			return value, true
+		}
+	}
+	var zero T
+	return zero, false
 }
 
 func updatePricing() {
@@ -347,8 +376,8 @@ func updatePricing() {
 		pricing.GroupModelPrice = buildGroupModelPriceValueMap(groupModelPriceMap, formattedModelName)
 		pricing.GroupModelPriceBySeconds = buildGroupModelPriceMap(groupModelPriceBySecondsMap, formattedModelName)
 		pricing.GroupModelPriceByResolution = buildGroupModelPriceMap(groupModelPriceByResolutionMap, formattedModelName)
-		secondsPriceMap, hasSecondsPrice := modelPriceBySecondsMap[formattedModelName]
-		resolutionPriceMap, hasResolutionPrice := modelPriceByResolutionMap[formattedModelName]
+		secondsPriceMap, hasSecondsPrice := findMapValueByModelCandidates(modelPriceBySecondsMap, formattedModelName)
+		resolutionPriceMap, hasResolutionPrice := findMapValueByModelCandidates(modelPriceByResolutionMap, formattedModelName)
 		modelPrice, findPrice := ratio_setting.GetModelPrice(model, false)
 		if hasSecondsPrice && len(secondsPriceMap) > 0 {
 			pricing.ModelPriceBySeconds = make(map[string]float64, len(secondsPriceMap))

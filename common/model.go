@@ -14,17 +14,16 @@ var (
 		"dall-e-2",
 		"gpt-image-1",
 		"gpt-image2",
-		"exact:grok-imagine-1.0",
+		"exact:grok-imagine-image",
 		"exact:grok-imagine-1.0-fast",
 		"prefix:imagen-",
 		"flux-",
 		"flux.1-",
 	}
 	ImageEditModels = []string{
-		"exact:grok-imagine-1.0-edit",
+		"exact:grok-imagine-image-edit",
 	}
 	OpenAIVideoModels = []string{
-		"exact:grok-imagine-1.0-video",
 		"exact:grok-imagine-video",
 	}
 	OpenAITextModels = []string{
@@ -35,6 +34,18 @@ var (
 		"chatgpt",
 	}
 )
+
+func NormalizeGrokImagineModelName(modelName string) string {
+	return strings.TrimSpace(modelName)
+}
+
+func GetGrokImagineModelNameCandidates(modelName string) []string {
+	trimmedModelName := strings.TrimSpace(modelName)
+	if trimmedModelName == "" {
+		return nil
+	}
+	return []string{trimmedModelName}
+}
 
 func IsOpenAIResponseOnlyModel(modelName string) bool {
 	for _, m := range OpenAIResponseOnlyModels {

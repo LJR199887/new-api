@@ -280,10 +280,15 @@ export const buildApiPayload = (
     return size;
   };
   const grokImagineImageModels = new Set([
-    'grok-imagine-1.0',
+    'grok-imagine-image',
     'grok-imagine-1.0-fast',
   ]);
-  const grokImagineImageEditModels = new Set(['grok-imagine-1.0-edit']);
+  const grokImagineImageEditModels = new Set([
+    'grok-imagine-image-edit',
+  ]);
+  const grokImagineVideoModels = new Set([
+    'grok-imagine-video',
+  ]);
   const adobeImageModels = new Set([
     'nano-banana',
     'nano-banana2',
@@ -343,7 +348,7 @@ export const buildApiPayload = (
     grokImagineImageModels.has(inputs.model) ||
     grokImagineImageEditModels.has(inputs.model);
   const isGrokImagineImageEditModel = grokImagineImageEditModels.has(inputs.model);
-  const isGrokImagineVideoModel = inputs.model === 'grok-imagine-1.0-video';
+  const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const isAdobeImageModel = adobeImageModels.has(inputs.model);
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
@@ -406,7 +411,11 @@ export const buildApiPayload = (
     if (inputs.videoSize) {
       payload.size = inputs.videoSize;
     }
-    if (inputs.videoSeconds) {
+    if (isGrokImagineVideoModel) {
+      payload.seconds = ['6', '10'].includes(String(inputs.videoSeconds))
+        ? String(inputs.videoSeconds)
+        : '10';
+    } else if (inputs.videoSeconds) {
       payload.seconds = String(inputs.videoSeconds);
     }
     if (inputs.videoQuality) {
@@ -451,8 +460,6 @@ export const buildApiPayload = (
     }
     if (inputs.model === 'veo31-ref') {
       payload.reference_mode = 'image';
-    } else if (inputs.model === 'veo31' && inputs.referenceMode) {
-      payload.reference_mode = inputs.referenceMode;
     }
   }
 

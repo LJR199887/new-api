@@ -22,13 +22,13 @@ func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 
 	common.QuotaPerUnit = 500
 	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{
-		"grok-imagine-1.0-video": {
-			"12": 0.2
+		"grok-imagine-video": {
+			"10": 0.2
 		}
 	}`))
 
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-1.0-video",
+		OriginModelName: "grok-imagine-video",
 		PriceData: types.PriceData{
 			BaseQuota: 100,
 			Quota:     100,
@@ -39,7 +39,7 @@ func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 	}
 
 	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 12,
+		"seconds": 10,
 		"size":    1.666667,
 	})
 
@@ -61,14 +61,14 @@ func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *
 	common.QuotaPerUnit = 500
 	require.NoError(t, ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(`{
 		"vip": {
-			"grok-imagine-1.0-video": {
-				"8": 0.07
+			"grok-imagine-video": {
+				"10": 0.07
 			}
 		}
 	}`))
 
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-1.0-video",
+		OriginModelName: "grok-imagine-video",
 		UsingGroup:      "default",
 		UserGroup:       "vip",
 		PriceData: types.PriceData{
@@ -81,7 +81,7 @@ func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *
 	}
 
 	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 8,
+		"seconds": 10,
 		"size":    1.666667,
 	})
 
@@ -103,7 +103,7 @@ func TestCalcTaskQuotaWithRatiosFallsBackToLinearSeconds(t *testing.T) {
 	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{}`))
 
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-1.0-video",
+		OriginModelName: "grok-imagine-video",
 		PriceData: types.PriceData{
 			BaseQuota: 100,
 			Quota:     100,

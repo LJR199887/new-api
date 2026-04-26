@@ -29,8 +29,8 @@ curl https://linksky.top/v1/models \
 | --- | --- | --- |
 | `POST /v1/chat/completions` | 文本对话 | OpenAI Chat Completions 兼容 |
 | `POST /v1/responses` | Responses 风格对话 | 当前 Grok 文本模型支持 |
-| `POST /v1/images/generations` | 文生图 | 适合 `grok-imagine-1.0` |
-| `POST /v1/images/edits` | 图生图/编辑 | 适合 `grok-imagine-1.0-edit` |
+| `POST /v1/images/generations` | 文生图 | 适合 `grok-imagine-image` |
+| `POST /v1/images/edits` | 图生图/编辑 | 适合 `grok-imagine-image-edit` |
 | `POST /v1/images/async-generations` | 异步文生图 | 立即返回 `task_id`，后台生成 |
 | `POST /v1/images/async-edits` | 异步图生图/编辑 | 立即返回 `task_id`，后台生成 |
 | `GET /v1/images/async-generations/{task_id}` | 查询异步图片任务 | 轮询获取状态与图片结果 |
@@ -63,8 +63,8 @@ curl https://linksky.top/v1/models \
 
 | 模型 | 推荐接口 | 计费方式 | 当前价格 |
 | --- | --- | --- | --- |
-| `grok-imagine-1.0` | `/v1/images/generations` | 按次 | `0.03/次` |
-| `grok-imagine-1.0-edit` | `/v1/images/edits` | 按次 | `0.03/次` |
+| `grok-imagine-image` | `/v1/images/generations` | 按次 | `0.03/次` |
+| `grok-imagine-image-edit` | `/v1/images/edits` | 按次 | `0.03/次` |
 | `nano-banana-pro` | `/v1/chat/completions` | 按分辨率 | `1K: 0.09` / `2K: 0.18` / `4K: 0.35` |
 | `nano-banana2` | `/v1/chat/completions` | 按分辨率 | `1K: 0.09` / `2K: 0.18` / `4K: 0.35` |
 
@@ -77,12 +77,13 @@ curl https://linksky.top/v1/models \
 
 | 模型 | 推荐接口 | 计费方式 | 当前价格 |
 | --- | --- | --- | --- |
-| `grok-imagine-1.0-video` | `/v1/video/generations` | 按秒数档位 | `6s: 0.06` / `8s: 0.08` / `10s: 0.10` |
+| `grok-imagine-video` | `/v1/video/generations` | 按秒数档位 | `6s: 0.06` / `8s: 0.08` / `10s: 0.10` |
+| `veo31` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 | `veo31-fast` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 | `veo31-ref` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 
 `veo31-ref` 适合带参考图的视频生成。  
-`grok-imagine-1.0-video` 也支持带图参考，可以在请求里传 `image`。
+`grok-imagine-video` 也支持带图参考，可以在请求里传 `image`。
 
 ## 4. 推荐调用方式
 
@@ -129,7 +130,7 @@ curl https://linksky.top/v1/images/generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0",
+    "model": "grok-imagine-image",
     "prompt": "一只戴宇航员头盔的柴犬，站在霓虹城市屋顶，电影感光影，超清细节",
     "size": "1024x1024",
     "response_format": "url"
@@ -201,14 +202,14 @@ curl https://linksky.top/v1/chat/completions \
 
 ### 4.4 图生图 / 图片编辑
 
-当前 `grok-imagine-1.0-edit` 可直接传远程图片 URL。
+当前 `grok-imagine-image-edit` 可直接传远程图片 URL。
 
 ```bash
 curl https://linksky.top/v1/images/edits \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-edit",
+    "model": "grok-imagine-image-edit",
     "prompt": "把画面改成黄昏氛围，并增加赛博朋克霓虹灯",
     "image": "https://example.com/source.png",
     "response_format": "url"
@@ -280,7 +281,7 @@ curl https://linksky.top/v1/images/async-generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0",
+    "model": "grok-imagine-image",
     "prompt": "一张复古科幻旅行海报，火星城市、火箭、胶片颗粒质感",
     "size": "1024x1024",
     "response_format": "url"
@@ -294,7 +295,7 @@ curl https://linksky.top/v1/images/async-generations \
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "image.task",
-  "model": "grok-imagine-1.0",
+  "model": "grok-imagine-image",
   "status": "queued",
   "progress": 10,
   "created_at": 1776146800
@@ -317,7 +318,7 @@ curl https://linksky.top/v1/images/async-edits \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-edit",
+    "model": "grok-imagine-image-edit",
     "prompt": "保留主体构图，把画面改成黄昏氛围，并增加赛博朋克霓虹灯",
     "image": "https://example.com/source.png",
     "response_format": "url"
@@ -343,7 +344,7 @@ curl https://linksky.top/v1/video/async-generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-video",
+    "model": "grok-imagine-video",
     "prompt": "夜晚的海边公路，一辆复古跑车驶过，镜头平滑跟拍，电影感",
     "duration": 8,
     "width": 1280,
@@ -358,7 +359,7 @@ curl https://linksky.top/v1/video/async-generations \
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "video",
-  "model": "grok-imagine-1.0-video",
+  "model": "grok-imagine-video",
   "status": "queued",
   "progress": 10,
   "created_at": 1776223000
@@ -383,7 +384,7 @@ curl https://linksky.top/v1/video/generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-video",
+    "model": "grok-imagine-video",
     "prompt": "夜晚的海边公路，一辆复古跑车驶过，镜头平滑跟拍，电影感",
     "duration": 8,
     "width": 1280,
@@ -393,7 +394,7 @@ curl https://linksky.top/v1/video/generations \
 
 #### Grok 图生视频
 
-`grok-imagine-1.0-video` 也支持带参考图的视频生成，可以直接在请求体中传 `image`。
+`grok-imagine-video` 也支持带参考图的视频生成，可以直接在请求体中传 `image`。
 适合做人像动作延展、商品镜头动画化、海报转动态短视频等场景。
 
 推荐参数说明:
@@ -402,7 +403,7 @@ curl https://linksky.top/v1/video/generations \
 - `width` / `height`: 建议与素材构图保持一致，常见可用 `1280x720` 或 `720x1280`
 
 支持参数总表:
-- `model`: 固定传 `grok-imagine-1.0-video`
+- `model`: 固定传 `grok-imagine-video`
 - `prompt`: 视频生成提示词
 - `image`: 单张参考图 URL，适合最常见的图生视频调用
 - `images`: 多张参考图数组，项目会自动归并为 `image_reference`
@@ -429,7 +430,7 @@ curl https://linksky.top/v1/video/generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-video",
+    "model": "grok-imagine-video",
     "prompt": "保留主体和整体色调，让画面中的人物缓慢转身并看向镜头，背景霓虹灯轻微闪烁，镜头平滑推进",
     "image": "https://example.com/reference.jpg",
     "duration": 8,
@@ -445,7 +446,7 @@ curl https://linksky.top/v1/video/generations \
   -H "Authorization: Bearer $LINKSKY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "grok-imagine-1.0-video",
+    "model": "grok-imagine-video",
     "prompt": "让人物保持服装和面部特征一致，做一个轻微抬头和向前走近镜头的动作，适合短视频封面动态化",
     "image": "https://example.com/reference-portrait.jpg",
     "duration": 6,
@@ -527,9 +528,9 @@ print(resp.choices[0].message)
 - 文本通用场景优先: `gpt-5.4-mini`、`grok-4.1-fast`
 - 代码和复杂开发任务优先: `gpt-5.3-codex`
 - 高质量文生图优先: `nano-banana-pro`
-- 图片修改优先: `grok-imagine-1.0-edit`
+- 图片修改优先: `grok-imagine-image-edit`
 - 高质量图生图优先: `nano-banana-pro`
-- 创意短视频优先: `grok-imagine-1.0-video`
+- 创意短视频优先: `grok-imagine-video`
 - 参考图视频优先: `veo31-ref`
 
 ## 7. 备注

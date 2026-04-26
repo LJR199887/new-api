@@ -1,7 +1,10 @@
 package sora
 
 import (
+	"bytes"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,14 +16,27 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
+func TestModelListIncludesVeo31Variants(t *testing.T) {
+	models := make(map[string]bool, len(ModelList))
+	for _, modelName := range ModelList {
+		models[modelName] = true
+	}
+
+	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref"} {
+		if !models[modelName] {
+			t.Fatalf("expected ModelList to include %s", modelName)
+		}
+	}
+}
+
 func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	body := map[string]interface{}{
-		"model":   "grok-imagine-1.0-video",
+		"model":   "grok-imagine-video",
 		"quality": "high",
 		"preset":  "fun",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["quality"]; got != "high" {
 		t.Fatalf("expected quality to stay high, got %#v", got)
@@ -41,13 +57,26 @@ func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	}
 }
 
+func TestNormalizeGrokVideoRequestBackfillsSecondsFromDuration(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "grok-imagine-video",
+		"duration": float64(10),
+	}
+
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
+
+	if got := body["seconds"]; got != "10" {
+		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
+	}
+}
+
 func TestNormalizeGrokVideoRequestBackfillsQualityFromResolutionName(t *testing.T) {
 	body := map[string]interface{}{
-		"model":           "grok-imagine-1.0-video",
+		"model":           "grok-imagine-video",
 		"resolution_name": "720p",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["quality"]; got != "high" {
 		t.Fatalf("expected quality high, got %#v", got)
@@ -57,41 +86,28 @@ func TestNormalizeGrokVideoRequestBackfillsQualityFromResolutionName(t *testing.
 	}
 }
 
-func TestNormalizeGrokVideoRequestBackfillsSecondsFromDuration(t *testing.T) {
+func TestNormalizeGrokVideoRequestClampsUnsupportedSeconds(t *testing.T) {
 	body := map[string]interface{}{
-		"model":    "grok-imagine-1.0-video",
-		"duration": float64(10),
-	}
-
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
-
-	if got := body["seconds"]; got != "10" {
-		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
-	}
-}
-
-func TestNormalizeGrokVideoRequestKeepsExplicitSeconds(t *testing.T) {
-	body := map[string]interface{}{
-		"model":    "grok-imagine-1.0-video",
+		"model":    "grok-imagine-video",
 		"duration": float64(10),
 		"seconds":  "8",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
-	if got := body["seconds"]; got != "8" {
-		t.Fatalf("expected explicit seconds to be preserved, got %#v", got)
+	if got := body["seconds"]; got != "10" {
+		t.Fatalf("expected unsupported seconds to default to 10, got %#v", got)
 	}
 }
 
 func TestNormalizeGrokVideoRequestPromotesImageReference(t *testing.T) {
 	body := map[string]interface{}{
-		"model":  "grok-imagine-1.0-video",
+		"model":  "grok-imagine-video",
 		"image":  "https://example.com/cover.png",
 		"images": []interface{}{"https://example.com/frame-2.png"},
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if _, exists := body["image"]; exists {
 		t.Fatalf("expected legacy image field to be removed")
@@ -235,26 +251,30 @@ func TestNormalizeSoraVideoRequestAcceptsSora2Alias(t *testing.T) {
 }
 
 func TestNormalizeSoraVideoRequestAcceptsVeoImageURLFormat(t *testing.T) {
-	body := map[string]interface{}{
-		"model":          "veo31-fast",
-		"prompt":         "Create a smooth cinematic motion",
-		"duration":       float64(4),
-		"aspect_ratio":   "16:9",
-		"resolution":     "720p",
-		"image_url":      "https://example.com/a.png",
-		"reference_mode": "",
-	}
+	for _, modelName := range []string{"veo31", "veo31-fast"} {
+		t.Run(modelName, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":          modelName,
+				"prompt":         "Create a smooth cinematic motion",
+				"duration":       float64(4),
+				"aspect_ratio":   "16:9",
+				"resolution":     "720p",
+				"image_url":      "https://example.com/a.png",
+				"reference_mode": "",
+			}
 
-	normalizeSoraVideoRequest(body, "veo31-fast")
+			normalizeSoraVideoRequest(body, modelName)
 
-	if got := body["image_url"]; got != "https://example.com/a.png" {
-		t.Fatalf("expected image_url to be preserved, got %#v", got)
-	}
-	if got := body["reference_mode"]; got != "frame" {
-		t.Fatalf("expected veo31-fast reference_mode=frame, got %#v", got)
-	}
-	if got, ok := body["async"].(bool); !ok || !got {
-		t.Fatalf("expected async=true, got %#v", body["async"])
+			if got := body["image_url"]; got != "https://example.com/a.png" {
+				t.Fatalf("expected image_url to be preserved, got %#v", got)
+			}
+			if got := body["reference_mode"]; got != "frame" {
+				t.Fatalf("expected %s reference_mode=frame, got %#v", modelName, got)
+			}
+			if got, ok := body["async"].(bool); !ok || !got {
+				t.Fatalf("expected async=true, got %#v", body["async"])
+			}
+		})
 	}
 }
 
@@ -368,9 +388,9 @@ func TestBuildRequestURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	adaptor := &TaskAdaptor{baseURL: "https://upstream.example"}
 	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
 		RequestURLPath:  "/v1/video/generations",
-		OriginModelName: "grok-imagine-1.0-video",
+		OriginModelName: "grok-imagine-video",
 		ChannelMeta: &relaycommon.ChannelMeta{
-			UpstreamModelName: "grok-imagine-1.0-video",
+			UpstreamModelName: "grok-imagine-video",
 		},
 	})
 	if err != nil {
@@ -378,6 +398,157 @@ func TestBuildRequestURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	}
 	if url != "https://upstream.example/v1/videos" {
 		t.Fatalf("expected OpenAI videos URL for Grok, got %s", url)
+	}
+}
+
+func TestBuildRequestBodyBuildsGrokVideoMultipartPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "grok-imagine-video",
+		"prompt": "animate it",
+		"duration": 8,
+		"image": "data:image/png;base64,iVBORw0KGgo="
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	mediaType, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	if mediaType != "multipart/form-data" {
+		t.Fatalf("expected multipart/form-data, got %s", mediaType)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	if got := form.Value["model"][0]; got != "grok-imagine-video" {
+		t.Fatalf("expected upstream model to be grok-imagine-video, got %#v", got)
+	}
+	if got := form.Value["seconds"][0]; got != "10" {
+		t.Fatalf("expected unsupported duration to default to 10 seconds, got %#v", got)
+	}
+	if len(form.File["input_reference[]"]) != 1 {
+		t.Fatalf("expected JSON image reference to be forwarded as input_reference[], got %#v", form.File)
+	}
+}
+
+func TestBuildRequestBodyMapsGrokJsonImageReferenceToFiles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "grok-imagine-video",
+		"prompt": "animate it",
+		"seconds": 10,
+		"image_reference": ["data:image/png;base64,iVBORw0KGgo="]
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	files := form.File["input_reference[]"]
+	if len(files) != 1 {
+		t.Fatalf("expected JSON image_reference to be uploaded as input_reference[], got %#v", form.File)
+	}
+	if got := files[0].Header.Get("Content-Type"); got != "image/png" {
+		t.Fatalf("expected image/png content type, got %q", got)
+	}
+}
+
+func TestBuildRequestBodyMapsGrokMultipartImageField(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", "grok-imagine-video")
+	_ = writer.WriteField("prompt", "animate it")
+	_ = writer.WriteField("duration", "10")
+	part, err := writer.CreateFormFile("image", "source.png")
+	if err != nil {
+		t.Fatalf("create form file failed: %v", err)
+	}
+	if _, err := part.Write([]byte("fake image")); err != nil {
+		t.Fatalf("write form file failed: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer failed: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", bytes.NewReader(body.Bytes()))
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	if got := form.Value["seconds"][0]; got != "10" {
+		t.Fatalf("expected duration to be forwarded as seconds, got %q", got)
+	}
+	if len(form.File["input_reference[]"]) != 1 {
+		t.Fatalf("expected image file to be forwarded as input_reference[], got %#v", form.File)
 	}
 }
 
@@ -426,7 +597,7 @@ func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSoraAlias(t *testing.
 func TestBuildTaskFetchURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	url, err := buildTaskFetchURL("https://upstream.example", map[string]any{
 		"task_id":      "upstream-task",
-		"model":        "grok-imagine-1.0-video",
+		"model":        "grok-imagine-video",
 		"request_path": "/v1/video/generations",
 	})
 	if err != nil {
