@@ -24,6 +24,10 @@ func TestGetModelPriceBySeconds(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 0.2, price)
 
+	price, ok = GetModelPriceBySeconds("grok-imagine-video", 12)
+	require.True(t, ok)
+	assert.Equal(t, 0.2, price)
+
 	_, ok = GetModelPriceBySeconds("grok-imagine-1.0-video", 15)
 	assert.False(t, ok)
 }

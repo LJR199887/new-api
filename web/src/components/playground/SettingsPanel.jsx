@@ -57,11 +57,22 @@ const SettingsPanel = ({
     return size;
   };
   const grokImagineImageModels = new Set([
+    'grok-imagine-image',
     'grok-imagine-1.0',
     'grok-imagine-1.0-fast',
   ]);
-  const grokImagineImageEditModels = new Set(['grok-imagine-1.0-edit']);
-  const restrictedImageUploadModels = new Set(['grok-imagine-1.0']);
+  const grokImagineImageEditModels = new Set([
+    'grok-imagine-image-edit',
+    'grok-imagine-1.0-edit',
+  ]);
+  const restrictedImageUploadModels = new Set([
+    'grok-imagine-image',
+    'grok-imagine-1.0',
+  ]);
+  const grokImagineVideoModels = new Set([
+    'grok-imagine-video',
+    'grok-imagine-1.0-video',
+  ]);
   const adobeImageModels = new Set([
     'nano-banana',
     'nano-banana2',
@@ -90,7 +101,7 @@ const SettingsPanel = ({
     inputs.model === 'veo31-fast';
   const isVideoModel =
     typeof inputs.model === 'string' && inputs.model.includes('video');
-  const isGrokImagineVideoModel = inputs.model === 'grok-imagine-1.0-video';
+  const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const imageSizeOptions = [
     { label: '1:1 方图 (1024x1024)', value: '1024x1024' },
     { label: '3:2 横图 (1792x1024)', value: '1792x1024' },

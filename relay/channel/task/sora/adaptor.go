@@ -239,8 +239,12 @@ func appendGrokVideoImageReference(target []interface{}, value interface{}) []in
 	return target
 }
 
+func isGrokImagineVideoModel(upstreamModel string) bool {
+	return common.NormalizeGrokImagineModelName(upstreamModel) == "grok-imagine-video"
+}
+
 func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
-	if upstreamModel != "grok-imagine-1.0-video" {
+	if !isGrokImagineVideoModel(upstreamModel) {
 		return
 	}
 
@@ -532,9 +536,10 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if strings.HasPrefix(contentType, "application/json") {
 		var bodyMap map[string]interface{}
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
-			bodyMap["model"] = info.UpstreamModelName
-			normalizeGrokVideoRequest(bodyMap, info.UpstreamModelName)
-			normalizeSoraVideoRequest(bodyMap, info.UpstreamModelName)
+			upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
+			bodyMap["model"] = upstreamModelName
+			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+			normalizeSoraVideoRequest(bodyMap, upstreamModelName)
 			if newBody, err := common.Marshal(bodyMap); err == nil {
 				c.Request.Header.Set("Content-Type", "application/json")
 				return bytes.NewReader(newBody), nil
@@ -550,7 +555,8 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		}
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
-		writer.WriteField("model", info.UpstreamModelName)
+		upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
+		writer.WriteField("model", upstreamModelName)
 		hasSeconds := false
 		hasDuration := false
 		durationValue := ""
@@ -583,17 +589,17 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if key == "aspect_ratio" && len(values) > 0 && aspectRatioValue == "" {
 				aspectRatioValue = strings.TrimSpace(values[0])
 			}
-			if usesImageURLVideoGenerationsModel(info.UpstreamModelName) && (key == "seconds" || key == "size") {
+			if usesImageURLVideoGenerationsModel(upstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
 			for _, v := range values {
 				writer.WriteField(key, v)
 			}
 		}
-		if info.UpstreamModelName == "grok-imagine-1.0-video" && !hasSeconds && durationValue != "" {
+		if isGrokImagineVideoModel(upstreamModelName) && !hasSeconds && durationValue != "" {
 			writer.WriteField("seconds", durationValue)
 		}
-		if usesImageURLVideoGenerationsModel(info.UpstreamModelName) {
+		if usesImageURLVideoGenerationsModel(upstreamModelName) {
 			if !hasDuration {
 				if durationValue == "" {
 					durationValue = "4"
@@ -615,7 +621,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					writer.WriteField("image_url", firstAsyncImageValue)
 				}
 				if !hasMultipartFieldValue(formData.Value, "reference_mode") {
-					if referenceMode := defaultVideoGenerationsReferenceMode(info.UpstreamModelName); referenceMode != "" {
+					if referenceMode := defaultVideoGenerationsReferenceMode(upstreamModelName); referenceMode != "" {
 						writer.WriteField("reference_mode", referenceMode)
 					}
 				}

@@ -50,6 +50,7 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	request.Model = common.NormalizeGrokImagineModelName(request.Model)
 	if info != nil && info.RelayMode == constant.RelayModeImagesEdits {
 		return buildImageEditJSONRequest(request)
 	}

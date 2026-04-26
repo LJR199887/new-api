@@ -145,7 +145,7 @@ export default function GroupRatioSettings(props) {
           <Col xs={24} sm={16}>
             <Form.TextArea
               label={t('分组按次固定价格')}
-              placeholder={t('JSON 文本，格式为 {"vip": {"grok-imagine-1.0-edit": 0.02, "grok-imagine-1.0": 0.02}}')}
+              placeholder={t('JSON 文本，格式为 {"vip": {"grok-imagine-image-edit": 0.02, "grok-imagine-image": 0.02}}')}
               extraText={t(
                 '用于图片等按次固定价格模型。优先按用户分组命中，其次按实际调用分组命中；命中后直接按该价格扣费，不再乘分组倍率。',
               )}
@@ -169,7 +169,7 @@ export default function GroupRatioSettings(props) {
           <Col xs={24} sm={16}>
             <Form.TextArea
               label={t('分组按秒固定价格')}
-              placeholder={t('JSON 文本，格式为 {"vip": {"grok-imagine-1.0-video": {"6": 0.05, "8": 0.07}}}')}
+              placeholder={t('JSON 文本，格式为 {"vip": {"grok-imagine-video": {"6": 0.05, "8": 0.07}}}')}
               extraText={t(
                 '仅用于视频等按时长固定价格模型。优先按用户分组命中，其次按实际调用分组命中；命中后直接按该价格扣费，不再乘分组倍率。',
               )}

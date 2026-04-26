@@ -15,12 +15,12 @@ import (
 
 func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	body := map[string]interface{}{
-		"model":   "grok-imagine-1.0-video",
+		"model":   "grok-imagine-video",
 		"quality": "high",
 		"preset":  "fun",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["quality"]; got != "high" {
 		t.Fatalf("expected quality to stay high, got %#v", got)
@@ -38,6 +38,19 @@ func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	}
 	if got := videoConfig["preset"]; got != "fun" {
 		t.Fatalf("expected video_config.preset fun, got %#v", got)
+	}
+}
+
+func TestNormalizeGrokVideoRequestAcceptsLegacyModelName(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "grok-imagine-1.0-video",
+		"duration": float64(10),
+	}
+
+	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+
+	if got := body["seconds"]; got != "10" {
+		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
 	}
 }
 
@@ -378,6 +391,47 @@ func TestBuildRequestURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	}
 	if url != "https://upstream.example/v1/videos" {
 		t.Fatalf("expected OpenAI videos URL for Grok, got %s", url)
+	}
+}
+
+func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "grok-imagine-1.0-video",
+		"prompt": "animate it",
+		"duration": 8,
+		"image": "https://example.com/source.png"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-1.0-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["model"]; got != "grok-imagine-video" {
+		t.Fatalf("expected upstream model to be grok-imagine-video, got %#v", got)
+	}
+	if got := payload["seconds"]; got != "8" {
+		t.Fatalf("expected duration to be normalized to seconds, got %#v", got)
 	}
 }
 

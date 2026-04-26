@@ -28,6 +28,7 @@ var ModelList = []string{
 	"grok-imagine-1.0-video",
 	"grok-imagine-image-pro",
 	"grok-imagine-image",
+	"grok-imagine-image-edit",
 	"grok-2-image-1212",
 	// video generation model
 	"grok-imagine-video",

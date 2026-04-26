@@ -36,7 +36,7 @@ func TestConvertImageRequestBuildsMultipartForEditImage(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", converted)
 	}
-	if payload["model"] != "grok-imagine-1.0-edit" {
+	if payload["model"] != "grok-imagine-image-edit" {
 		t.Fatalf("unexpected model: %v", payload["model"])
 	}
 	if payload["prompt"] != "make it watercolor" {
@@ -114,6 +114,9 @@ func TestConvertImageRequestPreservesSize(t *testing.T) {
 	if xaiReq.Size != "1536x1024" {
 		t.Fatalf("unexpected size: %s", xaiReq.Size)
 	}
+	if xaiReq.Model != "grok-imagine-image" {
+		t.Fatalf("expected legacy image model to normalize to grok-imagine-image, got %s", xaiReq.Model)
+	}
 }
 
 func TestConvertImageRequestPreservesAspectRatioAndOutputResolution(t *testing.T) {
@@ -166,8 +169,11 @@ func TestResolveImagePayloadSupportsPlainURLObject(t *testing.T) {
 	}
 }
 
-func TestModelListIncludesGrokImagineOnePointZeroVariants(t *testing.T) {
+func TestModelListIncludesGrokImagineVariants(t *testing.T) {
 	expected := []string{
+		"grok-imagine-image",
+		"grok-imagine-image-edit",
+		"grok-imagine-video",
 		"grok-imagine-1.0",
 		"grok-imagine-1.0-fast",
 		"grok-imagine-1.0-edit",

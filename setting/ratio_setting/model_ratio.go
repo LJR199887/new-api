@@ -509,33 +509,47 @@ func UpdateGroupModelPriceByJSONString(jsonStr string) error {
 }
 
 // GetModelPrice 返回模型的价格，如果模型不存在则返回-1，false
+func matchingModelNameCandidates(name string) []string {
+	rawCandidates := common.GetGrokImagineModelNameCandidates(name)
+	if len(rawCandidates) == 0 {
+		rawCandidates = []string{name}
+	}
+	candidates := make([]string, 0, len(rawCandidates))
+	seen := map[string]bool{}
+	for _, candidate := range rawCandidates {
+		candidate = FormatMatchingModelName(candidate)
+		if candidate == "" || seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		candidates = append(candidates, candidate)
+	}
+	return candidates
+}
+
 func GetModelPrice(name string, printErr bool) (float64, bool) {
-	name = FormatMatchingModelName(name)
-
-	if strings.HasSuffix(name, CompactModelSuffix) {
-		price, ok := modelPriceMap.Get(CompactWildcardModelKey)
-		if !ok {
-			if printErr {
-				common.SysError("model price not found: " + name)
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		if strings.HasSuffix(candidateName, CompactModelSuffix) {
+			price, ok := modelPriceMap.Get(CompactWildcardModelKey)
+			if !ok {
+				continue
 			}
-			return -1, false
+			return price, true
 		}
-		return price, true
-	}
 
-	price, ok := modelPriceMap.Get(name)
-	if !ok {
-		if printErr {
-			common.SysError("model price not found: " + name)
+		price, ok := modelPriceMap.Get(candidateName)
+		if ok {
+			return price, true
 		}
-		return -1, false
 	}
-	return price, true
+	if printErr {
+		common.SysError("model price not found: " + name)
+	}
+	return -1, false
 }
 
 func GetGroupModelPrice(group string, name string) (float64, bool) {
 	group = strings.TrimSpace(group)
-	name = FormatMatchingModelName(name)
 	if group == "" || name == "" {
 		return 0, false
 	}
@@ -543,26 +557,34 @@ func GetGroupModelPrice(group string, name string) (float64, bool) {
 	if !ok {
 		return 0, false
 	}
-	price, ok := modelMap[name]
-	return price, ok
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		price, ok := modelMap[candidateName]
+		if ok {
+			return price, true
+		}
+	}
+	return 0, false
 }
 
 func GetModelPriceBySeconds(name string, seconds int) (float64, bool) {
-	name = FormatMatchingModelName(name)
 	if seconds <= 0 {
 		return 0, false
 	}
-	secondsPriceMap, ok := modelPriceBySecondsMap.Get(name)
-	if !ok {
-		return 0, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		secondsPriceMap, ok := modelPriceBySecondsMap.Get(candidateName)
+		if !ok {
+			continue
+		}
+		price, ok := secondsPriceMap[strconv.Itoa(seconds)]
+		if ok {
+			return price, true
+		}
 	}
-	price, ok := secondsPriceMap[strconv.Itoa(seconds)]
-	return price, ok
+	return 0, false
 }
 
 func GetGroupModelPriceBySeconds(group string, name string, seconds int) (float64, bool) {
 	group = strings.TrimSpace(group)
-	name = FormatMatchingModelName(name)
 	if group == "" || seconds <= 0 {
 		return 0, false
 	}
@@ -570,30 +592,36 @@ func GetGroupModelPriceBySeconds(group string, name string, seconds int) (float6
 	if !ok {
 		return 0, false
 	}
-	secondsPriceMap, ok := modelMap[name]
-	if !ok {
-		return 0, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		secondsPriceMap, ok := modelMap[candidateName]
+		if !ok {
+			continue
+		}
+		price, ok := secondsPriceMap[strconv.Itoa(seconds)]
+		if ok {
+			return price, true
+		}
 	}
-	price, ok := secondsPriceMap[strconv.Itoa(seconds)]
-	return price, ok
+	return 0, false
 }
 
 func GetModelPriceBySecondsMap(name string) (map[string]float64, bool) {
-	name = FormatMatchingModelName(name)
-	secondsPriceMap, ok := modelPriceBySecondsMap.Get(name)
-	if !ok || len(secondsPriceMap) == 0 {
-		return nil, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		secondsPriceMap, ok := modelPriceBySecondsMap.Get(candidateName)
+		if !ok || len(secondsPriceMap) == 0 {
+			continue
+		}
+		cloned := make(map[string]float64, len(secondsPriceMap))
+		for seconds, price := range secondsPriceMap {
+			cloned[seconds] = price
+		}
+		return cloned, true
 	}
-	cloned := make(map[string]float64, len(secondsPriceMap))
-	for seconds, price := range secondsPriceMap {
-		cloned[seconds] = price
-	}
-	return cloned, true
+	return nil, false
 }
 
 func GetGroupModelPriceBySecondsMap(group string, name string) (map[string]float64, bool) {
 	group = strings.TrimSpace(group)
-	name = FormatMatchingModelName(name)
 	if group == "" {
 		return nil, false
 	}
@@ -601,34 +629,40 @@ func GetGroupModelPriceBySecondsMap(group string, name string) (map[string]float
 	if !ok {
 		return nil, false
 	}
-	secondsPriceMap, ok := modelMap[name]
-	if !ok || len(secondsPriceMap) == 0 {
-		return nil, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		secondsPriceMap, ok := modelMap[candidateName]
+		if !ok || len(secondsPriceMap) == 0 {
+			continue
+		}
+		cloned := make(map[string]float64, len(secondsPriceMap))
+		for seconds, price := range secondsPriceMap {
+			cloned[seconds] = price
+		}
+		return cloned, true
 	}
-	cloned := make(map[string]float64, len(secondsPriceMap))
-	for seconds, price := range secondsPriceMap {
-		cloned[seconds] = price
-	}
-	return cloned, true
+	return nil, false
 }
 
 func GetModelPriceByResolution(name string, resolution string) (float64, bool) {
-	name = FormatMatchingModelName(name)
 	key := normalizeResolutionKey(resolution)
 	if key == "" {
 		return 0, false
 	}
-	resolutionPriceMap, ok := modelPriceByResolutionMap.Get(name)
-	if !ok {
-		return 0, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		resolutionPriceMap, ok := modelPriceByResolutionMap.Get(candidateName)
+		if !ok {
+			continue
+		}
+		price, ok := resolutionPriceMap[key]
+		if ok {
+			return price, true
+		}
 	}
-	price, ok := resolutionPriceMap[key]
-	return price, ok
+	return 0, false
 }
 
 func GetGroupModelPriceByResolution(group string, name string, resolution string) (float64, bool) {
 	group = strings.TrimSpace(group)
-	name = FormatMatchingModelName(name)
 	key := normalizeResolutionKey(resolution)
 	if group == "" || key == "" {
 		return 0, false
@@ -637,30 +671,36 @@ func GetGroupModelPriceByResolution(group string, name string, resolution string
 	if !ok {
 		return 0, false
 	}
-	resolutionPriceMap, ok := modelMap[name]
-	if !ok {
-		return 0, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		resolutionPriceMap, ok := modelMap[candidateName]
+		if !ok {
+			continue
+		}
+		price, ok := resolutionPriceMap[key]
+		if ok {
+			return price, true
+		}
 	}
-	price, ok := resolutionPriceMap[key]
-	return price, ok
+	return 0, false
 }
 
 func GetModelPriceByResolutionMap(name string) (map[string]float64, bool) {
-	name = FormatMatchingModelName(name)
-	resolutionPriceMap, ok := modelPriceByResolutionMap.Get(name)
-	if !ok || len(resolutionPriceMap) == 0 {
-		return nil, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		resolutionPriceMap, ok := modelPriceByResolutionMap.Get(candidateName)
+		if !ok || len(resolutionPriceMap) == 0 {
+			continue
+		}
+		cloned := make(map[string]float64, len(resolutionPriceMap))
+		for resolution, price := range resolutionPriceMap {
+			cloned[resolution] = price
+		}
+		return cloned, true
 	}
-	cloned := make(map[string]float64, len(resolutionPriceMap))
-	for resolution, price := range resolutionPriceMap {
-		cloned[resolution] = price
-	}
-	return cloned, true
+	return nil, false
 }
 
 func GetGroupModelPriceByResolutionMap(group string, name string) (map[string]float64, bool) {
 	group = strings.TrimSpace(group)
-	name = FormatMatchingModelName(name)
 	if group == "" {
 		return nil, false
 	}
@@ -668,15 +708,18 @@ func GetGroupModelPriceByResolutionMap(group string, name string) (map[string]fl
 	if !ok {
 		return nil, false
 	}
-	resolutionPriceMap, ok := modelMap[name]
-	if !ok || len(resolutionPriceMap) == 0 {
-		return nil, false
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		resolutionPriceMap, ok := modelMap[candidateName]
+		if !ok || len(resolutionPriceMap) == 0 {
+			continue
+		}
+		cloned := make(map[string]float64, len(resolutionPriceMap))
+		for resolution, price := range resolutionPriceMap {
+			cloned[resolution] = price
+		}
+		return cloned, true
 	}
-	cloned := make(map[string]float64, len(resolutionPriceMap))
-	for resolution, price := range resolutionPriceMap {
-		cloned[resolution] = price
-	}
-	return cloned, true
+	return nil, false
 }
 
 func GetModelPriceByResolutionMin(name string) (float64, bool) {
@@ -756,19 +799,23 @@ func handleThinkingBudgetModel(name, prefix, wildcard string) string {
 }
 
 func GetModelRatio(name string) (float64, bool, string) {
-	name = FormatMatchingModelName(name)
-
-	ratio, ok := modelRatioMap.Get(name)
-	if !ok {
-		if strings.HasSuffix(name, CompactModelSuffix) {
-			if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
-				return wildcardRatio, true, name
-			}
-			//return 0, true, name
+	candidates := matchingModelNameCandidates(name)
+	for _, candidateName := range candidates {
+		ratio, ok := modelRatioMap.Get(candidateName)
+		if ok {
+			return ratio, true, candidateName
 		}
-		return 37.5, operation_setting.SelfUseModeEnabled, name
+		if strings.HasSuffix(candidateName, CompactModelSuffix) {
+			if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
+				return wildcardRatio, true, candidateName
+			}
+		}
 	}
-	return ratio, true, name
+	matchedName := FormatMatchingModelName(name)
+	if len(candidates) > 0 {
+		matchedName = candidates[0]
+	}
+	return 37.5, operation_setting.SelfUseModeEnabled, matchedName
 }
 
 func DefaultModelRatio2JSONString() string {
@@ -812,20 +859,27 @@ func UpdateCompletionRatioByJSONString(jsonStr string) error {
 }
 
 func GetCompletionRatio(name string) float64 {
-	name = FormatMatchingModelName(name)
+	candidates := matchingModelNameCandidates(name)
 
-	if strings.Contains(name, "/") {
-		if ratio, ok := completionRatioMap.Get(name); ok {
+	for _, candidateName := range candidates {
+		if strings.Contains(candidateName, "/") {
+			if ratio, ok := completionRatioMap.Get(candidateName); ok {
+				return ratio
+			}
+		}
+	}
+	for _, candidateName := range candidates {
+		hardCodedRatio, contain := getHardcodedCompletionModelRatio(candidateName)
+		if contain {
+			return hardCodedRatio
+		}
+	}
+	for _, candidateName := range candidates {
+		if ratio, ok := completionRatioMap.Get(candidateName); ok {
 			return ratio
 		}
 	}
-	hardCodedRatio, contain := getHardcodedCompletionModelRatio(name)
-	if contain {
-		return hardCodedRatio
-	}
-	if ratio, ok := completionRatioMap.Get(name); ok {
-		return ratio
-	}
+	hardCodedRatio, _ := getHardcodedCompletionModelRatio(FormatMatchingModelName(name))
 	return hardCodedRatio
 }
 
@@ -835,10 +889,31 @@ type CompletionRatioInfo struct {
 }
 
 func GetCompletionRatioInfo(name string) CompletionRatioInfo {
-	name = FormatMatchingModelName(name)
+	candidates := matchingModelNameCandidates(name)
 
-	if strings.Contains(name, "/") {
-		if ratio, ok := completionRatioMap.Get(name); ok {
+	for _, candidateName := range candidates {
+		if strings.Contains(candidateName, "/") {
+			if ratio, ok := completionRatioMap.Get(candidateName); ok {
+				return CompletionRatioInfo{
+					Ratio:  ratio,
+					Locked: false,
+				}
+			}
+		}
+	}
+
+	for _, candidateName := range candidates {
+		hardCodedRatio, locked := getHardcodedCompletionModelRatio(candidateName)
+		if locked {
+			return CompletionRatioInfo{
+				Ratio:  hardCodedRatio,
+				Locked: true,
+			}
+		}
+	}
+
+	for _, candidateName := range candidates {
+		if ratio, ok := completionRatioMap.Get(candidateName); ok {
 			return CompletionRatioInfo{
 				Ratio:  ratio,
 				Locked: false,
@@ -846,21 +921,7 @@ func GetCompletionRatioInfo(name string) CompletionRatioInfo {
 		}
 	}
 
-	hardCodedRatio, locked := getHardcodedCompletionModelRatio(name)
-	if locked {
-		return CompletionRatioInfo{
-			Ratio:  hardCodedRatio,
-			Locked: true,
-		}
-	}
-
-	if ratio, ok := completionRatioMap.Get(name); ok {
-		return CompletionRatioInfo{
-			Ratio:  ratio,
-			Locked: false,
-		}
-	}
-
+	hardCodedRatio, _ := getHardcodedCompletionModelRatio(FormatMatchingModelName(name))
 	return CompletionRatioInfo{
 		Ratio:  hardCodedRatio,
 		Locked: false,
@@ -995,31 +1056,39 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 }
 
 func GetAudioRatio(name string) float64 {
-	name = FormatMatchingModelName(name)
-	if ratio, ok := audioRatioMap.Get(name); ok {
-		return ratio
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		if ratio, ok := audioRatioMap.Get(candidateName); ok {
+			return ratio
+		}
 	}
 	return 1
 }
 
 func GetAudioCompletionRatio(name string) float64 {
-	name = FormatMatchingModelName(name)
-	if ratio, ok := audioCompletionRatioMap.Get(name); ok {
-		return ratio
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		if ratio, ok := audioCompletionRatioMap.Get(candidateName); ok {
+			return ratio
+		}
 	}
 	return 1
 }
 
 func ContainsAudioRatio(name string) bool {
-	name = FormatMatchingModelName(name)
-	_, ok := audioRatioMap.Get(name)
-	return ok
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		if _, ok := audioRatioMap.Get(candidateName); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func ContainsAudioCompletionRatio(name string) bool {
-	name = FormatMatchingModelName(name)
-	_, ok := audioCompletionRatioMap.Get(name)
-	return ok
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		if _, ok := audioCompletionRatioMap.Get(candidateName); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func ModelRatio2JSONString() string {
@@ -1043,11 +1112,13 @@ func UpdateImageRatioByJSONString(jsonStr string) error {
 }
 
 func GetImageRatio(name string) (float64, bool) {
-	ratio, ok := imageRatioMap.Get(name)
-	if !ok {
-		return 1, false // Default to 1 if not found
+	for _, candidateName := range matchingModelNameCandidates(name) {
+		ratio, ok := imageRatioMap.Get(candidateName)
+		if ok {
+			return ratio, true
+		}
 	}
-	return ratio, true
+	return 1, false // Default to 1 if not found
 }
 
 func AudioRatio2JSONString() string {

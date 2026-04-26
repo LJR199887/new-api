@@ -280,10 +280,18 @@ export const buildApiPayload = (
     return size;
   };
   const grokImagineImageModels = new Set([
+    'grok-imagine-image',
     'grok-imagine-1.0',
     'grok-imagine-1.0-fast',
   ]);
-  const grokImagineImageEditModels = new Set(['grok-imagine-1.0-edit']);
+  const grokImagineImageEditModels = new Set([
+    'grok-imagine-image-edit',
+    'grok-imagine-1.0-edit',
+  ]);
+  const grokImagineVideoModels = new Set([
+    'grok-imagine-video',
+    'grok-imagine-1.0-video',
+  ]);
   const adobeImageModels = new Set([
     'nano-banana',
     'nano-banana2',
@@ -343,7 +351,7 @@ export const buildApiPayload = (
     grokImagineImageModels.has(inputs.model) ||
     grokImagineImageEditModels.has(inputs.model);
   const isGrokImagineImageEditModel = grokImagineImageEditModels.has(inputs.model);
-  const isGrokImagineVideoModel = inputs.model === 'grok-imagine-1.0-video';
+  const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const isAdobeImageModel = adobeImageModels.has(inputs.model);
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);

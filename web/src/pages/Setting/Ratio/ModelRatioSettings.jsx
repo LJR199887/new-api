@@ -173,7 +173,7 @@ export default function ModelRatioSettings(props) {
                 '用于同一任务模型按 seconds 映射不同价格，例如可以分别设置 4/8/12/15/20/25/30 秒价格。',
               )}
               placeholder={t(
-                '为一个 JSON 文本，键为模型名称，值为一个以秒数为键的价格表，例如：{\"grok-imagine-1.0-video\": {\"4\": 0.08, \"8\": 0.15, \"12\": 0.2}}',
+                '为一个 JSON 文本，键为模型名称，值为一个以秒数为键的价格表，例如：{\"grok-imagine-video\": {\"4\": 0.08, \"8\": 0.15, \"12\": 0.2}}',
               )}
               field={'ModelPriceBySeconds'}
               autosize={{ minRows: 6, maxRows: 12 }}
