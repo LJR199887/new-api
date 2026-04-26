@@ -8912,22 +8912,30 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       </main>
 
       {previewImage ? (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm'>
-          <div className='relative w-full max-w-5xl rounded-[2rem] bg-white p-4 shadow-2xl'>
-            <button
-              onClick={() => setPreviewImage(null)}
-              className='absolute right-4 top-4 z-10 rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-red-200 hover:text-red-500'
-            >
-              <X size={18} />
-            </button>
-            <div className='mb-4 px-2 pr-12 text-sm font-semibold text-slate-600'>
+        <div
+          className='fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 pt-16 backdrop-blur-sm sm:p-6 sm:pt-20'
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            type='button'
+            aria-label='关闭预览'
+            onClick={() => setPreviewImage(null)}
+            className='fixed right-4 top-4 z-[1001] rounded-full border border-white/70 bg-white/95 p-2.5 text-slate-500 shadow-xl shadow-slate-950/20 transition hover:border-red-200 hover:text-red-500 sm:right-6 sm:top-6'
+          >
+            <X size={20} />
+          </button>
+          <div
+            className='relative w-full max-w-5xl rounded-[2rem] bg-white p-4 shadow-2xl'
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className='mb-4 max-h-[18vh] overflow-y-auto px-2 pr-2 text-sm font-semibold text-slate-600'>
               {previewImage.title || '图片预览'}
             </div>
             <div className='overflow-hidden rounded-[1.5rem] bg-slate-100'>
               <img
                 src={buildCreativeCenterImageDisplayUrl(previewImage.url)}
                 alt={previewImage.title || 'Preview'}
-                className='max-h-[80vh] w-full object-contain'
+                className='max-h-[72vh] w-full object-contain'
               />
             </div>
           </div>
