@@ -291,6 +291,15 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	if preset != "" {
 		bodyMap["preset"] = preset
 	}
+	if seconds == "" {
+		seconds = stringifyBodyValue(bodyMap["seconds"])
+	}
+	if seconds != "" {
+		bodyMap["seconds"] = seconds
+	}
+	if size := grokVideoSizeValue(bodyMap); size != "" {
+		bodyMap["size"] = size
+	}
 	if resolutionName != "" || preset != "" {
 		videoConfig := map[string]interface{}{}
 		if resolutionName != "" {
@@ -301,6 +310,66 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 		}
 		bodyMap["video_config"] = videoConfig
 	}
+}
+
+func grokVideoSizeValue(bodyMap map[string]interface{}) string {
+	size := stringifyBodyValue(bodyMap["size"])
+	if size == "" {
+		if videoConfig, ok := bodyMap["video_config"].(map[string]interface{}); ok {
+			size = stringifyBodyValue(videoConfig["size"])
+		}
+	}
+	if size != "" {
+		return size
+	}
+	width := stringifyBodyValue(bodyMap["width"])
+	height := stringifyBodyValue(bodyMap["height"])
+	if width != "" && height != "" {
+		return width + "x" + height
+	}
+	return ""
+}
+
+func firstGrokVideoFieldValue(bodyMap map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value := stringifyBodyValue(bodyMap[key]); value != "" {
+			return value
+		}
+	}
+	if videoConfig, ok := bodyMap["video_config"].(map[string]interface{}); ok {
+		for _, key := range keys {
+			if value := stringifyBodyValue(videoConfig[key]); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func buildGrokVideoMultipartBody(bodyMap map[string]interface{}, upstreamModelName string) (io.Reader, string, error) {
+	normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	fields := map[string]string{
+		"model":           upstreamModelName,
+		"prompt":          firstGrokVideoFieldValue(bodyMap, "prompt", "input"),
+		"seconds":         firstGrokVideoFieldValue(bodyMap, "seconds", "duration"),
+		"size":            grokVideoSizeValue(bodyMap),
+		"resolution_name": firstGrokVideoFieldValue(bodyMap, "resolution_name"),
+		"preset":          firstGrokVideoFieldValue(bodyMap, "preset"),
+	}
+	for _, key := range []string{"model", "prompt", "seconds", "size", "resolution_name", "preset"} {
+		if value := strings.TrimSpace(fields[key]); value != "" {
+			if err := writer.WriteField(key, value); err != nil {
+				return nil, "", err
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+	return &buf, writer.FormDataContentType(), nil
 }
 
 func isSoraVideoModel(upstreamModel string) bool {
@@ -372,6 +441,15 @@ func firstNonEmptyMultipartValue(values map[string][]string, keys ...string) str
 		}
 	}
 	return ""
+}
+
+func isGrokVideoReferenceFileField(fieldName string) bool {
+	switch strings.TrimSpace(fieldName) {
+	case "image", "image[]", "images", "images[]", "image_reference", "image_reference[]", "input_reference", "input_reference[]":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
@@ -538,6 +616,13 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		if err := common.Unmarshal(cachedBody, &bodyMap); err == nil {
 			upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
 			bodyMap["model"] = upstreamModelName
+			if isGrokImagineVideoModel(upstreamModelName) {
+				body, formContentType, err := buildGrokVideoMultipartBody(bodyMap, upstreamModelName)
+				if err == nil {
+					c.Request.Header.Set("Content-Type", formContentType)
+					return body, nil
+				}
+			}
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
 			normalizeSoraVideoRequest(bodyMap, upstreamModelName)
 			if newBody, err := common.Marshal(bodyMap); err == nil {
@@ -556,6 +641,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 		upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
+		isGrokVideo := isGrokImagineVideoModel(upstreamModelName)
 		writer.WriteField("model", upstreamModelName)
 		hasSeconds := false
 		hasDuration := false
@@ -566,6 +652,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		aspectRatioValue := ""
 		for key, values := range formData.Value {
 			if key == "model" {
+				continue
+			}
+			if isGrokVideo && (key == "duration" || key == "async" || key == "video_config") {
+				if key == "duration" && len(values) > 0 && durationValue == "" {
+					durationValue = strings.TrimSpace(values[0])
+				}
 				continue
 			}
 			if key == "seconds" && len(values) > 0 && strings.TrimSpace(values[0]) != "" {
@@ -628,6 +720,10 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			}
 		}
 		for fieldName, fileHeaders := range formData.File {
+			targetFieldName := fieldName
+			if isGrokVideo && isGrokVideoReferenceFileField(fieldName) {
+				targetFieldName = "input_reference[]"
+			}
 			for _, fh := range fileHeaders {
 				f, err := fh.Open()
 				if err != nil {
@@ -646,7 +742,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					}
 				}
 				h := make(textproto.MIMEHeader)
-				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fieldName, fh.Filename))
+				h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, targetFieldName, fh.Filename))
 				h.Set("Content-Type", ct)
 				part, err := writer.CreatePart(h)
 				if err != nil {

@@ -1,7 +1,10 @@
 package sora
 
 import (
+	"bytes"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -423,15 +426,77 @@ func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
 		t.Fatalf("read request body failed: %v", err)
 	}
 
-	var payload map[string]any
-	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("unmarshal request payload failed: %v", err)
+	mediaType, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
 	}
-	if got := payload["model"]; got != "grok-imagine-video" {
+	if mediaType != "multipart/form-data" {
+		t.Fatalf("expected multipart/form-data, got %s", mediaType)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	if got := form.Value["model"][0]; got != "grok-imagine-video" {
 		t.Fatalf("expected upstream model to be grok-imagine-video, got %#v", got)
 	}
-	if got := payload["seconds"]; got != "8" {
+	if got := form.Value["seconds"][0]; got != "8" {
 		t.Fatalf("expected duration to be normalized to seconds, got %#v", got)
+	}
+}
+
+func TestBuildRequestBodyMapsGrokMultipartImageField(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", "grok-imagine-video")
+	_ = writer.WriteField("prompt", "animate it")
+	_ = writer.WriteField("duration", "10")
+	part, err := writer.CreateFormFile("image", "source.png")
+	if err != nil {
+		t.Fatalf("create form file failed: %v", err)
+	}
+	if _, err := part.Write([]byte("fake image")); err != nil {
+		t.Fatalf("write form file failed: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer failed: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", bytes.NewReader(body.Bytes()))
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	if got := form.Value["seconds"][0]; got != "10" {
+		t.Fatalf("expected duration to be forwarded as seconds, got %q", got)
+	}
+	if len(form.File["input_reference[]"]) != 1 {
+		t.Fatalf("expected image file to be forwarded as input_reference[], got %#v", form.File)
 	}
 }
 
