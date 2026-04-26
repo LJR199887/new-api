@@ -16,6 +16,19 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
+func TestModelListIncludesVeo31Variants(t *testing.T) {
+	models := make(map[string]bool, len(ModelList))
+	for _, modelName := range ModelList {
+		models[modelName] = true
+	}
+
+	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref"} {
+		if !models[modelName] {
+			t.Fatalf("expected ModelList to include %s", modelName)
+		}
+	}
+}
+
 func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	body := map[string]interface{}{
 		"model":   "grok-imagine-video",
@@ -238,26 +251,30 @@ func TestNormalizeSoraVideoRequestAcceptsSora2Alias(t *testing.T) {
 }
 
 func TestNormalizeSoraVideoRequestAcceptsVeoImageURLFormat(t *testing.T) {
-	body := map[string]interface{}{
-		"model":          "veo31-fast",
-		"prompt":         "Create a smooth cinematic motion",
-		"duration":       float64(4),
-		"aspect_ratio":   "16:9",
-		"resolution":     "720p",
-		"image_url":      "https://example.com/a.png",
-		"reference_mode": "",
-	}
+	for _, modelName := range []string{"veo31", "veo31-fast"} {
+		t.Run(modelName, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":          modelName,
+				"prompt":         "Create a smooth cinematic motion",
+				"duration":       float64(4),
+				"aspect_ratio":   "16:9",
+				"resolution":     "720p",
+				"image_url":      "https://example.com/a.png",
+				"reference_mode": "",
+			}
 
-	normalizeSoraVideoRequest(body, "veo31-fast")
+			normalizeSoraVideoRequest(body, modelName)
 
-	if got := body["image_url"]; got != "https://example.com/a.png" {
-		t.Fatalf("expected image_url to be preserved, got %#v", got)
-	}
-	if got := body["reference_mode"]; got != "frame" {
-		t.Fatalf("expected veo31-fast reference_mode=frame, got %#v", got)
-	}
-	if got, ok := body["async"].(bool); !ok || !got {
-		t.Fatalf("expected async=true, got %#v", body["async"])
+			if got := body["image_url"]; got != "https://example.com/a.png" {
+				t.Fatalf("expected image_url to be preserved, got %#v", got)
+			}
+			if got := body["reference_mode"]; got != "frame" {
+				t.Fatalf("expected %s reference_mode=frame, got %#v", modelName, got)
+			}
+			if got, ok := body["async"].(bool); !ok || !got {
+				t.Fatalf("expected async=true, got %#v", body["async"])
+			}
+		})
 	}
 }
 

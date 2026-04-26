@@ -78,6 +78,7 @@ curl https://linksky.top/v1/models \
 | 模型 | 推荐接口 | 计费方式 | 当前价格 |
 | --- | --- | --- | --- |
 | `grok-imagine-video` | `/v1/video/generations` | 按秒数档位 | `6s: 0.06` / `8s: 0.08` / `10s: 0.10` |
+| `veo31` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 | `veo31-fast` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 | `veo31-ref` | `/v1/video/generations` | 按秒数档位 | `4s: 0.08` / `6s: 0.12` / `8s: 0.16` |
 

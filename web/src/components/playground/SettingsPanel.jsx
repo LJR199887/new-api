@@ -216,10 +216,6 @@ const SettingsPanel = ({
     { label: '1080p', value: '1080p' },
     { label: '720p', value: '720p' },
   ];
-  const adobeReferenceModeOptions = [
-    { label: 'Frame', value: 'frame' },
-    { label: 'Image', value: 'image' },
-  ];
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const currentAdobeAspectRatioOptions = isGPTImage2Model
     ? gptImage2SizeOptions
@@ -592,20 +588,6 @@ const SettingsPanel = ({
                     optionList={adobeVideoResolutionOptions}
                     value={inputs.videoResolution || '1080p'}
                     onChange={(value) => onInputChange('videoResolution', value)}
-                    disabled={customRequestMode}
-                  />
-                </div>
-              )}
-              {inputs.model === 'veo31' && (
-                <div>
-                  <Typography.Text strong className='text-sm'>
-                    Reference Mode
-                  </Typography.Text>
-                  <Select
-                    className='!rounded-lg mt-2'
-                    optionList={adobeReferenceModeOptions}
-                    value={inputs.referenceMode || 'frame'}
-                    onChange={(value) => onInputChange('referenceMode', value)}
                     disabled={customRequestMode}
                   />
                 </div>

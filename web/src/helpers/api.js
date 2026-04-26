@@ -460,8 +460,6 @@ export const buildApiPayload = (
     }
     if (inputs.model === 'veo31-ref') {
       payload.reference_mode = 'image';
-    } else if (inputs.model === 'veo31' && inputs.referenceMode) {
-      payload.reference_mode = inputs.referenceMode;
     }
   }
 

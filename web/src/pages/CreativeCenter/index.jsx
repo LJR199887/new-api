@@ -88,6 +88,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'gpt-image2': 6,
   'sora2': 1,
   'sora2-pro': 1,
+  'veo31': 2,
   'veo31-fast': 2,
   'veo31-ref': 3,
 };
@@ -229,6 +230,7 @@ const CREATIVE_CENTER_VIDEO_TASK_ACTIONS = new Set([
 ]);
 const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
   'grok-imagine-video',
+  'veo31',
   'veo31-fast',
   'veo31-ref',
 ]);
@@ -3636,9 +3638,6 @@ export default function App() {
           sourceParams.aspectRatio || getAdobeVideoDefaultAspectRatio(modelName);
         if (isCurrentAdobeVeoModel) {
           snapshot.videoResolution = sourceParams.videoResolution || '1080p';
-        }
-        if (modelName === 'veo31') {
-          snapshot.referenceMode = sourceParams.referenceMode || 'frame';
         }
       }
     }
@@ -8874,7 +8873,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         />
                       )}
 
-                      {currentModelName === 'veo31' && (
+                      {false && currentModelName === 'veo31' && (
                         <DropSelectButton
                           menuKey='referenceMode'
                           icon={<Layers size={14} />}
