@@ -7,7 +7,7 @@ import (
 )
 
 func TestFilterOtherRatiosForDurationOnlyModel(t *testing.T) {
-	filtered := FilterOtherRatiosForBillingModel("grok-imagine-1.0-video", map[string]float64{
+	filtered := FilterOtherRatiosForBillingModel("grok-imagine-video", map[string]float64{
 		"seconds":    6,
 		"size":       1.666667,
 		"resolution": 1.5,

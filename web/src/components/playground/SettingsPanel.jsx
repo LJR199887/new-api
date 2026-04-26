@@ -58,20 +58,16 @@ const SettingsPanel = ({
   };
   const grokImagineImageModels = new Set([
     'grok-imagine-image',
-    'grok-imagine-1.0',
     'grok-imagine-1.0-fast',
   ]);
   const grokImagineImageEditModels = new Set([
     'grok-imagine-image-edit',
-    'grok-imagine-1.0-edit',
   ]);
   const restrictedImageUploadModels = new Set([
     'grok-imagine-image',
-    'grok-imagine-1.0',
   ]);
   const grokImagineVideoModels = new Set([
     'grok-imagine-video',
-    'grok-imagine-1.0-video',
   ]);
   const adobeImageModels = new Set([
     'nano-banana',

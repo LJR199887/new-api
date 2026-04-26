@@ -115,17 +115,17 @@ func TestModelPriceHelperUsesGroupPerCallPriceWithoutGroupRatio(t *testing.T) {
 	}`))
 	require.NoError(t, ratio_setting.UpdateGroupModelPriceByJSONString(`{
 		"vip": {
-			"grok-imagine-1.0-edit": 0.02
+			"grok-imagine-image-edit": 0.02
 		}
 	}`))
 
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	request := &dto.ImageRequest{
-		Model: "grok-imagine-1.0-edit",
+		Model: "grok-imagine-image-edit",
 	}
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-1.0-edit",
+		OriginModelName: "grok-imagine-image-edit",
 		UsingGroup:      "default",
 		UserGroup:       "vip",
 		Request:         request,

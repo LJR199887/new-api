@@ -20,12 +20,6 @@ func TestGetEndpointTypesByChannelTypeRecognizesGrokImagineImageModels(t *testin
 			expected: constant.EndpointTypeImageGeneration,
 		},
 		{
-			name:     "grok imagine 1.0 generation",
-			channel:  constant.ChannelTypeXai,
-			model:    "grok-imagine-1.0",
-			expected: constant.EndpointTypeImageGeneration,
-		},
-		{
 			name:     "grok imagine 1.0 fast generation",
 			channel:  constant.ChannelTypeXai,
 			model:    "grok-imagine-1.0-fast",
@@ -38,27 +32,15 @@ func TestGetEndpointTypesByChannelTypeRecognizesGrokImagineImageModels(t *testin
 			expected: constant.EndpointTypeImageEdit,
 		},
 		{
-			name:     "grok imagine 1.0 edit",
-			channel:  constant.ChannelTypeXai,
-			model:    "grok-imagine-1.0-edit",
-			expected: constant.EndpointTypeImageEdit,
-		},
-		{
 			name:     "grok imagine video on xai",
 			channel:  constant.ChannelTypeXai,
 			model:    "grok-imagine-video",
 			expected: constant.EndpointTypeOpenAIVideo,
 		},
 		{
-			name:     "grok imagine 1.0 video on xai",
-			channel:  constant.ChannelTypeXai,
-			model:    "grok-imagine-1.0-video",
-			expected: constant.EndpointTypeOpenAIVideo,
-		},
-		{
 			name:     "grok imagine video stays video",
 			channel:  constant.ChannelTypeSora,
-			model:    "grok-imagine-1.0-video",
+			model:    "grok-imagine-video",
 			expected: constant.EndpointTypeOpenAIVideo,
 		},
 	}

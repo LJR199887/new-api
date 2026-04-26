@@ -52,7 +52,7 @@ func TestGeneralOpenAIRequestPreserveExplicitZeroValues(t *testing.T) {
 
 func TestGeneralOpenAIRequestPreservesImageConfig(t *testing.T) {
 	raw := []byte(`{
-		"model":"grok-imagine-1.0-edit",
+		"model":"grok-imagine-image-edit",
 		"stream":false,
 		"image_config":{
 			"n":1,

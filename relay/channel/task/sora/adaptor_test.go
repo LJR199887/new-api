@@ -44,13 +44,13 @@ func TestNormalizeGrokVideoRequestAddsResolutionAliases(t *testing.T) {
 	}
 }
 
-func TestNormalizeGrokVideoRequestAcceptsLegacyModelName(t *testing.T) {
+func TestNormalizeGrokVideoRequestBackfillsSecondsFromDuration(t *testing.T) {
 	body := map[string]interface{}{
-		"model":    "grok-imagine-1.0-video",
+		"model":    "grok-imagine-video",
 		"duration": float64(10),
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["seconds"]; got != "10" {
 		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
@@ -59,11 +59,11 @@ func TestNormalizeGrokVideoRequestAcceptsLegacyModelName(t *testing.T) {
 
 func TestNormalizeGrokVideoRequestBackfillsQualityFromResolutionName(t *testing.T) {
 	body := map[string]interface{}{
-		"model":           "grok-imagine-1.0-video",
+		"model":           "grok-imagine-video",
 		"resolution_name": "720p",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["quality"]; got != "high" {
 		t.Fatalf("expected quality high, got %#v", got)
@@ -73,27 +73,14 @@ func TestNormalizeGrokVideoRequestBackfillsQualityFromResolutionName(t *testing.
 	}
 }
 
-func TestNormalizeGrokVideoRequestBackfillsSecondsFromDuration(t *testing.T) {
-	body := map[string]interface{}{
-		"model":    "grok-imagine-1.0-video",
-		"duration": float64(10),
-	}
-
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
-
-	if got := body["seconds"]; got != "10" {
-		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
-	}
-}
-
 func TestNormalizeGrokVideoRequestClampsUnsupportedSeconds(t *testing.T) {
 	body := map[string]interface{}{
-		"model":    "grok-imagine-1.0-video",
+		"model":    "grok-imagine-video",
 		"duration": float64(10),
 		"seconds":  "8",
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if got := body["seconds"]; got != "10" {
 		t.Fatalf("expected unsupported seconds to default to 10, got %#v", got)
@@ -102,12 +89,12 @@ func TestNormalizeGrokVideoRequestClampsUnsupportedSeconds(t *testing.T) {
 
 func TestNormalizeGrokVideoRequestPromotesImageReference(t *testing.T) {
 	body := map[string]interface{}{
-		"model":  "grok-imagine-1.0-video",
+		"model":  "grok-imagine-video",
 		"image":  "https://example.com/cover.png",
 		"images": []interface{}{"https://example.com/frame-2.png"},
 	}
 
-	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
+	normalizeGrokVideoRequest(body, "grok-imagine-video")
 
 	if _, exists := body["image"]; exists {
 		t.Fatalf("expected legacy image field to be removed")
@@ -384,9 +371,9 @@ func TestBuildRequestURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	adaptor := &TaskAdaptor{baseURL: "https://upstream.example"}
 	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
 		RequestURLPath:  "/v1/video/generations",
-		OriginModelName: "grok-imagine-1.0-video",
+		OriginModelName: "grok-imagine-video",
 		ChannelMeta: &relaycommon.ChannelMeta{
-			UpstreamModelName: "grok-imagine-1.0-video",
+			UpstreamModelName: "grok-imagine-video",
 		},
 	})
 	if err != nil {
@@ -397,12 +384,12 @@ func TestBuildRequestURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	}
 }
 
-func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
+func TestBuildRequestBodyBuildsGrokVideoMultipartPayload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
-		"model": "grok-imagine-1.0-video",
+		"model": "grok-imagine-video",
 		"prompt": "animate it",
 		"duration": 8,
 		"image": "data:image/png;base64,iVBORw0KGgo="
@@ -412,7 +399,7 @@ func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
 	adaptor := &TaskAdaptor{}
 	info := &relaycommon.RelayInfo{
 		ChannelMeta: &relaycommon.ChannelMeta{
-			UpstreamModelName: "grok-imagine-1.0-video",
+			UpstreamModelName: "grok-imagine-video",
 		},
 	}
 
@@ -593,7 +580,7 @@ func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSoraAlias(t *testing.
 func TestBuildTaskFetchURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	url, err := buildTaskFetchURL("https://upstream.example", map[string]any{
 		"task_id":      "upstream-task",
-		"model":        "grok-imagine-1.0-video",
+		"model":        "grok-imagine-video",
 		"request_path": "/v1/video/generations",
 	})
 	if err != nil {

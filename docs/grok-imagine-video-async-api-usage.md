@@ -1,6 +1,6 @@
 # Grok Imagine Video 异步调用文档
 
-本文面向下游系统调用 `grok-imagine-video`。旧模型名 `grok-imagine-1.0-video` 仍可传入，服务端会自动转为上游新模型名 `grok-imagine-video`。
+本文面向下游系统调用 `grok-imagine-video`。
 
 参考上游 `grok2api` 文档：Grok 视频独立接口是 `POST /v1/videos`，使用 multipart 表单提交，创建后通过 `GET /v1/videos/{video_id}` 轮询。本站对外仍提供统一异步接口 `/v1/video/async-generations`，服务端会在后台转换并转发给上游。
 
@@ -34,20 +34,6 @@ curl https://linksky.top/v1/video/async-generations \
     "preset": "normal",
     "async": true
   }'
-```
-
-兼容旧模型名：
-
-```json
-{
-  "model": "grok-imagine-1.0-video",
-  "prompt": "A neon rainy street at night, cinematic slow tracking shot",
-  "duration": 10,
-  "size": "1792x1024",
-  "resolution_name": "720p",
-  "preset": "normal",
-  "async": true
-}
 ```
 
 说明：`duration` 会兼容转换为上游需要的 `seconds`。
@@ -93,7 +79,7 @@ curl https://linksky.top/v1/video/async-generations \
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | 推荐 `grok-imagine-video`；旧名 `grok-imagine-1.0-video` 兼容 |
+| `model` | string | 是 | 固定传 `grok-imagine-video` |
 | `prompt` | string | 是 | 视频提示词 |
 | `seconds` | number/string | 否 | 视频长度，只允许 `6` 或 `10`，默认 `10` |
 | `duration` | number/string | 否 | 兼容字段，会转为 `seconds`，只允许 `6` 或 `10` |

@@ -14,19 +14,15 @@ func TestGetGroupModelPrice(t *testing.T) {
 
 	require.NoError(t, UpdateGroupModelPriceByJSONString(`{
 		"vip": {
-			"grok-imagine-1.0-edit": 0.02
+			"grok-imagine-image-edit": 0.02
 		}
 	}`))
 
-	price, ok := GetGroupModelPrice("vip", "grok-imagine-1.0-edit")
+	price, ok := GetGroupModelPrice("vip", "grok-imagine-image-edit")
 	require.True(t, ok)
 	require.Equal(t, 0.02, price)
 
-	price, ok = GetGroupModelPrice("vip", "grok-imagine-image-edit")
-	require.True(t, ok)
-	require.Equal(t, 0.02, price)
-
-	_, ok = GetGroupModelPrice("default", "grok-imagine-1.0-edit")
+	_, ok = GetGroupModelPrice("default", "grok-imagine-image-edit")
 	require.False(t, ok)
 }
 
@@ -38,22 +34,18 @@ func TestGetGroupModelPriceBySeconds(t *testing.T) {
 
 	require.NoError(t, UpdateGroupModelPriceBySecondsByJSONString(`{
 		"vip": {
-			"grok-imagine-1.0-video": {
+			"grok-imagine-video": {
 				"6": 0.05,
-				"8": 0.07
+				"10": 0.07
 			}
 		}
 	}`))
 
-	price, ok := GetGroupModelPriceBySeconds("vip", "grok-imagine-1.0-video", 8)
+	price, ok := GetGroupModelPriceBySeconds("vip", "grok-imagine-video", 10)
 	require.True(t, ok)
 	require.Equal(t, 0.07, price)
 
-	price, ok = GetGroupModelPriceBySeconds("vip", "grok-imagine-video", 8)
-	require.True(t, ok)
-	require.Equal(t, 0.07, price)
-
-	_, ok = GetGroupModelPriceBySeconds("default", "grok-imagine-1.0-video", 8)
+	_, ok = GetGroupModelPriceBySeconds("default", "grok-imagine-video", 10)
 	require.False(t, ok)
 }
 

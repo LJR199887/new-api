@@ -27,7 +27,7 @@ func TestConvertImageRequestAllowsJSONEditPayload(t *testing.T) {
 	converted, err := adaptor.ConvertImageRequest(ctx, &relaycommon.RelayInfo{
 		RelayMode: relayconstant.RelayModeImagesEdits,
 	}, dto.ImageRequest{
-		Model:          "grok-imagine-1.0-edit",
+		Model:          "grok-imagine-image-edit",
 		Prompt:         "enhance this image",
 		N:              lo.ToPtr(uint(1)),
 		Size:           "1024x1024",
@@ -55,7 +55,7 @@ func TestConvertImageRequestAllowsJSONEditPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read multipart form failed: %v", err)
 	}
-	if form.Value["model"][0] != "grok-imagine-1.0-edit" {
+	if form.Value["model"][0] != "grok-imagine-image-edit" {
 		t.Fatalf("unexpected model: %v", form.Value["model"])
 	}
 	if form.Value["prompt"][0] != "enhance this image" {

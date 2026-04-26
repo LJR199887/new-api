@@ -50,7 +50,7 @@ func TestIsTransientVideoNotFoundResponse(t *testing.T) {
 			statusCode: http.StatusNotFound,
 			body:       []byte(`{"detail":"video generation not found"}`),
 			submitTime: now - 1*60,
-			models:     []string{"grok-imagine-1.0-video"},
+			models:     []string{"grok-imagine-video"},
 			want:       false,
 		},
 		{

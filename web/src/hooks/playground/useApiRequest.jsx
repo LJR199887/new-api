@@ -34,16 +34,13 @@ import {
 
 const GROK_IMAGE_GENERATION_MODELS = new Set([
   'grok-imagine-image',
-  'grok-imagine-1.0',
   'grok-imagine-1.0-fast',
 ]);
 const GROK_IMAGE_EDIT_MODELS = new Set([
   'grok-imagine-image-edit',
-  'grok-imagine-1.0-edit',
 ]);
 const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
-  'grok-imagine-1.0-video',
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',

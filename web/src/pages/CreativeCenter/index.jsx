@@ -48,23 +48,18 @@ const tabs = [
 
 const GROK_IMAGINE_IMAGE_MODELS = new Set([
   'grok-imagine-image',
-  'grok-imagine-1.0',
   'grok-imagine-1.0-fast',
   'grok-imagine-image-edit',
-  'grok-imagine-1.0-edit',
 ]);
 const GROK_IMAGE_EDIT_MODELS = new Set([
   'grok-imagine-image-edit',
-  'grok-imagine-1.0-edit',
 ]);
 const GROK_IMAGE_GENERATION_MODELS = new Set([
   'grok-imagine-image',
-  'grok-imagine-1.0',
   'grok-imagine-1.0-fast',
 ]);
 const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
-  'grok-imagine-1.0-video',
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
@@ -86,9 +81,7 @@ const ADOBE_VIDEO_MODELS = new Set([
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
-  'grok-imagine-1.0-edit': 3,
   'grok-imagine-video': 7,
-  'grok-imagine-1.0-video': 7,
   'nano-banana': 4,
   'nano-banana2': 6,
   'nano-banana-pro': 6,
@@ -236,7 +229,6 @@ const CREATIVE_CENTER_VIDEO_TASK_ACTIONS = new Set([
 ]);
 const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
   'grok-imagine-video',
-  'grok-imagine-1.0-video',
   'veo31-fast',
   'veo31-ref',
 ]);

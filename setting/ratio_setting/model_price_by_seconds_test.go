@@ -14,20 +14,16 @@ func TestGetModelPriceBySeconds(t *testing.T) {
 	}()
 
 	require.NoError(t, UpdateModelPriceBySecondsByJSONString(`{
-		"grok-imagine-1.0-video": {
-			"12": 0.2,
-			"20": 0.28
+		"grok-imagine-video": {
+			"6": 0.2,
+			"10": 0.28
 		}
 	}`))
 
-	price, ok := GetModelPriceBySeconds("grok-imagine-1.0-video", 12)
+	price, ok := GetModelPriceBySeconds("grok-imagine-video", 6)
 	require.True(t, ok)
 	assert.Equal(t, 0.2, price)
 
-	price, ok = GetModelPriceBySeconds("grok-imagine-video", 12)
-	require.True(t, ok)
-	assert.Equal(t, 0.2, price)
-
-	_, ok = GetModelPriceBySeconds("grok-imagine-1.0-video", 15)
+	_, ok = GetModelPriceBySeconds("grok-imagine-video", 8)
 	assert.False(t, ok)
 }
