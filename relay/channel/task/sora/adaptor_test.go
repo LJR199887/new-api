@@ -405,7 +405,7 @@ func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
 		"model": "grok-imagine-1.0-video",
 		"prompt": "animate it",
 		"duration": 8,
-		"image": "https://example.com/source.png"
+		"image": "data:image/png;base64,iVBORw0KGgo="
 	}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -442,6 +442,54 @@ func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
 	}
 	if got := form.Value["seconds"][0]; got != "8" {
 		t.Fatalf("expected duration to be normalized to seconds, got %#v", got)
+	}
+	if len(form.File["input_reference[]"]) != 1 {
+		t.Fatalf("expected JSON image reference to be forwarded as input_reference[], got %#v", form.File)
+	}
+}
+
+func TestBuildRequestBodyMapsGrokJsonImageReferenceToFiles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "grok-imagine-video",
+		"prompt": "animate it",
+		"seconds": 10,
+		"image_reference": ["data:image/png;base64,iVBORw0KGgo="]
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "grok-imagine-video",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	files := form.File["input_reference[]"]
+	if len(files) != 1 {
+		t.Fatalf("expected JSON image_reference to be uploaded as input_reference[], got %#v", form.File)
+	}
+	if got := files[0].Header.Get("Content-Type"); got != "image/png" {
+		t.Fatalf("expected image/png content type, got %q", got)
 	}
 }
 

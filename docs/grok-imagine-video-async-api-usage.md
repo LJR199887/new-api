@@ -70,6 +70,25 @@ curl https://linksky.top/v1/video/async-generations \
 
 为兼容现有客户端，服务端也会把 multipart 中的 `image`、`image[]`、`images`、`images[]`、`image_reference`、`image_reference[]` 文件字段转为上游的 `input_reference[]`。
 
+如果下游只能传 JSON，也可以传公网可访问的图片 URL：
+
+```json
+{
+  "model": "grok-imagine-video",
+  "prompt": "让参考图里的主体向镜头走来，电影感运镜",
+  "seconds": 10,
+  "size": "720x1280",
+  "resolution_name": "720p",
+  "preset": "normal",
+  "image_reference": [
+    "https://example.com/reference.png"
+  ],
+  "async": true
+}
+```
+
+服务端会下载这些图片，并作为上游要求的 `input_reference[]` 文件转发。如果图片 URL 无法下载，任务会直接失败，不会静默退化成文生视频。
+
 ## 参数
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -187,5 +206,5 @@ async function createGrokVideo() {
 
 - 下游只需要调用本站 `/v1/video/async-generations`；不要直接调用上游 `/v1/videos`。
 - 服务端会把 JSON 文生视频转换为上游 multipart 表单。
-- 图生视频推荐直接传 multipart 文件，字段名用 `input_reference[]`。
-- JSON 图片 URL 不是上游文档推荐格式；如需图生视频，优先上传文件。
+- 图生视频最稳妥的方式是直接传 multipart 文件，字段名用 `input_reference[]`。
+- JSON 图片 URL 也支持，服务端会先下载图片再转成上游 multipart 文件字段。
