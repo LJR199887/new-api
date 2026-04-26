@@ -125,6 +125,11 @@ const ModelPricingTable = ({
       ? modelData.model_price_by_resolution
       : {};
 
+  const groupModelPrice =
+    modelData?.group_model_price && typeof modelData.group_model_price === 'object'
+      ? modelData.group_model_price
+      : {};
+
   const groupModelPriceBySeconds =
     modelData?.group_model_price_by_seconds &&
     typeof modelData.group_model_price_by_seconds === 'object'
@@ -189,10 +194,17 @@ const ModelPricingTable = ({
   };
 
   const renderGroupPriceTable = () => {
-    const availableGroups = Object.keys(usableGroup || {})
+    const displayGroupSource =
+      groupRatio && Object.keys(groupRatio).length > 0 ? groupRatio : usableGroup || {};
+    const groupsWithPriceOverride = new Set([
+      ...Object.keys(groupModelPrice),
+      ...Object.keys(groupModelPriceBySeconds),
+      ...Object.keys(groupModelPriceByResolution),
+    ]);
+    const availableGroups = Object.keys(displayGroupSource)
       .filter((g) => g !== '')
       .filter((g) => g !== 'auto')
-      .filter((g) => modelEnableGroups.includes(g));
+      .filter((g) => modelEnableGroups.includes(g) || groupsWithPriceOverride.has(g));
 
     const tableData = availableGroups.map((group) => {
       const priceData = modelData

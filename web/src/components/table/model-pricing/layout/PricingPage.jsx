@@ -67,7 +67,7 @@ const PricingPage = () => {
         visible={pricingData.showModelDetail}
         onClose={pricingData.closeModelDetail}
         modelData={pricingData.selectedModel}
-        groupRatio={pricingData.groupRatio}
+        groupRatio={pricingData.pricingGroupRatio || pricingData.groupRatio}
         usableGroup={pricingData.usableGroup}
         currency={pricingData.currency}
         siteDisplayType={pricingData.siteDisplayType}
