@@ -86,7 +86,7 @@ func TestNormalizeGrokVideoRequestBackfillsSecondsFromDuration(t *testing.T) {
 	}
 }
 
-func TestNormalizeGrokVideoRequestKeepsExplicitSeconds(t *testing.T) {
+func TestNormalizeGrokVideoRequestClampsUnsupportedSeconds(t *testing.T) {
 	body := map[string]interface{}{
 		"model":    "grok-imagine-1.0-video",
 		"duration": float64(10),
@@ -95,8 +95,8 @@ func TestNormalizeGrokVideoRequestKeepsExplicitSeconds(t *testing.T) {
 
 	normalizeGrokVideoRequest(body, "grok-imagine-1.0-video")
 
-	if got := body["seconds"]; got != "8" {
-		t.Fatalf("expected explicit seconds to be preserved, got %#v", got)
+	if got := body["seconds"]; got != "10" {
+		t.Fatalf("expected unsupported seconds to default to 10, got %#v", got)
 	}
 }
 
@@ -440,8 +440,8 @@ func TestBuildRequestBodyNormalizesLegacyGrokVideoModelName(t *testing.T) {
 	if got := form.Value["model"][0]; got != "grok-imagine-video" {
 		t.Fatalf("expected upstream model to be grok-imagine-video, got %#v", got)
 	}
-	if got := form.Value["seconds"][0]; got != "8" {
-		t.Fatalf("expected duration to be normalized to seconds, got %#v", got)
+	if got := form.Value["seconds"][0]; got != "10" {
+		t.Fatalf("expected unsupported duration to default to 10 seconds, got %#v", got)
 	}
 	if len(form.File["input_reference[]"]) != 1 {
 		t.Fatalf("expected JSON image reference to be forwarded as input_reference[], got %#v", form.File)

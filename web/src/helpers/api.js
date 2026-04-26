@@ -414,7 +414,11 @@ export const buildApiPayload = (
     if (inputs.videoSize) {
       payload.size = inputs.videoSize;
     }
-    if (inputs.videoSeconds) {
+    if (isGrokImagineVideoModel) {
+      payload.seconds = ['6', '10'].includes(String(inputs.videoSeconds))
+        ? String(inputs.videoSeconds)
+        : '10';
+    } else if (inputs.videoSeconds) {
       payload.seconds = String(inputs.videoSeconds);
     }
     if (inputs.videoQuality) {

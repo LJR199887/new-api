@@ -130,7 +130,10 @@ const SettingsPanel = ({
     { label: '9:16', value: '720x1280' },
     { label: '1:1', value: '1024x1024' },
   ];
-  const videoSecondsOptions = [6, 8, 10, 12, 15, 20, 25, 30].map((v) => ({
+  const videoSecondsOptions = (isGrokImagineVideoModel
+    ? [10, 6]
+    : [6, 8, 10, 12, 15, 20, 25, 30]
+  ).map((v) => ({
     label: `${v}s`,
     value: String(v),
   }));

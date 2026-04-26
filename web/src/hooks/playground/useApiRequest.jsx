@@ -262,7 +262,7 @@ export const useApiRequest = (
       const prompt = getTextFromMessageContent(lastUserMessage?.content);
       const images = getImagesFromMessageContent(lastUserMessage?.content);
       const size = payload?.size || payload?.videoSize;
-      const seconds = payload?.seconds || payload?.videoSeconds;
+      const rawSeconds = payload?.seconds || payload?.videoSeconds;
       const quality = payload?.quality || payload?.videoQuality;
       const preset = payload?.preset || payload?.videoPreset;
       const isGrokImagineVideoModel =
@@ -274,7 +274,10 @@ export const useApiRequest = (
       const requestPayload = {
         model: payload.model,
         prompt,
-        seconds,
+        seconds:
+          isGrokImagineVideoModel && !['6', '10'].includes(String(rawSeconds))
+            ? '10'
+            : rawSeconds,
         size,
         quality: normalizeVideoQuality(quality),
         preset,

@@ -152,7 +152,7 @@ const GENERIC_VIDEO_SIZE_OPTIONS = [
 const GENERIC_VIDEO_SECONDS_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30].map(
   (value) => ({ label: `${value}s`, value: String(value) }),
 );
-const GROK_IMAGINE_VIDEO_SECONDS_OPTIONS = [6, 8, 10].map((value) => ({
+const GROK_IMAGINE_VIDEO_SECONDS_OPTIONS = [10, 6].map((value) => ({
   label: `${value}s`,
   value: String(value),
 }));

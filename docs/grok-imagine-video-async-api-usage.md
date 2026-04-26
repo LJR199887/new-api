@@ -95,8 +95,8 @@ curl https://linksky.top/v1/video/async-generations \
 | --- | --- | --- | --- |
 | `model` | string | 是 | 推荐 `grok-imagine-video`；旧名 `grok-imagine-1.0-video` 兼容 |
 | `prompt` | string | 是 | 视频提示词 |
-| `seconds` | number/string | 否 | 视频长度，上游支持 `6`、`10`、`12`、`16`、`20` |
-| `duration` | number/string | 否 | 兼容字段，会转为 `seconds` |
+| `seconds` | number/string | 否 | 视频长度，只允许 `6` 或 `10`，默认 `10` |
+| `duration` | number/string | 否 | 兼容字段，会转为 `seconds`，只允许 `6` 或 `10` |
 | `size` | string | 否 | `720x1280`、`1280x720`、`1024x1024`、`1024x1792`、`1792x1024` |
 | `resolution_name` | string | 否 | `480p` 或 `720p` |
 | `preset` | string | 否 | `fun`、`normal`、`spicy`、`custom` |

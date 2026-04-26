@@ -245,6 +245,15 @@ func isGrokImagineVideoModel(upstreamModel string) bool {
 	return common.NormalizeGrokImagineModelName(upstreamModel) == "grok-imagine-video"
 }
 
+func normalizeGrokVideoSeconds(value string) string {
+	switch strings.TrimSpace(value) {
+	case "6", "10":
+		return strings.TrimSpace(value)
+	default:
+		return "10"
+	}
+}
+
 func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
 	if !isGrokImagineVideoModel(upstreamModel) {
 		return
@@ -276,7 +285,7 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 		bodyMap["quality"] = quality
 	}
 	if seconds == "" && duration != "" {
-		bodyMap["seconds"] = duration
+		bodyMap["seconds"] = normalizeGrokVideoSeconds(duration)
 	}
 	imageReferences := make([]interface{}, 0)
 	imageReferences = appendGrokVideoImageReference(imageReferences, bodyMap["image_reference"])
@@ -296,9 +305,7 @@ func normalizeGrokVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	if seconds == "" {
 		seconds = stringifyBodyValue(bodyMap["seconds"])
 	}
-	if seconds != "" {
-		bodyMap["seconds"] = seconds
-	}
+	bodyMap["seconds"] = normalizeGrokVideoSeconds(seconds)
 	if size := grokVideoSizeValue(bodyMap); size != "" {
 		bodyMap["size"] = size
 	}
@@ -461,7 +468,7 @@ func buildGrokVideoMultipartBody(bodyMap map[string]interface{}, upstreamModelNa
 	fields := map[string]string{
 		"model":           upstreamModelName,
 		"prompt":          firstGrokVideoFieldValue(bodyMap, "prompt", "input"),
-		"seconds":         firstGrokVideoFieldValue(bodyMap, "seconds", "duration"),
+		"seconds":         normalizeGrokVideoSeconds(firstGrokVideoFieldValue(bodyMap, "seconds", "duration")),
 		"size":            grokVideoSizeValue(bodyMap),
 		"resolution_name": firstGrokVideoFieldValue(bodyMap, "resolution_name"),
 		"preset":          firstGrokVideoFieldValue(bodyMap, "preset"),
@@ -684,7 +691,11 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if seconds == 0 {
 		seconds = req.Duration
 	}
-	if seconds <= 0 {
+	if isGrokImagineVideoModel(info.UpstreamModelName) {
+		if seconds != 6 && seconds != 10 {
+			seconds = 10
+		}
+	} else if seconds <= 0 {
 		seconds = 4
 	}
 
