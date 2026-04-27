@@ -62,7 +62,7 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 		return nil, errors.New("not supported model for image generation, only imagen models are supported")
 	}
 
-	// convert size to aspect ratio but allow user to specify aspect ratio
+	// Convert legacy size to aspect ratio, then let explicit aspect_ratio win.
 	aspectRatio := "1:1" // default aspect ratio
 	size := strings.TrimSpace(request.Size)
 	if size != "" {
@@ -82,6 +82,9 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 				aspectRatio = "16:9"
 			}
 		}
+	}
+	if explicitAspectRatio := strings.TrimSpace(request.AspectRatio); explicitAspectRatio != "" {
+		aspectRatio = explicitAspectRatio
 	}
 
 	// build gemini imagen request
@@ -104,7 +107,14 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	// imageSize values: 1K (default), 2K
 	// https://ai.google.dev/gemini-api/docs/imagen
 	// https://platform.openai.com/docs/api-reference/images/create
-	if request.Quality != "" {
+	if request.OutputResolution != "" {
+		switch strings.TrimSpace(request.OutputResolution) {
+		case "2K":
+			geminiRequest.Parameters.ImageSize = "2K"
+		default:
+			geminiRequest.Parameters.ImageSize = "1K"
+		}
+	} else if request.Quality != "" {
 		imageSize := "1K" // default
 		switch request.Quality {
 		case "hd", "high":

@@ -7008,6 +7008,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                     ? ''
                     : currentParamsSnapshot.aspectRatio) ||
                   '1:1';
+                payload.size = payload.aspect_ratio;
                 if (currentUploadedImageUrls.length > 0) {
                   payload.messages = buildGPTImage2ReferenceMessages(
                     currentPrompt,
