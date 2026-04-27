@@ -69,6 +69,36 @@ func TestImageRequestPreservesMessages(t *testing.T) {
 	require.NotContains(t, req.Extra, "messages")
 }
 
+func TestImageRequestPreservesExtraBody(t *testing.T) {
+	raw := []byte(`{
+		"model":"nano-banana-pro",
+		"prompt":"poster",
+		"aspect_ratio":"9:16",
+		"output_resolution":"2K",
+		"extra_body":{
+			"google":{
+				"image_config":{
+					"aspect_ratio":"9:16",
+					"image_size":"2K"
+				}
+			}
+		}
+	}`)
+
+	var req ImageRequest
+	err := common.Unmarshal(raw, &req)
+	require.NoError(t, err)
+
+	encoded, err := common.Marshal(req)
+	require.NoError(t, err)
+
+	require.Equal(t, "9:16", gjson.GetBytes(encoded, "aspect_ratio").String())
+	require.Equal(t, "2K", gjson.GetBytes(encoded, "output_resolution").String())
+	require.Equal(t, "9:16", gjson.GetBytes(encoded, "extra_body.google.image_config.aspect_ratio").String())
+	require.Equal(t, "2K", gjson.GetBytes(encoded, "extra_body.google.image_config.image_size").String())
+	require.NotContains(t, req.Extra, "extra_body")
+}
+
 func TestImageRequestBananaUsesNeutralImagePriceRatio(t *testing.T) {
 	n := uint(3)
 	req := ImageRequest{

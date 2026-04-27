@@ -7028,6 +7028,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 } else if (basePayload.size) {
                   payload.size = basePayload.size;
                 }
+                if (basePayload.extra_body) {
+                  payload.extra_body = basePayload.extra_body;
+                }
                 if (currentUploadedImageUrls.length > 0) {
                   payload.image_urls = currentUploadedImageUrls;
                 }
