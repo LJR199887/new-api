@@ -135,6 +135,7 @@ func TestConvertImageRequestPreservesImageUrlsForGenerations(t *testing.T) {
 		ImageUrls:        []byte(`["https://example.com/1.png","https://example.com/2.png"]`),
 		AspectRatio:      "16:9",
 		OutputResolution: "2K",
+		ExtraBody:        []byte(`{"google":{"image_config":{"aspect_ratio":"16:9","image_size":"2K"}}}`),
 	})
 	if err != nil {
 		t.Fatalf("ConvertImageRequest returned error: %v", err)
@@ -149,5 +150,8 @@ func TestConvertImageRequestPreservesImageUrlsForGenerations(t *testing.T) {
 	}
 	if gjson.GetBytes(encoded, "image_urls.1").String() != "https://example.com/2.png" {
 		t.Fatalf("unexpected second image_urls item: %s", string(encoded))
+	}
+	if gjson.GetBytes(encoded, "extra_body.google.image_config.aspect_ratio").String() != "16:9" {
+		t.Fatalf("unexpected extra_body aspect ratio: %s", string(encoded))
 	}
 }

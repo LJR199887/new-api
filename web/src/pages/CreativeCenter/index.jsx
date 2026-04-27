@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useContext, useMemo, useRef, useState, useEffect } from 'react';
 import { SSE } from 'sse.js';
 import {
   ArrowUp,
@@ -69,6 +69,7 @@ const ADOBE_IMAGE_MODELS = new Set([
 ]);
 const GPT_IMAGE2_MODEL = 'gpt-image2';
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
+  'nano-banana',
   'nano-banana2',
   'nano-banana-pro',
 ]);
@@ -248,6 +249,7 @@ const CREATIVE_CENTER_VIDEO_PENDING_TO_GENERATING_MS = 10000;
 const CREATIVE_CENTER_HISTORY_PERSIST_DEBOUNCE_MS = 2000;
 const CREATIVE_CENTER_VIDEO_HISTORY_PERSIST_DEBOUNCE_MS = 6000;
 const CREATIVE_CENTER_HISTORY_PERSIST_429_BACKOFF_MS = 15000;
+const CREATIVE_CENTER_PROMPT_MAX_LENGTH = 5000;
 const CREATIVE_BATCH_REQUEST_SPACING_MS = 300;
 const ESTIMATED_PROGRESS_TICK_MS = 500;
 const ESTIMATED_PROGRESS_FINALIZING_MS = 1400;
@@ -2926,6 +2928,9 @@ export default function App() {
     videoResolution: '1080p',
     referenceMode: 'frame',
   });
+  const updatePrompt = useCallback((value) => {
+    setPrompt(String(value || '').slice(0, CREATIVE_CENTER_PROMPT_MAX_LENGTH));
+  }, []);
 
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
@@ -3913,7 +3918,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   const applyCreativeSessionToView = (tabKey, sessionSnapshot) => {
     clearUploadedImages();
     setUploadImageNotice('');
-    setPrompt('');
+    updatePrompt('');
 
     if (tabKey === 'chat') {
       setChatMessages(
@@ -5762,7 +5767,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
     applyReusedUploadedImages(record.sourceImages || []);
     if (record.prompt) {
-      setPrompt(record.prompt);
+      updatePrompt(record.prompt);
     }
     if (record.params && typeof record.params === 'object') {
       setParams((prev) => ({
@@ -6806,7 +6811,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     const currentPrompt = prompt;
     const currentUploadedImageUrls = uploadedImageUrls;
     const currentUploadedImageSources = currentUploadedImageItems;
-    setPrompt('');
+    updatePrompt('');
     clearUploadedImages();
     if (isChatTab) {
       setIsGenerating(true);
@@ -7008,6 +7013,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                     ? ''
                     : currentParamsSnapshot.aspectRatio) ||
                   '1:1';
+                payload.size = payload.aspect_ratio;
                 if (currentUploadedImageUrls.length > 0) {
                   payload.messages = buildGPTImage2ReferenceMessages(
                     currentPrompt,
@@ -7026,6 +7032,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   payload.aspect_ratio = basePayload.aspect_ratio;
                 } else if (basePayload.size) {
                   payload.size = basePayload.size;
+                }
+                if (basePayload.extra_body) {
+                  payload.extra_body = basePayload.extra_body;
                 }
                 if (currentUploadedImageUrls.length > 0) {
                   payload.image_urls = currentUploadedImageUrls;
@@ -8598,7 +8607,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 <textarea
                   ref={textareaRef}
                   value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
+                  onChange={(e) => updatePrompt(e.target.value)}
+                  maxLength={CREATIVE_CENTER_PROMPT_MAX_LENGTH}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
                   placeholder={!isLoggedIn ? "登录后即可开始对话、图片或视频创作..." : activeTab === 'chat' ? "发送消息..." : "描述你想要的画面，越详细越好..."}
                   className='max-h-32 min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] font-medium leading-relaxed text-slate-800 outline-none placeholder:text-slate-400 sm:max-h-60 sm:min-h-[70px] sm:px-0 sm:py-3 custom-scrollbar'
@@ -8610,6 +8620,15 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 >
                   {isSubmitPending ? <Loader2 size={26} className='animate-spin' /> : <ArrowUp size={26} strokeWidth={2.5} className='transition-transform group-hover/btn:-translate-y-0.5' />}
                 </button>
+              </div>
+              <div className={`mt-1 px-3 text-right text-[10px] font-semibold ${
+                prompt.length >= CREATIVE_CENTER_PROMPT_MAX_LENGTH
+                  ? 'text-red-500'
+                  : prompt.length >= CREATIVE_CENTER_PROMPT_MAX_LENGTH * 0.9
+                    ? 'text-amber-500'
+                    : 'text-slate-400'
+              }`}>
+                {prompt.length}/{CREATIVE_CENTER_PROMPT_MAX_LENGTH}
               </div>
 
               {uploadedImages.length > 0 ? (

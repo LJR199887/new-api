@@ -373,6 +373,7 @@ export const buildApiPayload = (
   if (isAdobeImageModel) {
     if (isGPTImage2Model) {
       payload.aspect_ratio = adobeAspectRatio || '1:1';
+      payload.size = payload.aspect_ratio;
       payload.output_resolution = '1K';
     } else {
       if (adobeAspectRatio) {
