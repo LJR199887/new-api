@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -205,6 +206,16 @@ func initAsyncVideoTask(c *gin.Context, req relaycommon.TaskSubmitReq) *model.Ta
 }
 
 func runAsyncVideoJob(job asyncVideoJob) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			updateAsyncVideoTaskFailureByID(
+				job.TaskID,
+				nil,
+				fmt.Sprintf("async video submit panic: %v", recovered),
+			)
+		}
+	}()
+
 	task, exist, err := model.GetByOnlyTaskId(job.TaskID)
 	if err != nil || !exist || task == nil {
 		if err != nil {
@@ -250,8 +261,49 @@ func runAsyncVideoJob(job asyncVideoJob) {
 		statusCode = http.StatusOK
 	}
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		updateAsyncVideoTaskFailure(task, responseBody, extractPlaygroundTaskErrorMessage(responseBody, "async video request failed"))
+		updateAsyncVideoTaskFailureByID(job.TaskID, responseBody, extractPlaygroundTaskErrorMessage(responseBody, "async video request failed"))
+		return
 	}
+	ensureAsyncVideoSubmitRecorded(job.TaskID, responseBody)
+}
+
+func ensureAsyncVideoSubmitRecorded(taskID string, responseBody []byte) {
+	task, exist, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
+		common.SysError("get async video task after submit error: " + err.Error())
+		return
+	}
+	if !exist || task == nil {
+		common.SysError("async video task disappeared after submit: " + taskID)
+		return
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return
+	}
+	if strings.TrimSpace(task.PrivateData.UpstreamTaskID) != "" {
+		return
+	}
+	updateAsyncVideoTaskFailure(
+		task,
+		responseBody,
+		extractPlaygroundTaskErrorMessage(responseBody, "async video submit did not return upstream task id"),
+	)
+}
+
+func updateAsyncVideoTaskFailureByID(taskID string, responseBody []byte, failReason string) {
+	task, exist, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
+		common.SysError("get async video task for failure update error: " + err.Error())
+		return
+	}
+	if !exist || task == nil {
+		common.SysError("async video task not found for failure update: " + taskID)
+		return
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return
+	}
+	updateAsyncVideoTaskFailure(task, responseBody, failReason)
 }
 
 func updateAsyncVideoTaskFailure(task *model.Task, responseBody []byte, failReason string) {
