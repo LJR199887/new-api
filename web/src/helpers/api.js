@@ -378,6 +378,7 @@ export const buildApiPayload = (
     } else {
       if (adobeAspectRatio) {
         payload.aspect_ratio = adobeAspectRatio;
+        payload.size = adobeAspectRatio;
       } else if (inputs.autoImageSize) {
         payload.size = inputs.autoImageSize;
       }
@@ -393,6 +394,20 @@ export const buildApiPayload = (
     if (!isGPTImage2Model) {
       payload.extra_body = {
         ...(payload.extra_body || {}),
+        ...(adobeAspectRatio ? { aspect_ratio: adobeAspectRatio } : {}),
+        ...(payload.output_resolution
+          ? { output_resolution: payload.output_resolution }
+          : {}),
+        image_config: {
+          ...((payload.extra_body && payload.extra_body.image_config) || {}),
+          ...(adobeAspectRatio ? { aspect_ratio: adobeAspectRatio } : {}),
+          ...(payload.output_resolution
+            ? {
+                image_size: payload.output_resolution,
+                resolution: payload.output_resolution,
+              }
+            : {}),
+        },
         google: {
           ...((payload.extra_body && payload.extra_body.google) || {}),
           image_config: {
@@ -400,7 +415,10 @@ export const buildApiPayload = (
               .image_config || {}),
             ...(adobeAspectRatio ? { aspect_ratio: adobeAspectRatio } : {}),
             ...(payload.output_resolution
-              ? { image_size: payload.output_resolution }
+              ? {
+                  image_size: payload.output_resolution,
+                  resolution: payload.output_resolution,
+                }
               : {}),
           },
         },
