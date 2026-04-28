@@ -166,6 +166,9 @@ func initConstantEnv() {
 		}
 		constant.TaskPricePatches = taskPricePatches
 	}
+	if !StringsContains(constant.TaskPricePatches, "kling-v3") {
+		constant.TaskPricePatches = append(constant.TaskPricePatches, "kling-v3")
+	}
 
 	// Initialize trusted redirect domains for URL validation
 	trustedDomainsStr := GetEnvOrDefaultString("TRUSTED_REDIRECT_DOMAINS", "")

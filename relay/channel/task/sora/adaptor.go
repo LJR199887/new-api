@@ -107,7 +107,8 @@ func isVideoGenerationsTaskModel(model string) bool {
 	return strings.HasPrefix(model, "veo") ||
 		strings.Contains(model, "/veo") ||
 		strings.HasPrefix(model, "sora-2") ||
-		strings.HasPrefix(model, "sora2")
+		strings.HasPrefix(model, "sora2") ||
+		model == "kling-v3"
 }
 
 func usesVideoGenerationsTaskEndpoint(path string, modelNames ...string) bool {
@@ -494,9 +495,13 @@ func isSoraVideoModel(upstreamModel string) bool {
 	return strings.HasPrefix(upstreamModel, "sora-2") || strings.HasPrefix(upstreamModel, "sora2")
 }
 
+func isKlingV3VideoModel(upstreamModel string) bool {
+	return strings.EqualFold(strings.TrimSpace(upstreamModel), "kling-v3")
+}
+
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo")
+	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel)
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
@@ -539,6 +544,100 @@ func soraDurationBodyValue(value string) interface{} {
 	return strings.TrimSpace(value)
 }
 
+func normalizeKlingV3Duration(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 5, nil
+	}
+	duration, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("duration must be an integer between 3 and 15")
+	}
+	if duration < 3 || duration > 15 {
+		return 0, fmt.Errorf("duration must be between 3 and 15 for kling-v3")
+	}
+	return duration, nil
+}
+
+func normalizeKlingV3AspectRatio(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "16:9", nil
+	}
+	switch value {
+	case "16:9", "9:16":
+		return value, nil
+	default:
+		return "", fmt.Errorf("aspect_ratio must be 16:9 or 9:16 for kling-v3")
+	}
+}
+
+func collectKlingV3ImageURLs(bodyMap map[string]interface{}) []string {
+	sources := make([]string, 0, 2)
+	for _, key := range []string{"image_url", "image", "input_reference", "images", "image_reference"} {
+		sources = appendGrokVideoReferenceSource(sources, bodyMap[key])
+		if len(sources) >= 2 {
+			break
+		}
+	}
+	if len(sources) > 2 {
+		return sources[:2]
+	}
+	return sources
+}
+
+func normalizeKlingV3VideoRequest(bodyMap map[string]interface{}) error {
+	duration := stringifyBodyValue(bodyMap["duration"])
+	if duration == "" {
+		duration = stringifyBodyValue(bodyMap["seconds"])
+	}
+	normalizedDuration, err := normalizeKlingV3Duration(duration)
+	if err != nil {
+		return err
+	}
+
+	aspectRatio := stringifyBodyValue(bodyMap["aspect_ratio"])
+	if aspectRatio == "" {
+		aspectRatio = soraAspectRatioFromSize(stringifyBodyValue(bodyMap["size"]))
+	}
+	normalizedAspectRatio, err := normalizeKlingV3AspectRatio(aspectRatio)
+	if err != nil {
+		return err
+	}
+
+	imageURLs := collectKlingV3ImageURLs(bodyMap)
+	bodyMap["duration"] = normalizedDuration
+	bodyMap["aspect_ratio"] = normalizedAspectRatio
+	bodyMap["async"] = true
+	generateAudio := bodyMap["generate_audio"]
+	if generateAudio == nil {
+		generateAudio = bodyMap["generateAudio"]
+	}
+	if stringifyBodyValue(generateAudio) == "" {
+		generateAudio = true
+	}
+	bodyMap["generate_audio"] = generateAudio
+	bodyMap["generateAudio"] = generateAudio
+	if len(imageURLs) > 0 {
+		bodyMap["image_url"] = imageURLs[0]
+		if len(imageURLs) > 1 {
+			images := make([]interface{}, 0, len(imageURLs))
+			for _, imageURL := range imageURLs {
+				images = append(images, imageURL)
+			}
+			bodyMap["images"] = images
+		}
+	}
+	delete(bodyMap, "seconds")
+	delete(bodyMap, "size")
+	delete(bodyMap, "input_reference")
+	delete(bodyMap, "image")
+	delete(bodyMap, "image_reference")
+	delete(bodyMap, "resolution")
+	delete(bodyMap, "reference_mode")
+	return nil
+}
+
 func hasMultipartFieldValue(values map[string][]string, key string) bool {
 	items := values[key]
 	for _, item := range items {
@@ -571,6 +670,9 @@ func isGrokVideoReferenceFileField(fieldName string) bool {
 
 func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
 	if !usesImageURLVideoGenerationsModel(upstreamModel) {
+		return
+	}
+	if isKlingV3VideoModel(upstreamModel) {
 		return
 	}
 
@@ -686,6 +788,9 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if err != nil {
 		return nil
 	}
+	if isKlingV3VideoModel(info.UpstreamModelName) {
+		return nil
+	}
 
 	seconds, _ := strconv.Atoi(req.Seconds)
 	if seconds == 0 {
@@ -746,6 +851,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				return body, nil
 			}
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+			if isKlingV3VideoModel(upstreamModelName) {
+				if err := normalizeKlingV3VideoRequest(bodyMap); err != nil {
+					return nil, err
+				}
+			}
 			normalizeSoraVideoRequest(bodyMap, upstreamModelName)
 			if newBody, err := common.Marshal(bodyMap); err == nil {
 				c.Request.Header.Set("Content-Type", "application/json")
@@ -764,6 +874,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		writer := multipart.NewWriter(&buf)
 		upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
 		isGrokVideo := isGrokImagineVideoModel(upstreamModelName)
+		isKlingV3Video := isKlingV3VideoModel(upstreamModelName)
 		writer.WriteField("model", upstreamModelName)
 		hasSeconds := false
 		hasDuration := false
@@ -806,6 +917,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if usesImageURLVideoGenerationsModel(upstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
+			if isKlingV3Video && (key == "resolution" || key == "reference_mode") {
+				continue
+			}
 			for _, v := range values {
 				writer.WriteField(key, v)
 			}
@@ -816,7 +930,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		if usesImageURLVideoGenerationsModel(upstreamModelName) {
 			if !hasDuration {
 				if durationValue == "" {
-					durationValue = "4"
+					if isKlingV3Video {
+						durationValue = "5"
+					} else {
+						durationValue = "4"
+					}
 				}
 				writer.WriteField("duration", durationValue)
 			}
@@ -825,16 +943,30 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					aspectRatioValue = soraAspectRatioFromSize(sizeValue)
 				}
 				if aspectRatioValue == "" {
-					aspectRatioValue = "9:16"
+					if isKlingV3Video {
+						aspectRatioValue = "16:9"
+					} else {
+						aspectRatioValue = "9:16"
+					}
 				}
 				writer.WriteField("aspect_ratio", aspectRatioValue)
 			}
 			writer.WriteField("async", "true")
+			if isKlingV3Video && !hasMultipartFieldValue(formData.Value, "generate_audio") {
+				writer.WriteField("generate_audio", "true")
+			}
+			if isKlingV3Video && !hasMultipartFieldValue(formData.Value, "generateAudio") {
+				generateAudioValue := firstNonEmptyMultipartValue(formData.Value, "generate_audio", "generateAudio")
+				if generateAudioValue == "" {
+					generateAudioValue = "true"
+				}
+				writer.WriteField("generateAudio", generateAudioValue)
+			}
 			if firstAsyncImageValue := firstNonEmptyMultipartValue(formData.Value, "image_url", "input_reference", "image"); firstAsyncImageValue != "" {
 				if firstAsyncImageValue != "" && !hasMultipartFieldValue(formData.Value, "image_url") {
 					writer.WriteField("image_url", firstAsyncImageValue)
 				}
-				if !hasMultipartFieldValue(formData.Value, "reference_mode") {
+				if !isKlingV3Video && !hasMultipartFieldValue(formData.Value, "reference_mode") {
 					if referenceMode := defaultVideoGenerationsReferenceMode(upstreamModelName); referenceMode != "" {
 						writer.WriteField("reference_mode", referenceMode)
 					}

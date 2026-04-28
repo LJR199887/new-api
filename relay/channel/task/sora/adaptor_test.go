@@ -16,13 +16,13 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-func TestModelListIncludesVeo31Variants(t *testing.T) {
+func TestModelListIncludesAdobeVideoVariants(t *testing.T) {
 	models := make(map[string]bool, len(ModelList))
 	for _, modelName := range ModelList {
 		models[modelName] = true
 	}
 
-	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref"} {
+	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref", "kling-v3"} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
 		}
@@ -347,6 +347,100 @@ func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	}
 	if got, ok := payload["async"].(bool); !ok || !got {
 		t.Fatalf("expected async=true, got %#v", payload["async"])
+	}
+}
+
+func TestBuildRequestBodyNormalizesKlingV3VideoGenerationPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "kling-v3",
+		"prompt": "cinematic motion",
+		"duration": 8,
+		"aspect_ratio": "9:16",
+		"resolution": "1080p",
+		"reference_mode": "frame",
+		"images": ["https://example.com/a.png", "https://example.com/b.png", "https://example.com/c.png"]
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "kling-v3",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["model"]; got != "kling-v3" {
+		t.Fatalf("expected model=kling-v3, got %#v", got)
+	}
+	if got := payload["duration"]; got != float64(8) {
+		t.Fatalf("expected duration=8, got %#v", got)
+	}
+	if got := payload["aspect_ratio"]; got != "9:16" {
+		t.Fatalf("expected aspect_ratio=9:16, got %#v", got)
+	}
+	if got, ok := payload["async"].(bool); !ok || !got {
+		t.Fatalf("expected async=true, got %#v", payload["async"])
+	}
+	if got, ok := payload["generate_audio"].(bool); !ok || !got {
+		t.Fatalf("expected generate_audio=true, got %#v", payload["generate_audio"])
+	}
+	if got, ok := payload["generateAudio"].(bool); !ok || !got {
+		t.Fatalf("expected generateAudio=true, got %#v", payload["generateAudio"])
+	}
+	if got := payload["image_url"]; got != "https://example.com/a.png" {
+		t.Fatalf("expected image_url to use first image, got %#v", got)
+	}
+	images, ok := payload["images"].([]any)
+	if !ok || len(images) != 2 {
+		t.Fatalf("expected two forwarded images, got %#v", payload["images"])
+	}
+	if _, exists := payload["resolution"]; exists {
+		t.Fatalf("expected resolution to be removed for kling-v3")
+	}
+	if _, exists := payload["reference_mode"]; exists {
+		t.Fatalf("expected reference_mode to be removed for kling-v3")
+	}
+}
+
+func TestBuildRequestBodyRejectsInvalidKlingV3Duration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "kling-v3",
+		"prompt": "cinematic motion",
+		"duration": 16
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "kling-v3",
+		},
+	}
+
+	if _, err := adaptor.BuildRequestBody(c, info); err == nil {
+		t.Fatalf("expected invalid kling-v3 duration to fail")
 	}
 }
 
