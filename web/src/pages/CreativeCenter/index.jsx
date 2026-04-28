@@ -7386,7 +7386,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             if (isAdobeKlingV3Model && currentUploadedImageUrls.length > 0) {
               payload.image_url = currentUploadedImageUrls[0];
               if (currentUploadedImageUrls.length > 1) {
-                payload.images = currentUploadedImageUrls.slice(0, 2);
+                payload.image_urls = currentUploadedImageUrls.slice(0, 2);
               }
             } else if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
               payload.image_url = currentUploadedImageUrls[0];

@@ -574,7 +574,7 @@ func normalizeKlingV3AspectRatio(value string) (string, error) {
 
 func collectKlingV3ImageURLs(bodyMap map[string]interface{}) []string {
 	sources := make([]string, 0, 2)
-	for _, key := range []string{"image_url", "image", "input_reference", "images", "image_reference"} {
+	for _, key := range []string{"image_urls", "image_url", "image", "input_reference", "images", "image_reference"} {
 		sources = appendGrokVideoReferenceSource(sources, bodyMap[key])
 		if len(sources) >= 2 {
 			break
@@ -621,17 +621,18 @@ func normalizeKlingV3VideoRequest(bodyMap map[string]interface{}) error {
 	if len(imageURLs) > 0 {
 		bodyMap["image_url"] = imageURLs[0]
 		if len(imageURLs) > 1 {
-			images := make([]interface{}, 0, len(imageURLs))
+			imageURLValues := make([]interface{}, 0, len(imageURLs))
 			for _, imageURL := range imageURLs {
-				images = append(images, imageURL)
+				imageURLValues = append(imageURLValues, imageURL)
 			}
-			bodyMap["images"] = images
+			bodyMap["image_urls"] = imageURLValues
 		}
 	}
 	delete(bodyMap, "seconds")
 	delete(bodyMap, "size")
 	delete(bodyMap, "input_reference")
 	delete(bodyMap, "image")
+	delete(bodyMap, "images")
 	delete(bodyMap, "image_reference")
 	delete(bodyMap, "resolution")
 	delete(bodyMap, "reference_mode")

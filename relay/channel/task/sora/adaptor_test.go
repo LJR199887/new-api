@@ -408,9 +408,12 @@ func TestBuildRequestBodyNormalizesKlingV3VideoGenerationPayload(t *testing.T) {
 	if got := payload["image_url"]; got != "https://example.com/a.png" {
 		t.Fatalf("expected image_url to use first image, got %#v", got)
 	}
-	images, ok := payload["images"].([]any)
-	if !ok || len(images) != 2 {
-		t.Fatalf("expected two forwarded images, got %#v", payload["images"])
+	imageURLs, ok := payload["image_urls"].([]any)
+	if !ok || len(imageURLs) != 2 {
+		t.Fatalf("expected two forwarded image_urls, got %#v", payload["image_urls"])
+	}
+	if _, exists := payload["images"]; exists {
+		t.Fatalf("expected images to be removed for kling-v3")
 	}
 	if _, exists := payload["resolution"]; exists {
 		t.Fatalf("expected resolution to be removed for kling-v3")
