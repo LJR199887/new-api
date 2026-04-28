@@ -470,6 +470,7 @@ export const buildApiPayload = (
     }
     if (isAdobeKlingV3Model) {
       payload.generate_audio = true;
+      payload.generateAudio = true;
     }
   }
 

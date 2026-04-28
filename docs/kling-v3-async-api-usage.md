@@ -35,6 +35,7 @@ Content-Type: application/json
 | `duration` | number | 否 | 视频时长，允许 `3-15` 秒，默认 `5` |
 | `aspect_ratio` | string | 否 | 允许 `16:9` 或 `9:16`，默认 `16:9` |
 | `generate_audio` | boolean | 否 | 是否生成音频，默认 `true` |
+| `generateAudio` | boolean | 否 | 音频开关兼容字段，建议和 `generate_audio` 同时传 `true` |
 | `async` | boolean | 否 | 建议传 `true` |
 | `image_url` | string | 否 | 图生视频参考图 URL |
 | `images` | string[] | 否 | 图生视频参考图 URL 数组，最多使用前 2 张 |
@@ -53,6 +54,7 @@ curl -X POST "https://linksky.top/v1/video/async-generations" \
     "duration": 8,
     "aspect_ratio": "16:9",
     "generate_audio": true,
+    "generateAudio": true,
     "async": true
   }'
 ```
@@ -81,6 +83,7 @@ curl -X POST "https://linksky.top/v1/video/async-generations" \
     "duration": 15,
     "aspect_ratio": "9:16",
     "generate_audio": true,
+    "generateAudio": true,
     "async": true,
     "image_url": "https://example.com/character.png"
   }'
@@ -98,6 +101,7 @@ curl -X POST "https://linksky.top/v1/video/async-generations" \
     "duration": 10,
     "aspect_ratio": "16:9",
     "generate_audio": true,
+    "generateAudio": true,
     "async": true,
     "images": [
       "https://example.com/start.png",

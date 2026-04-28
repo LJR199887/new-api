@@ -402,6 +402,9 @@ func TestBuildRequestBodyNormalizesKlingV3VideoGenerationPayload(t *testing.T) {
 	if got, ok := payload["generate_audio"].(bool); !ok || !got {
 		t.Fatalf("expected generate_audio=true, got %#v", payload["generate_audio"])
 	}
+	if got, ok := payload["generateAudio"].(bool); !ok || !got {
+		t.Fatalf("expected generateAudio=true, got %#v", payload["generateAudio"])
+	}
 	if got := payload["image_url"]; got != "https://example.com/a.png" {
 		t.Fatalf("expected image_url to use first image, got %#v", got)
 	}

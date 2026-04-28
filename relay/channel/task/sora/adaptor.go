@@ -609,11 +609,15 @@ func normalizeKlingV3VideoRequest(bodyMap map[string]interface{}) error {
 	bodyMap["duration"] = normalizedDuration
 	bodyMap["aspect_ratio"] = normalizedAspectRatio
 	bodyMap["async"] = true
-	if stringifyBodyValue(bodyMap["generate_audio"]) == "" && stringifyBodyValue(bodyMap["generateAudio"]) == "" {
-		bodyMap["generate_audio"] = true
-	} else if generateAudio := bodyMap["generateAudio"]; generateAudio != nil {
-		bodyMap["generate_audio"] = generateAudio
+	generateAudio := bodyMap["generate_audio"]
+	if generateAudio == nil {
+		generateAudio = bodyMap["generateAudio"]
 	}
+	if stringifyBodyValue(generateAudio) == "" {
+		generateAudio = true
+	}
+	bodyMap["generate_audio"] = generateAudio
+	bodyMap["generateAudio"] = generateAudio
 	if len(imageURLs) > 0 {
 		bodyMap["image_url"] = imageURLs[0]
 		if len(imageURLs) > 1 {
@@ -629,7 +633,6 @@ func normalizeKlingV3VideoRequest(bodyMap map[string]interface{}) error {
 	delete(bodyMap, "input_reference")
 	delete(bodyMap, "image")
 	delete(bodyMap, "image_reference")
-	delete(bodyMap, "generateAudio")
 	delete(bodyMap, "resolution")
 	delete(bodyMap, "reference_mode")
 	return nil
@@ -914,7 +917,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if usesImageURLVideoGenerationsModel(upstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
-			if isKlingV3Video && (key == "resolution" || key == "reference_mode" || key == "generateAudio") {
+			if isKlingV3Video && (key == "resolution" || key == "reference_mode") {
 				continue
 			}
 			for _, v := range values {
@@ -951,6 +954,13 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			writer.WriteField("async", "true")
 			if isKlingV3Video && !hasMultipartFieldValue(formData.Value, "generate_audio") {
 				writer.WriteField("generate_audio", "true")
+			}
+			if isKlingV3Video && !hasMultipartFieldValue(formData.Value, "generateAudio") {
+				generateAudioValue := firstNonEmptyMultipartValue(formData.Value, "generate_audio", "generateAudio")
+				if generateAudioValue == "" {
+					generateAudioValue = "true"
+				}
+				writer.WriteField("generateAudio", generateAudioValue)
 			}
 			if firstAsyncImageValue := firstNonEmptyMultipartValue(formData.Value, "image_url", "input_reference", "image"); firstAsyncImageValue != "" {
 				if firstAsyncImageValue != "" && !hasMultipartFieldValue(formData.Value, "image_url") {
