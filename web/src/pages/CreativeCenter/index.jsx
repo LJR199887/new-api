@@ -79,6 +79,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'veo31',
   'veo31-ref',
   'veo31-fast',
+  'kling-v3',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
@@ -92,6 +93,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'veo31': 2,
   'veo31-fast': 2,
   'veo31-ref': 3,
+  'kling-v3': 2,
 };
 
 const GROK_IMAGE_SIZE_OPTIONS = [
@@ -164,6 +166,10 @@ const GROK_VIDEO_PRESET_OPTIONS = [
 const ADOBE_VIDEO_DURATION_OPTIONS = {
   sora: [4, 8, 12].map((value) => ({ label: `${value}s`, value: String(value) })),
   veo: [4, 6, 8].map((value) => ({ label: `${value}s`, value: String(value) })),
+  kling: Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
+    label: `${value}s`,
+    value: String(value),
+  })),
 };
 const ADOBE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '16:9', value: '16:9' },
@@ -176,6 +182,9 @@ const getAdobeVideoDurationOptions = (modelName) => {
   if (modelName === 'sora2' || modelName === 'sora2-pro') {
     return ADOBE_VIDEO_DURATION_OPTIONS.sora;
   }
+  if (modelName === 'kling-v3') {
+    return ADOBE_VIDEO_DURATION_OPTIONS.kling;
+  }
   return ADOBE_VIDEO_DURATION_OPTIONS.veo;
 };
 const getAdobeVideoAspectRatioOptions = (modelName) => {
@@ -187,7 +196,9 @@ const getAdobeVideoAspectRatioOptions = (modelName) => {
   return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS;
 };
 const getAdobeVideoDefaultDuration = (modelName) =>
-  getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
+  modelName === 'kling-v3'
+    ? '5'
+    : getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
 const getAdobeVideoDefaultAspectRatio = (modelName) =>
   getAdobeVideoAspectRatioOptions(modelName)[0]?.value || '16:9';
 const ADOBE_VIDEO_RESOLUTION_OPTIONS = [
@@ -234,6 +245,7 @@ const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
   'veo31',
   'veo31-fast',
   'veo31-ref',
+  'kling-v3',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const CREATIVE_CENTER_IMAGE_UPLOAD_CONCURRENCY = 2;
@@ -3487,6 +3499,7 @@ export default function App() {
     currentModelName === 'veo31' ||
     currentModelName === 'veo31-ref' ||
     currentModelName === 'veo31-fast';
+  const isAdobeKlingV3Model = currentModelName === 'kling-v3';
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending = (isChatTab && isGenerating) || isUploadingImage;
@@ -3599,6 +3612,7 @@ export default function App() {
       modelName === 'veo31' ||
       modelName === 'veo31-ref' ||
       modelName === 'veo31-fast';
+    const isCurrentAdobeKlingV3Model = modelName === 'kling-v3';
     const isCurrentVideoModel =
       typeof modelName === 'string' && modelName.includes('video');
     const isCurrentGrokImagineVideoModel =
@@ -3643,6 +3657,9 @@ export default function App() {
           sourceParams.aspectRatio || getAdobeVideoDefaultAspectRatio(modelName);
         if (isCurrentAdobeVeoModel) {
           snapshot.videoResolution = sourceParams.videoResolution || '1080p';
+        }
+        if (isCurrentAdobeKlingV3Model) {
+          snapshot.generateAudio = true;
         }
       }
     }
@@ -7366,7 +7383,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload[key] = basePayload[key];
               }
             });
-            if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
+            if (isAdobeKlingV3Model && currentUploadedImageUrls.length > 0) {
+              payload.image_url = currentUploadedImageUrls[0];
+              if (currentUploadedImageUrls.length > 1) {
+                payload.images = currentUploadedImageUrls.slice(0, 2);
+              }
+            } else if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
               payload.image_url = currentUploadedImageUrls[0];
             } else if (
               GROK_IMAGINE_VIDEO_MODELS.has(currentModelName) &&

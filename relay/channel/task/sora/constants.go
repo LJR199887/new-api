@@ -6,6 +6,7 @@ var ModelList = []string{
 	"veo31",
 	"veo31-fast",
 	"veo31-ref",
+	"kling-v3",
 }
 
 var ChannelName = "sora"

@@ -301,6 +301,7 @@ export const buildApiPayload = (
     'veo31',
     'veo31-ref',
     'veo31-fast',
+    'kling-v3',
   ]);
   const processedMessages = messages
     .filter(isValidMessage)
@@ -356,6 +357,7 @@ export const buildApiPayload = (
     inputs.model === 'veo31' ||
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
+  const isAdobeKlingV3Model = inputs.model === 'kling-v3';
   const adobeAspectRatioRaw =
     inputs.aspectRatio || (isAdobeVideoModel ? '16:9' : '1:1');
   const adobeAspectRatio =
@@ -449,7 +451,11 @@ export const buildApiPayload = (
     }
   }
   if (isAdobeVideoModel) {
-    const forcedDuration = inputs.model === 'veo31-ref' ? 8 : Number(inputs.videoDuration || 4);
+    const forcedDuration = inputs.model === 'veo31-ref'
+      ? 8
+      : isAdobeKlingV3Model
+        ? Math.min(Math.max(Number(inputs.videoDuration || 5), 3), 15)
+        : Number(inputs.videoDuration || 4);
     const forcedAspectRatio = inputs.model === 'veo31-ref' ? '16:9' : adobeAspectRatio;
     payload.duration = forcedDuration;
     payload.aspect_ratio = forcedAspectRatio;
@@ -461,6 +467,9 @@ export const buildApiPayload = (
     }
     if (inputs.model === 'veo31-ref') {
       payload.reference_mode = 'image';
+    }
+    if (isAdobeKlingV3Model) {
+      payload.generate_audio = true;
     }
   }
 
