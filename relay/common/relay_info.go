@@ -671,6 +671,7 @@ type TaskSubmitReq struct {
 	Messages       json.RawMessage        `json:"messages,omitempty"`
 	Image          string                 `json:"image,omitempty"`
 	ImageURL       string                 `json:"image_url,omitempty"`
+	ImageURLs      []string               `json:"image_urls,omitempty"`
 	Images         []string               `json:"images,omitempty"`
 	ImageReference json.RawMessage        `json:"image_reference,omitempty"`
 	Size           string                 `json:"size,omitempty"`
@@ -688,7 +689,7 @@ func (t *TaskSubmitReq) GetPrompt() string {
 }
 
 func (t *TaskSubmitReq) HasImage() bool {
-	if len(t.Images) > 0 {
+	if len(t.Images) > 0 || len(t.ImageURLs) > 0 {
 		return true
 	}
 	if strings.TrimSpace(t.Image) != "" || strings.TrimSpace(t.ImageURL) != "" || strings.TrimSpace(t.InputReference) != "" {

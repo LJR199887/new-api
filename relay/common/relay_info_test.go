@@ -37,3 +37,16 @@ func TestTaskSubmitReqHasImageFromTopLevelImageURL(t *testing.T) {
 		t.Fatalf("expected HasImage to detect top-level image_url")
 	}
 }
+
+func TestTaskSubmitReqHasImageFromTopLevelImageURLs(t *testing.T) {
+	req := TaskSubmitReq{
+		ImageURLs: []string{
+			"https://img688.com/file/first.jpg",
+			"https://img688.com/file/last.jpg",
+		},
+	}
+
+	if !req.HasImage() {
+		t.Fatalf("expected HasImage to detect top-level image_urls")
+	}
+}

@@ -141,6 +141,9 @@ func ValidateMultipartDirect(c *gin.Context, info *RelayInfo) *dto.TaskError {
 	if req.InputReference != "" {
 		req.Images = []string{req.InputReference}
 	}
+	if len(req.Images) == 0 && len(req.ImageURLs) > 0 {
+		req.Images = req.ImageURLs
+	}
 
 	if strings.TrimSpace(req.Model) == "" {
 		return createTaskError(fmt.Errorf("model field is required"), "missing_model", http.StatusBadRequest, true)
@@ -193,6 +196,7 @@ func isKnownTaskField(field string) bool {
 		"mode":            true,
 		"image":           true,
 		"image_url":       true,
+		"image_urls":      true,
 		"images":          true,
 		"size":            true,
 		"duration":        true,

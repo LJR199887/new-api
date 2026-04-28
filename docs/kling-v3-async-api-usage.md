@@ -38,7 +38,8 @@ Content-Type: application/json
 | `generateAudio` | boolean | 否 | 音频开关兼容字段，建议和 `generate_audio` 同时传 `true` |
 | `async` | boolean | 否 | 建议传 `true` |
 | `image_url` | string | 否 | 图生视频参考图 URL |
-| `images` | string[] | 否 | 图生视频参考图 URL 数组，最多使用前 2 张 |
+| `image_urls` | string[] | 否 | 首尾帧参考图 URL 数组，最多使用前 2 张 |
+| `images` | string[] | 否 | 兼容字段，服务端会转换为 `image_urls` |
 
 `kling-v3` 按次计费；`duration` 只影响生成时长，不作为下游按秒倍率扣费。
 
@@ -89,7 +90,7 @@ curl -X POST "https://linksky.top/v1/video/async-generations" \
   }'
 ```
 
-双图：
+首尾帧双图：
 
 ```bash
 curl -X POST "https://linksky.top/v1/video/async-generations" \
@@ -97,20 +98,20 @@ curl -X POST "https://linksky.top/v1/video/async-generations" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "kling-v3",
-    "prompt": "根据两张参考图生成一段连贯的电影感运动镜头",
-    "duration": 10,
-    "aspect_ratio": "16:9",
+    "prompt": "让角色从第一张图自然运动到第二张图，镜头平滑推进，电影级运镜",
+    "duration": 8,
+    "aspect_ratio": "9:16",
     "generate_audio": true,
     "generateAudio": true,
     "async": true,
-    "images": [
-      "https://example.com/start.png",
-      "https://example.com/end.png"
+    "image_urls": [
+      "https://example.com/first-frame.png",
+      "https://example.com/last-frame.png"
     ]
   }'
 ```
 
-兼容字段：服务端也接受 `image`、`input_reference`、`image_reference`，会自动转换为上游需要的参考图字段。新接入建议直接使用 `image_url` 或 `images`。
+兼容字段：服务端也接受 `image`、`input_reference`、`image_reference`、`images`，会自动转换为上游需要的参考图字段。新接入建议单图使用 `image_url`，首尾帧双图使用 `image_urls`。
 
 ## 5. 查询任务
 
