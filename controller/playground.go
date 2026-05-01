@@ -35,11 +35,13 @@ var (
 		"nano-banana-pro": {},
 	}
 	playgroundChatVideoModels = map[string]struct{}{
-		"sora2":      {},
-		"sora2-pro":  {},
-		"veo31":      {},
-		"veo31-ref":  {},
-		"veo31-fast": {},
+		"sora2":             {},
+		"sora2-pro":         {},
+		"veo31":             {},
+		"veo31-ref":         {},
+		"veo31-fast":        {},
+		"seedance-2.0":      {},
+		"seedance-2.0-fast": {},
 	}
 	playgroundHTMLVideoURLPattern = regexp.MustCompile(`<video[^>]+src=['"]([^'"]+)['"]`)
 	playgroundMarkdownURLPattern  = regexp.MustCompile(`\((https?://[^)\s]+)\)`)

@@ -42,6 +42,20 @@ const GROK_IMAGE_EDIT_MODELS = new Set([
 const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
 ]);
+const TASK_VIDEO_MODELS = new Set([
+  'sora2',
+  'sora2-pro',
+  'veo31',
+  'veo31-ref',
+  'veo31-fast',
+  'kling-v3',
+  'seedance-2.0',
+  'seedance-2.0-fast',
+]);
+const SEEDANCE_VIDEO_MODELS = new Set([
+  'seedance-2.0',
+  'seedance-2.0-fast',
+]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -80,10 +94,17 @@ export const useApiRequest = (
     return ADOBE_IMAGE_MODELS.has(model);
   }, []);
 
+  const isTaskVideoModel = useCallback((model) => {
+    return TASK_VIDEO_MODELS.has(model);
+  }, []);
+
   const isVideoGenerationPayload = useCallback((payload) => {
     const model = payload?.model;
-    return typeof model === 'string' && model.includes('video');
-  }, []);
+    return (
+      typeof model === 'string' &&
+      (model.includes('video') || isTaskVideoModel(model))
+    );
+  }, [isTaskVideoModel]);
 
   const isImageGenerationPayload = useCallback(
     (payload) => {
@@ -264,12 +285,65 @@ export const useApiRequest = (
       const preset = payload?.preset || payload?.videoPreset;
       const isGrokImagineVideoModel =
         GROK_IMAGINE_VIDEO_MODELS.has(payload?.model);
+      const isSeedanceVideoModel =
+        SEEDANCE_VIDEO_MODELS.has(payload?.model);
+      const isTaskVideoModelPayload = TASK_VIDEO_MODELS.has(payload?.model);
       const resolutionName =
         payload?.resolution_name ||
         (isGrokImagineVideoModel ? formatVideoQuality(quality) : '');
 
+      if (isSeedanceVideoModel) {
+        return {
+          model: payload.model,
+          group: payload.group,
+          prompt,
+          seconds: String(payload?.seconds || payload?.duration || '5'),
+          ...(payload?.metadata && typeof payload.metadata === 'object'
+            ? { metadata: payload.metadata }
+            : {}),
+          ...(images[0] ? { image: images[0] } : {}),
+        };
+      }
+
+      if (isTaskVideoModelPayload) {
+        const requestPayload = {
+          model: payload.model,
+          group: payload.group,
+          prompt,
+          ...(payload?.duration !== undefined ? { duration: payload.duration } : {}),
+          ...(payload?.aspect_ratio ? { aspect_ratio: payload.aspect_ratio } : {}),
+          ...(payload?.resolution ? { resolution: payload.resolution } : {}),
+          ...(payload?.reference_mode
+            ? { reference_mode: payload.reference_mode }
+            : {}),
+          ...(payload?.generate_audio !== undefined
+            ? { generate_audio: payload.generate_audio }
+            : {}),
+          ...(payload?.generateAudio !== undefined
+            ? { generateAudio: payload.generateAudio }
+            : {}),
+          ...(payload?.metadata && typeof payload.metadata === 'object'
+            ? { metadata: payload.metadata }
+            : {}),
+        };
+
+        if (payload?.model === 'kling-v3') {
+          if (images[0]) {
+            requestPayload.image_url = images[0];
+          }
+          if (images.length > 1) {
+            requestPayload.image_urls = images.slice(0, 2);
+          }
+        } else if (images[0]) {
+          requestPayload.image_url = images[0];
+        }
+
+        return requestPayload;
+      }
+
       const requestPayload = {
         model: payload.model,
+        group: payload.group,
         prompt,
         seconds:
           isGrokImagineVideoModel && !['6', '10'].includes(String(rawSeconds))
@@ -616,14 +690,26 @@ export const useApiRequest = (
           data.task_id
         ) {
           const videoUrl = extractVideoUrl(data);
-          const requestedQuality = formatVideoQuality(requestPayload.quality);
-          const upstreamQuality = formatVideoQuality(data.quality);
+          const requestedDuration =
+            requestPayload.seconds || requestPayload.duration;
+          const requestedSize =
+            requestPayload.size ||
+            requestPayload.aspect_ratio ||
+            requestPayload.metadata?.ratio;
+          const requestedQuality =
+            formatVideoQuality(requestPayload.quality) ||
+            requestPayload.resolution ||
+            requestPayload.metadata?.resolution;
+          const upstreamQuality =
+            formatVideoQuality(data.quality) ||
+            data.resolution ||
+            data.metadata?.resolution;
           const summary = [
             `${t('视频任务已创建')}`,
             `task_id: ${data.task_id || data.id || '-'}`,
             `status: ${data.status || '-'}`,
-            `seconds: ${data.seconds || requestPayload.seconds || '-'}`,
-            `size: ${data.size || requestPayload.size || '-'}`,
+            `seconds: ${data.seconds || requestedDuration || '-'}`,
+            `size: ${data.size || requestedSize || '-'}`,
             `quality: ${requestedQuality || upstreamQuality || '-'}`,
             ...(upstreamQuality && upstreamQuality !== requestedQuality
               ? [`upstream_quality: ${upstreamQuality}`]

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -74,6 +75,36 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 				t.Fatalf("shouldRefreshAsyncVideoTask() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestReadAsyncVideoTaskRequestPreservesAspectRatioAndResolution(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "seedance-2.0",
+		"prompt": "make a short video",
+		"duration": 4,
+		"aspect_ratio": "9:16",
+		"resolution": "720p"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	req := readAsyncVideoTaskRequest(c, []byte(`{
+		"model": "seedance-2.0",
+		"prompt": "make a short video",
+		"duration": 4,
+		"aspect_ratio": "9:16",
+		"resolution": "720p"
+	}`))
+
+	if req.AspectRatio != "9:16" {
+		t.Fatalf("AspectRatio = %q, want 9:16", req.AspectRatio)
+	}
+	if req.Resolution != "720p" {
+		t.Fatalf("Resolution = %q, want 720p", req.Resolution)
 	}
 }
 

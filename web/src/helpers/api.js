@@ -302,6 +302,8 @@ export const buildApiPayload = (
     'veo31-ref',
     'veo31-fast',
     'kling-v3',
+    'seedance-2.0',
+    'seedance-2.0-fast',
   ]);
   const processedMessages = messages
     .filter(isValidMessage)
@@ -343,8 +345,6 @@ export const buildApiPayload = (
     }
   });
 
-  const isVideoModel =
-    typeof inputs.model === 'string' && inputs.model.includes('video');
   const isGrokImagineImageModel =
     grokImagineImageModels.has(inputs.model) ||
     grokImagineImageEditModels.has(inputs.model);
@@ -353,6 +353,11 @@ export const buildApiPayload = (
   const isAdobeImageModel = adobeImageModels.has(inputs.model);
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
+  const isSeedanceVideoModel =
+    inputs.model === 'seedance-2.0' || inputs.model === 'seedance-2.0-fast';
+  const isVideoModel =
+    typeof inputs.model === 'string' &&
+    (inputs.model.includes('video') || isAdobeVideoModel);
   const isAdobeVeoModel =
     inputs.model === 'veo31' ||
     inputs.model === 'veo31-ref' ||
@@ -409,7 +414,7 @@ export const buildApiPayload = (
       };
     }
   }
-  if (isVideoModel) {
+  if (isVideoModel && !isAdobeVideoModel) {
     payload.stream = false;
     if (inputs.videoSize) {
       payload.size = inputs.videoSize;
@@ -451,14 +456,26 @@ export const buildApiPayload = (
     }
   }
   if (isAdobeVideoModel) {
-    const forcedDuration = inputs.model === 'veo31-ref'
-      ? 8
-      : isAdobeKlingV3Model
-        ? Math.min(Math.max(Number(inputs.videoDuration || 5), 3), 15)
-        : Number(inputs.videoDuration || 4);
+    const forcedDuration = isSeedanceVideoModel
+      ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 15)
+      : inputs.model === 'veo31-ref'
+        ? 8
+        : isAdobeKlingV3Model
+          ? Math.min(Math.max(Number(inputs.videoDuration || 5), 3), 15)
+          : Number(inputs.videoDuration || 4);
     const forcedAspectRatio = inputs.model === 'veo31-ref' ? '16:9' : adobeAspectRatio;
-    payload.duration = forcedDuration;
-    payload.aspect_ratio = forcedAspectRatio;
+    payload.stream = false;
+    if (isSeedanceVideoModel) {
+      payload.seconds = String(forcedDuration);
+      payload.metadata = {
+        ...(payload.metadata || {}),
+        ratio: forcedAspectRatio || '16:9',
+        resolution: inputs.videoResolution || '720p',
+      };
+    } else {
+      payload.duration = forcedDuration;
+      payload.aspect_ratio = forcedAspectRatio;
+    }
     if (Number.isFinite(normalizedSeed)) {
       payload.seeds = [Math.trunc(normalizedSeed)];
     }

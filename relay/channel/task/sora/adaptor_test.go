@@ -16,13 +16,20 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-func TestModelListIncludesAdobeVideoVariants(t *testing.T) {
+func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 	models := make(map[string]bool, len(ModelList))
 	for _, modelName := range ModelList {
 		models[modelName] = true
 	}
 
-	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref", "kling-v3"} {
+	for _, modelName := range []string{
+		"veo31",
+		"veo31-fast",
+		"veo31-ref",
+		"kling-v3",
+		"seedance-2.0",
+		"seedance-2.0-fast",
+	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
 		}
@@ -303,6 +310,37 @@ func TestNormalizeSoraVideoRequestDefaultsVeoRefToImageMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestBuildsLeoPayload(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "seedance-2.0",
+		"duration":     float64(8),
+		"quality":      "high",
+		"resolution":   "720p",
+		"aspect_ratio": "16:9",
+		"image_url":    "https://example.com/frame.png",
+	}
+
+	normalizeSeedanceVideoRequest(body, "seedance-2.0")
+
+	if got := body["model"]; got != "seedance-2.0" {
+		t.Fatalf("expected model to stay seedance-2.0, got %#v", got)
+	}
+	if got := body["duration"]; got != float64(8) && got != 8 {
+		t.Fatalf("expected duration to be preserved, got %#v", got)
+	}
+	if got := body["size"]; got != "1280x720" {
+		t.Fatalf("expected size=1280x720, got %#v", got)
+	}
+	if got := body["image_url"]; got != "https://example.com/frame.png" {
+		t.Fatalf("expected image_url to stay normalized, got %#v", got)
+	}
+	for _, key := range []string{"seconds", "quality", "aspect_ratio", "resolution", "metadata"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("expected %s to be removed after normalization", key)
+		}
+	}
+}
+
 func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -347,6 +385,61 @@ func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	}
 	if got, ok := payload["async"].(bool); !ok || !got {
 		t.Fatalf("expected async=true, got %#v", payload["async"])
+	}
+}
+
+func TestBuildRequestBodyNormalizesSeedanceVideoGenerationPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "seedance-2.0-fast",
+		"prompt": "Animate this key art",
+		"duration": 5,
+		"aspect_ratio": "9:16",
+		"resolution": "720p",
+		"image_url": "https://example.com/source.png"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["model"]; got != "seedance-2.0-fast" {
+		t.Fatalf("expected model=seedance-2.0-fast, got %#v", got)
+	}
+	if got := payload["duration"]; got != float64(5) && got != 5 {
+		t.Fatalf("expected duration=5, got %#v", got)
+	}
+	if got := payload["size"]; got != "720x1280" {
+		t.Fatalf("expected size=720x1280, got %#v", got)
+	}
+	if got := payload["image_url"]; got != "https://example.com/source.png" {
+		t.Fatalf("expected image_url to be forwarded, got %#v", got)
+	}
+	for _, key := range []string{"seconds", "aspect_ratio", "resolution", "input_reference", "metadata"} {
+		if _, exists := payload[key]; exists {
+			t.Fatalf("expected %s to be removed from upstream payload", key)
+		}
 	}
 }
 
@@ -478,6 +571,23 @@ func TestBuildRequestURLUsesVideoGenerationsPathForSora(t *testing.T) {
 	}
 	if url != "https://upstream.example/v1/video/generations" {
 		t.Fatalf("expected video generations URL for sora, got %s", url)
+	}
+}
+
+func TestBuildRequestURLUsesVideoGenerationsPathForSeedance(t *testing.T) {
+	adaptor := &TaskAdaptor{baseURL: "https://upstream.example"}
+	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+		RequestURLPath:  "/v1/video/generations",
+		OriginModelName: "seedance-2.0",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0",
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildRequestURL returned error: %v", err)
+	}
+	if url != "https://upstream.example/v1/video/generations" {
+		t.Fatalf("expected video generations URL for seedance, got %s", url)
 	}
 }
 
@@ -691,6 +801,21 @@ func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSoraAlias(t *testing.
 	}
 }
 
+func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSeedance(t *testing.T) {
+	url, err := buildTaskFetchURL("https://upstream.example", map[string]any{
+		"task_id":      "upstream-task",
+		"model":        "seedance-2.0",
+		"origin_model": "seedance-2.0",
+		"request_path": "/v1/video/generations",
+	})
+	if err != nil {
+		t.Fatalf("buildTaskFetchURL returned error: %v", err)
+	}
+	if url != "https://upstream.example/v1/video/generations/upstream-task" {
+		t.Fatalf("expected video generations fetch URL for seedance, got %s", url)
+	}
+}
+
 func TestBuildTaskFetchURLKeepsGrokOnOpenAIVideosPath(t *testing.T) {
 	url, err := buildTaskFetchURL("https://upstream.example", map[string]any{
 		"task_id":      "upstream-task",
@@ -759,6 +884,49 @@ func TestParseTaskResultReadsVideoURLFromDataArray(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultInfersSuccessFromDataArrayWithoutStatus(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"created":1777616686,"model":"seedance-2.0-fast","data":[{"url":"https://cdn.example/from-sync.mp4"}]}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "SUCCESS" {
+		t.Fatalf("expected inferred success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/from-sync.mp4" {
+		t.Fatalf("expected sync video url, got %s", taskInfo.Url)
+	}
+	if taskInfo.CreatedAt != 1777616686 {
+		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
+func TestParseTaskResultReadsNestedDataObject(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{
+		"code": 200,
+		"data": {
+			"task_id": "seedance-task-123",
+			"status": "completed",
+			"progress": 100,
+			"created_at": 1776418394,
+			"video_url": "https://cdn.example/from-data-object.mp4"
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "SUCCESS" {
+		t.Fatalf("expected success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/from-data-object.mp4" {
+		t.Fatalf("expected nested data object video url, got %s", taskInfo.Url)
+	}
+	if taskInfo.CreatedAt != 1776418394 {
+		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
 func TestParseTaskResultFailsCompletedWithoutURL(t *testing.T) {
 	adaptor := &TaskAdaptor{}
 	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"completed","progress":100.0}`))
@@ -799,6 +967,28 @@ func TestParseTaskResultReadsStringError(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultReadsNestedFailureReason(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{
+		"code": 500,
+		"data": {
+			"status": "failed",
+			"error": {
+				"message": "seedance upstream moderation failed"
+			}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "FAILURE" {
+		t.Fatalf("expected failure status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Reason != "seedance upstream moderation failed" {
+		t.Fatalf("expected nested failure reason, got %q", taskInfo.Reason)
+	}
+}
+
 func TestDoResponsePrefersTaskIDForUpstreamPolling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -830,5 +1020,81 @@ func TestDoResponsePrefersTaskIDForUpstreamPolling(t *testing.T) {
 	}
 	if upstreamID != "abc123def456" {
 		t.Fatalf("expected upstream task_id to be preferred, got %s", upstreamID)
+	}
+}
+
+func TestDoResponseReadsNestedTaskIDFromData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &http.Response{
+		StatusCode: http.StatusAccepted,
+		Body: io.NopCloser(strings.NewReader(`{
+			"code": 200,
+			"data": {
+				"id":"vidgen-seedance-123",
+				"task_id":"seedance-upstream-task-123",
+				"status":"queued",
+				"progress":10,
+				"created_at":1776410000
+			}
+		}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_seedance_123",
+		},
+	}
+
+	upstreamID, _, taskErr := adaptor.DoResponse(c, resp, info)
+	if taskErr != nil {
+		t.Fatalf("DoResponse returned error: %v", taskErr)
+	}
+	if upstreamID != "seedance-upstream-task-123" {
+		t.Fatalf("expected nested upstream task_id, got %s", upstreamID)
+	}
+	if !strings.Contains(w.Body.String(), "\"task_id\":\"task_public_seedance_123\"") {
+		t.Fatalf("expected public task_id in client response, got %s", w.Body.String())
+	}
+}
+
+func TestDoResponseAcceptsSyncSeedanceSuccessWithoutTaskID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(`{
+			"created": 1777616686,
+			"model": "seedance-2.0-fast",
+			"data": [
+				{"url": "https://cdn.example/final.mp4"}
+			]
+		}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_sync_seedance_123",
+		},
+	}
+
+	upstreamID, _, taskErr := adaptor.DoResponse(c, resp, info)
+	if taskErr != nil {
+		t.Fatalf("DoResponse returned error: %v", taskErr)
+	}
+	if upstreamID != "" {
+		t.Fatalf("expected empty upstream task id for sync response, got %s", upstreamID)
+	}
+	if !strings.Contains(w.Body.String(), "\"status\":\"completed\"") {
+		t.Fatalf("expected completed status in client response, got %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "\"url\":\"https://cdn.example/final.mp4\"") {
+		t.Fatalf("expected final url in client response, got %s", w.Body.String())
 	}
 }
