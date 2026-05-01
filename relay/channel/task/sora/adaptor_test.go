@@ -341,6 +341,74 @@ func TestNormalizeSeedanceVideoRequestBuildsLeoPayload(t *testing.T) {
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestPreservesVideoReference(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "seedance-2.0-fast",
+		"duration": float64(8),
+		"size":     "1280x720",
+		"video_reference": []interface{}{
+			map[string]interface{}{
+				"url":  "https://example.com/video-1.mp4",
+				"type": "URL",
+			},
+			map[string]interface{}{
+				"url": "https://example.com/video-2.mp4",
+			},
+		},
+	}
+
+	normalizeSeedanceVideoRequest(body, "seedance-2.0-fast")
+
+	videoReference, ok := body["video_reference"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected video_reference to remain normalized, got %#v", body["video_reference"])
+	}
+	if len(videoReference) != 2 {
+		t.Fatalf("expected 2 video references, got %#v", videoReference)
+	}
+	if got := videoReference[0]["url"]; got != "https://example.com/video-1.mp4" {
+		t.Fatalf("expected first video reference url, got %#v", got)
+	}
+	if got := videoReference[0]["type"]; got != "URL" {
+		t.Fatalf("expected first video reference type to be preserved, got %#v", got)
+	}
+	if got := videoReference[1]["url"]; got != "https://example.com/video-2.mp4" {
+		t.Fatalf("expected second video reference url, got %#v", got)
+	}
+}
+
+func TestNormalizeSeedanceVideoRequestConvertsVideoURLsToVideoReference(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "seedance-2.0-fast",
+		"duration":     float64(4),
+		"aspect_ratio": "9:16",
+		"resolution":   "720p",
+		"video_urls": []interface{}{
+			"https://example.com/video-1.mp4",
+			"https://example.com/video-2.mp4",
+		},
+	}
+
+	normalizeSeedanceVideoRequest(body, "seedance-2.0-fast")
+
+	videoReference, ok := body["video_reference"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected video_reference to be populated, got %#v", body["video_reference"])
+	}
+	if len(videoReference) != 2 {
+		t.Fatalf("expected 2 video references, got %#v", videoReference)
+	}
+	if got := videoReference[0]["url"]; got != "https://example.com/video-1.mp4" {
+		t.Fatalf("unexpected first video reference %#v", got)
+	}
+	if got := videoReference[1]["url"]; got != "https://example.com/video-2.mp4" {
+		t.Fatalf("unexpected second video reference %#v", got)
+	}
+	if _, exists := body["video_urls"]; exists {
+		t.Fatalf("expected video_urls to be removed after normalization")
+	}
+}
+
 func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -440,6 +508,66 @@ func TestBuildRequestBodyNormalizesSeedanceVideoGenerationPayload(t *testing.T) 
 		if _, exists := payload[key]; exists {
 			t.Fatalf("expected %s to be removed from upstream payload", key)
 		}
+	}
+}
+
+func TestBuildRequestBodyNormalizesSeedanceVideoReferencePayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "seedance-2.0-fast",
+		"prompt": "广告视频",
+		"duration": 8,
+		"size": "1280x720",
+		"video_urls": [
+			"https://example.com/video-1.mp4",
+			"https://example.com/video-2.mp4"
+		]
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["size"]; got != "1280x720" {
+		t.Fatalf("expected size=1280x720, got %#v", got)
+	}
+	videoReference, ok := payload["video_reference"].([]any)
+	if !ok {
+		t.Fatalf("expected video_reference array, got %#v", payload["video_reference"])
+	}
+	if len(videoReference) != 2 {
+		t.Fatalf("expected 2 video references, got %#v", videoReference)
+	}
+	first, ok := videoReference[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first video reference object, got %#v", videoReference[0])
+	}
+	if got := first["url"]; got != "https://example.com/video-1.mp4" {
+		t.Fatalf("unexpected first video reference url %#v", got)
+	}
+	if _, exists := payload["video_urls"]; exists {
+		t.Fatalf("expected video_urls to be removed from upstream payload")
 	}
 }
 

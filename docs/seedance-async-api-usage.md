@@ -27,50 +27,17 @@ Content-Type: application/json
 
 调用流程：提交任务 -> 获取 `task_id` -> 每 `3-5` 秒轮询 -> `completed` 后读取 `url`。
 
-## 2. 支持能力
-
-### 2.1 文生视频
-
-不传 `image_url` 即可。
-
-### 2.2 图生视频
-
-传入顶层 `image_url` 即可。
-
-说明：
-- `image_url` 必须是公网可访问的图片地址，建议使用 HTTPS。
-- 当前推荐只传一张参考图。
-
-### 2.3 首尾帧模式
-
-可通过顶层 `start_image_url` 和 `end_image_url` 提交首尾帧过渡任务。
-
-说明：
-- `start_image_url` 表示起始画面。
-- `end_image_url` 表示结束画面。
-- 两张图片都建议使用公网可访问的 HTTPS 地址。
-
-### 2.4 多图参考模式
-
-可通过顶层 `images` 数组提交多张参考图。
-
-说明：
-- `images` 为字符串数组，每项为一张参考图 URL。
-- 最多支持 `4` 张参考图。
-- 建议图片地址稳定可访问。
-- 推荐从 `2` 张参考图开始接入和验证。
-
-### 2.5 模型参数范围
+## 2. 模型参数范围
 
 `seedance-2.0`：
 - 时长：`4-15` 秒
 - 比例：`9:16`、`16:9`、`1:1`
-- 分辨率：`480p`、`720p`、`1080p`
+- 分辨率：`720p`
 
 `seedance-2.0-fast`：
 - 时长：`4-15` 秒
 - 比例：`9:16`、`16:9`、`1:1`
-- 分辨率：`480p`、`720p`
+- 分辨率：`720p`
 
 ## 3. 提交参数
 
@@ -81,8 +48,10 @@ Content-Type: application/json
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`720x720` |
 | `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
-| `resolution` | string | 否 | 输出分辨率，如 `720p` |
+| `resolution` | string | 否 | 输出分辨率，当前仅支持 `720p` |
 | `image_url` | string | 否 | 图生视频参考图 URL；不传即为文生视频 |
+| `video_url` | string | 否 | 单视频参考模式使用的视频素材 URL |
+| `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "..." }]`，最多 `3` 个 |
 | `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
 | `end_image_url` | string | 否 | 首尾帧模式的结束图 URL |
 | `images` | string[] | 否 | 多图参考模式的图片 URL 数组，最多 `4` 张 |
@@ -91,8 +60,9 @@ Content-Type: application/json
 说明：
 - 下游调用时建议显式传 `duration`、`aspect_ratio`、`resolution`，不要依赖默认值。
 - 如果你已经能明确给出尺寸，也可以直接传 `size`。
-- 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的尺寸。
-- `seedance-2.0-fast` 不建议传 `1080p`。
+- 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的 `720p` 尺寸。
+- 多图参考最多上传 `4` 张图片。
+- 上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
 - `prompt` 建议避免违规、侵权、涉政、涉黄等高风险内容。
 
 ## 4. 文生视频示例
@@ -160,7 +130,60 @@ Content-Type: application/json
 }
 ```
 
-## 8. 提交响应
+## 8. 视频参考示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "广告视频",
+  "duration": 4,
+  "size": "720x1280",
+  "video_url": "https://example.com/source.mp4",
+  "async": true
+}
+```
+
+## 9. 多视频参考示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "广告视频",
+  "duration": 8,
+  "size": "1280x720",
+  "video_reference": [
+    {
+      "url": "https://example.com/video-1.mp4"
+    },
+    {
+      "url": "https://example.com/video-2.mp4"
+    }
+  ],
+  "async": true
+}
+```
+
+## 10. 图片 + 视频混合参考示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "广告视频",
+  "duration": 4,
+  "size": "720x1280",
+  "image_url": "https://example.com/source.png",
+  "video_url": "https://example.com/source.mp4",
+  "async": true
+}
+```
+
+## 11. 提交响应
 
 提交成功后会先返回异步任务信息：
 
@@ -178,7 +201,7 @@ Content-Type: application/json
 
 下游必须保存 `task_id`，后续通过它查询任务结果。
 
-## 9. 查询任务
+## 12. 查询任务
 
 处理中：
 
@@ -233,7 +256,7 @@ Content-Type: application/json
 - 部分任务结果里还可能附带 `seconds`、`size` 字段。
 - 生成成功时优先读取顶层 `url`。
 
-## 10. 状态说明
+## 13. 状态说明
 
 | status | 处理方式 |
 | --- | --- |
@@ -249,7 +272,7 @@ Content-Type: application/json
 - 最长轮询 `5-10` 分钟。
 - 若长时间停留在 `queued`，通常表示上游仍在排队，不一定是请求失败。
 
-## 11. cURL 示例
+## 14. cURL 示例
 
 提交任务：
 
@@ -274,7 +297,7 @@ curl "https://你的域名/v1/video/async-generations/task_xxx" \
   -H "Authorization: Bearer sk-你的令牌"
 ```
 
-## 12. JS 调用示例
+## 15. JS 调用示例
 
 ```js
 async function createSeedanceVideo() {
@@ -338,7 +361,7 @@ async function createSeedanceVideo() {
 }
 ```
 
-## 13. 推荐接入方式
+## 16. 推荐接入方式
 
 - Web/H5 场景建议先提交任务，再在前端或服务端轮询结果。
 - 如果需要更稳定的任务管理，建议下游自行落库保存 `task_id`、`status`、`url`。
