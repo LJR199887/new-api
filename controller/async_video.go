@@ -140,7 +140,9 @@ func readAsyncVideoTaskRequest(c *gin.Context, bodyBytes []byte) relaycommon.Tas
 			req.Image = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "image"))
 			req.ImageURL = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "image_url"))
 			req.Size = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "size"))
+			req.AspectRatio = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "aspect_ratio"))
 			req.Seconds = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "seconds"))
+			req.Resolution = strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "resolution"))
 			if duration, err := strconv.Atoi(strings.TrimSpace(firstAsyncVideoFormValue(form.Value, "duration"))); err == nil {
 				req.Duration = duration
 			}

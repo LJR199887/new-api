@@ -897,6 +897,32 @@ func TestParseTaskResultReadsVideoURLFromDataArray(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultReadsNestedDataObject(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{
+		"code": 200,
+		"data": {
+			"task_id": "seedance-task-123",
+			"status": "completed",
+			"progress": 100,
+			"created_at": 1776418394,
+			"video_url": "https://cdn.example/from-data-object.mp4"
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "SUCCESS" {
+		t.Fatalf("expected success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/from-data-object.mp4" {
+		t.Fatalf("expected nested data object video url, got %s", taskInfo.Url)
+	}
+	if taskInfo.CreatedAt != 1776418394 {
+		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
 func TestParseTaskResultFailsCompletedWithoutURL(t *testing.T) {
 	adaptor := &TaskAdaptor{}
 	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"completed","progress":100.0}`))
@@ -937,6 +963,28 @@ func TestParseTaskResultReadsStringError(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultReadsNestedFailureReason(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{
+		"code": 500,
+		"data": {
+			"status": "failed",
+			"error": {
+				"message": "seedance upstream moderation failed"
+			}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "FAILURE" {
+		t.Fatalf("expected failure status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Reason != "seedance upstream moderation failed" {
+		t.Fatalf("expected nested failure reason, got %q", taskInfo.Reason)
+	}
+}
+
 func TestDoResponsePrefersTaskIDForUpstreamPolling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -968,5 +1016,43 @@ func TestDoResponsePrefersTaskIDForUpstreamPolling(t *testing.T) {
 	}
 	if upstreamID != "abc123def456" {
 		t.Fatalf("expected upstream task_id to be preferred, got %s", upstreamID)
+	}
+}
+
+func TestDoResponseReadsNestedTaskIDFromData(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &http.Response{
+		StatusCode: http.StatusAccepted,
+		Body: io.NopCloser(strings.NewReader(`{
+			"code": 200,
+			"data": {
+				"id":"vidgen-seedance-123",
+				"task_id":"seedance-upstream-task-123",
+				"status":"queued",
+				"progress":10,
+				"created_at":1776410000
+			}
+		}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_seedance_123",
+		},
+	}
+
+	upstreamID, _, taskErr := adaptor.DoResponse(c, resp, info)
+	if taskErr != nil {
+		t.Fatalf("DoResponse returned error: %v", taskErr)
+	}
+	if upstreamID != "seedance-upstream-task-123" {
+		t.Fatalf("expected nested upstream task_id, got %s", upstreamID)
+	}
+	if !strings.Contains(w.Body.String(), "\"task_id\":\"task_public_seedance_123\"") {
+		t.Fatalf("expected public task_id in client response, got %s", w.Body.String())
 	}
 }

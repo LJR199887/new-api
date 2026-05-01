@@ -860,6 +860,18 @@ func extractVideoURL(respBody []byte) string {
 		"data.video_url",
 		"data.0.url",
 		"data.0.video_url",
+		"result.url",
+		"result.video_url",
+		"result.data.url",
+		"result.data.video_url",
+		"result.data.0.url",
+		"result.data.0.video_url",
+		"task.url",
+		"task.video_url",
+		"task.data.url",
+		"task.data.video_url",
+		"task.data.0.url",
+		"task.data.0.video_url",
 		"output.video_url",
 		"task_result.videos.0.url",
 	} {
@@ -868,6 +880,171 @@ func extractVideoURL(respBody []byte) string {
 		}
 	}
 	return ""
+}
+
+func firstTaskStringValue(respBody []byte, paths ...string) string {
+	for _, path := range paths {
+		if value := strings.TrimSpace(gjson.GetBytes(respBody, path).String()); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstTaskFloatValue(respBody []byte, paths ...string) (float64, bool) {
+	for _, path := range paths {
+		result := gjson.GetBytes(respBody, path)
+		if !result.Exists() {
+			continue
+		}
+		switch result.Type {
+		case gjson.Number:
+			return result.Float(), true
+		case gjson.String:
+			if value, err := strconv.ParseFloat(strings.TrimSpace(result.String()), 64); err == nil {
+				return value, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func firstTaskInt64Value(respBody []byte, paths ...string) (int64, bool) {
+	if value, ok := firstTaskFloatValue(respBody, paths...); ok {
+		return int64(value), true
+	}
+	return 0, false
+}
+
+func extractTaskFailureReason(respBody []byte) string {
+	for _, path := range []string{
+		"error.message",
+		"data.error.message",
+		"result.error.message",
+		"task.error.message",
+		"error",
+		"data.error",
+		"result.error",
+		"task.error",
+		"message",
+		"data.message",
+		"result.message",
+		"task.message",
+	} {
+		result := gjson.GetBytes(respBody, path)
+		if !result.Exists() {
+			continue
+		}
+		switch result.Type {
+		case gjson.String:
+			if value := strings.TrimSpace(result.String()); value != "" {
+				return value
+			}
+		case gjson.JSON:
+			if value := strings.TrimSpace(result.Get("message").String()); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func fillResponseTaskFallbacks(respBody []byte, task *responseTask) {
+	if task == nil {
+		return
+	}
+
+	if task.TaskID == "" {
+		task.TaskID = firstTaskStringValue(respBody,
+			"task_id",
+			"data.task_id",
+			"data.id",
+			"result.task_id",
+			"result.id",
+			"task.task_id",
+			"task.id",
+		)
+	}
+	if task.ID == "" {
+		task.ID = firstTaskStringValue(respBody,
+			"id",
+			"task_id",
+			"data.id",
+			"data.task_id",
+			"result.id",
+			"result.task_id",
+			"task.id",
+			"task.task_id",
+		)
+	}
+	if task.Object == "" {
+		task.Object = firstTaskStringValue(respBody, "object", "data.object", "result.object", "task.object")
+	}
+	if task.Model == "" {
+		task.Model = firstTaskStringValue(respBody, "model", "data.model", "result.model", "task.model")
+	}
+	if task.Status == "" {
+		task.Status = firstTaskStringValue(respBody, "status", "data.status", "result.status", "task.status")
+	}
+	if task.URL == "" {
+		task.URL = extractVideoURL(respBody)
+	}
+	if task.VideoURL == "" {
+		task.VideoURL = firstTaskStringValue(
+			respBody,
+			"video_url",
+			"data.video_url",
+			"result.video_url",
+			"task.video_url",
+		)
+		if task.VideoURL == "" {
+			task.VideoURL = task.URL
+		}
+	}
+	if task.URL == "" {
+		task.URL = task.VideoURL
+	}
+	if task.Progress == 0 {
+		if progress, ok := firstTaskFloatValue(respBody, "progress", "data.progress", "result.progress", "task.progress"); ok {
+			task.Progress = progress
+		}
+	}
+	if task.CreatedAt == 0 {
+		if createdAt, ok := firstTaskInt64Value(respBody, "created_at", "data.created_at", "result.created_at", "task.created_at"); ok {
+			task.CreatedAt = createdAt
+		}
+	}
+	if task.Created == 0 {
+		if created, ok := firstTaskInt64Value(respBody, "created", "data.created", "result.created", "task.created"); ok {
+			task.Created = created
+		}
+	}
+	if task.CompletedAt == 0 {
+		if completedAt, ok := firstTaskInt64Value(respBody, "completed_at", "data.completed_at", "result.completed_at", "task.completed_at"); ok {
+			task.CompletedAt = completedAt
+		}
+	}
+	if task.ExpiresAt == 0 {
+		if expiresAt, ok := firstTaskInt64Value(respBody, "expires_at", "data.expires_at", "result.expires_at", "task.expires_at"); ok {
+			task.ExpiresAt = expiresAt
+		}
+	}
+	if task.Seconds == "" {
+		task.Seconds = firstTaskStringValue(respBody, "seconds", "data.seconds", "result.seconds", "task.seconds")
+	}
+	if task.Size == "" {
+		task.Size = firstTaskStringValue(respBody, "size", "data.size", "result.size", "task.size")
+	}
+	if task.Error == nil {
+		if reason := extractTaskFailureReason(respBody); reason != "" {
+			task.Error = &responseTaskError{
+				Message: reason,
+				Code:    firstTaskStringValue(respBody, "error.code", "data.error.code", "result.error.code", "task.error.code"),
+			}
+		}
+	} else if task.Error.Message == "" {
+		task.Error.Message = extractTaskFailureReason(respBody)
+	}
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -1161,6 +1338,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
+	fillResponseTaskFallbacks(responseBody, &dResp)
 
 	upstreamID := dResp.TaskID
 	if upstreamID == "" {
@@ -1221,15 +1399,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	if err := common.Unmarshal(respBody, &resTask); err != nil {
 		return nil, errors.Wrap(err, "unmarshal task result failed")
 	}
-	if resTask.URL == "" {
-		resTask.URL = extractVideoURL(respBody)
-	}
-	if resTask.VideoURL == "" {
-		resTask.VideoURL = resTask.URL
-	}
-	if resTask.URL == "" {
-		resTask.URL = resTask.VideoURL
-	}
+	fillResponseTaskFallbacks(respBody, &resTask)
 	createdAt := resTask.CreatedAt
 	if createdAt == 0 {
 		createdAt = resTask.Created
@@ -1259,6 +1429,9 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		if resTask.Error != nil {
 			taskResult.Reason = resTask.Error.Message
 		} else {
+			taskResult.Reason = extractTaskFailureReason(respBody)
+		}
+		if taskResult.Reason == "" {
 			taskResult.Reason = "task failed"
 		}
 	default:
