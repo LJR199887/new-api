@@ -80,6 +80,12 @@ const ADOBE_VIDEO_MODELS = new Set([
   'veo31-ref',
   'veo31-fast',
   'kling-v3',
+  'seedance-2.0',
+  'seedance-2.0-fast',
+]);
+const SEEDANCE_VIDEO_MODELS = new Set([
+  'seedance-2.0',
+  'seedance-2.0-fast',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
@@ -94,6 +100,8 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'veo31-fast': 2,
   'veo31-ref': 3,
   'kling-v3': 2,
+  'seedance-2.0': 1,
+  'seedance-2.0-fast': 1,
 };
 
 const GROK_IMAGE_SIZE_OPTIONS = [
@@ -170,10 +178,22 @@ const ADOBE_VIDEO_DURATION_OPTIONS = {
     label: `${value}s`,
     value: String(value),
   })),
+  seedance: Array.from({ length: 12 }, (_, index) => index + 4).map((value) => ({
+    label: `${value}s`,
+    value: String(value),
+  })),
 };
 const ADOBE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '16:9', value: '16:9' },
   { label: '9:16', value: '9:16' },
+];
+const SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS = [
+  { label: '16:9', value: '16:9' },
+  { label: '4:3', value: '4:3' },
+  { label: '1:1', value: '1:1' },
+  { label: '3:4', value: '3:4' },
+  { label: '9:16', value: '9:16' },
+  { label: '21:9', value: '21:9' },
 ];
 const getAdobeVideoDurationOptions = (modelName) => {
   if (modelName === 'veo31-ref') {
@@ -185,6 +205,9 @@ const getAdobeVideoDurationOptions = (modelName) => {
   if (modelName === 'kling-v3') {
     return ADOBE_VIDEO_DURATION_OPTIONS.kling;
   }
+  if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
+    return ADOBE_VIDEO_DURATION_OPTIONS.seedance;
+  }
   return ADOBE_VIDEO_DURATION_OPTIONS.veo;
 };
 const getAdobeVideoAspectRatioOptions = (modelName) => {
@@ -193,11 +216,16 @@ const getAdobeVideoAspectRatioOptions = (modelName) => {
       (option) => option.value === '16:9',
     );
   }
+  if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
+    return SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS;
+  }
   return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS;
 };
 const getAdobeVideoDefaultDuration = (modelName) =>
   modelName === 'kling-v3'
     ? '5'
+    : SEEDANCE_VIDEO_MODELS.has(modelName)
+      ? '5'
     : getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
 const getAdobeVideoDefaultAspectRatio = (modelName) =>
   getAdobeVideoAspectRatioOptions(modelName)[0]?.value || '16:9';
@@ -205,6 +233,24 @@ const ADOBE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '1080p', value: '1080p' },
   { label: '720p', value: '720p' },
 ];
+const SEEDANCE_VIDEO_RESOLUTION_OPTIONS = [
+  { label: '480p', value: '480p' },
+  { label: '720p', value: '720p' },
+  { label: '1080p', value: '1080p' },
+];
+const getAdobeVideoResolutionOptions = (modelName) => {
+  if (modelName === 'seedance-2.0-fast') {
+    return SEEDANCE_VIDEO_RESOLUTION_OPTIONS.filter(
+      (option) => option.value !== '1080p',
+    );
+  }
+  if (modelName === 'seedance-2.0') {
+    return SEEDANCE_VIDEO_RESOLUTION_OPTIONS;
+  }
+  return ADOBE_VIDEO_RESOLUTION_OPTIONS;
+};
+const getAdobeVideoDefaultResolution = (modelName) =>
+  SEEDANCE_VIDEO_MODELS.has(modelName) ? '720p' : '1080p';
 const ADOBE_REFERENCE_MODE_OPTIONS = [
   { label: 'Frame', value: 'frame' },
   { label: 'Image', value: 'image' },
@@ -3500,11 +3546,13 @@ export default function App() {
     currentModelName === 'veo31-ref' ||
     currentModelName === 'veo31-fast';
   const isAdobeKlingV3Model = currentModelName === 'kling-v3';
+  const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending = (isChatTab && isGenerating) || isUploadingImage;
   const isVideoModel =
-    typeof currentModelName === 'string' && currentModelName.includes('video');
+    typeof currentModelName === 'string' &&
+    (currentModelName.includes('video') || isAdobeVideoModel);
   const isGrokImagineVideoModel =
     GROK_IMAGINE_VIDEO_MODELS.has(currentModelName);
   const currentVideoSecondsOptions = isGrokImagineVideoModel
@@ -3613,8 +3661,10 @@ export default function App() {
       modelName === 'veo31-ref' ||
       modelName === 'veo31-fast';
     const isCurrentAdobeKlingV3Model = modelName === 'kling-v3';
+    const isCurrentSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(modelName);
     const isCurrentVideoModel =
-      typeof modelName === 'string' && modelName.includes('video');
+      typeof modelName === 'string' &&
+      (modelName.includes('video') || isCurrentAdobeVideoModel);
     const isCurrentGrokImagineVideoModel =
       GROK_IMAGINE_VIDEO_MODELS.has(modelName);
 
@@ -3655,8 +3705,10 @@ export default function App() {
           sourceParams.videoDuration || getAdobeVideoDefaultDuration(modelName);
         snapshot.aspectRatio =
           sourceParams.aspectRatio || getAdobeVideoDefaultAspectRatio(modelName);
-        if (isCurrentAdobeVeoModel) {
-          snapshot.videoResolution = sourceParams.videoResolution || '1080p';
+        if (isCurrentAdobeVeoModel || isCurrentSeedanceVideoModel) {
+          snapshot.videoResolution =
+            sourceParams.videoResolution ||
+            getAdobeVideoDefaultResolution(modelName);
         }
         if (isCurrentAdobeKlingV3Model) {
           snapshot.generateAudio = true;
@@ -3875,12 +3927,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           next.aspectRatio = getAdobeVideoDefaultAspectRatio(currentModelName);
         }
         if (
-          isAdobeVeoModel &&
-          !ADOBE_VIDEO_RESOLUTION_OPTIONS.some(
+          (isAdobeVeoModel || isSeedanceVideoModel) &&
+          !getAdobeVideoResolutionOptions(currentModelName).some(
             (option) => option.value === next.videoResolution,
           )
         ) {
-          next.videoResolution = '1080p';
+          next.videoResolution = getAdobeVideoDefaultResolution(currentModelName);
         }
         if (
           currentModelName === 'veo31' &&
@@ -3896,10 +3948,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     });
   }, [
     currentModelName,
+    currentVideoSecondsOptions,
     isAdobeImageModel,
     isAdobeVeoModel,
     isAdobeVideoModel,
     isGrokImagineImageModel,
+    isSeedanceVideoModel,
     isVideoModel,
   ]);
 
@@ -7367,6 +7421,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                     creative_index: index + 1,
                   },
                 };
+            if (basePayload.metadata && typeof basePayload.metadata === 'object') {
+              payload.metadata = {
+                ...basePayload.metadata,
+                ...payload.metadata,
+              };
+            }
             [
               'size',
               'seconds',
@@ -8895,13 +8955,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         widthClass='w-32'
                       />
 
-                      {isAdobeVeoModel && (
+                      {(isAdobeVeoModel || isSeedanceVideoModel) && (
                         <DropSelectButton
                           menuKey='adobeVideoResolution'
                           icon={<Video size={14} />}
                           label={`分辨率 ${params.videoResolution}`}
                           value={params.videoResolution}
-                          options={ADOBE_VIDEO_RESOLUTION_OPTIONS}
+                          options={getAdobeVideoResolutionOptions(currentModelName)}
                           openMenu={openMenu}
                           setOpenMenu={setOpenMenu}
                           onSelect={(value) =>

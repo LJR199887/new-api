@@ -82,6 +82,9 @@ const SettingsPanel = ({
     'veo31',
     'veo31-ref',
     'veo31-fast',
+    'kling-v3',
+    'seedance-2.0',
+    'seedance-2.0-fast',
   ]);
   const isGrokImagineImageModel =
     grokImagineImageModels.has(inputs.model) ||
@@ -95,8 +98,11 @@ const SettingsPanel = ({
     inputs.model === 'veo31' ||
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
+  const isSeedanceVideoModel =
+    inputs.model === 'seedance-2.0' || inputs.model === 'seedance-2.0-fast';
   const isVideoModel =
-    typeof inputs.model === 'string' && inputs.model.includes('video');
+    typeof inputs.model === 'string' &&
+    (inputs.model.includes('video') || isAdobeVideoModel);
   const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const imageSizeOptions = [
     { label: '1:1 方图 (1024x1024)', value: '1024x1024' },
@@ -178,6 +184,14 @@ const SettingsPanel = ({
     { label: '16:9', value: '16:9' },
     { label: '9:16', value: '9:16' },
   ];
+  const seedanceVideoAspectRatioOptions = [
+    { label: '16:9', value: '16:9' },
+    { label: '4:3', value: '4:3' },
+    { label: '1:1', value: '1:1' },
+    { label: '3:4', value: '3:4' },
+    { label: '9:16', value: '9:16' },
+    { label: '21:9', value: '21:9' },
+  ];
   const adobeOutputResolutionOptions = [
     { label: '1K', value: '1K' },
     { label: '2K', value: '2K' },
@@ -191,12 +205,32 @@ const SettingsPanel = ({
     label: `${v}s`,
     value: String(v),
   }));
+  const adobeKlingDurationOptions = Array.from(
+    { length: 13 },
+    (_, index) => index + 3,
+  ).map((v) => ({
+    label: `${v}s`,
+    value: String(v),
+  }));
+  const seedanceVideoDurationOptions = Array.from(
+    { length: 12 },
+    (_, index) => index + 4,
+  ).map((v) => ({
+    label: `${v}s`,
+    value: String(v),
+  }));
   const getAdobeVideoDurationOptions = (modelName) => {
     if (modelName === 'veo31-ref') {
       return adobeVeoDurationOptions.filter((option) => option.value === '8');
     }
     if (modelName === 'sora2' || modelName === 'sora2-pro') {
       return adobeSoraDurationOptions;
+    }
+    if (modelName === 'kling-v3') {
+      return adobeKlingDurationOptions;
+    }
+    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+      return seedanceVideoDurationOptions;
     }
     return adobeVeoDurationOptions;
   };
@@ -206,16 +240,45 @@ const SettingsPanel = ({
         (option) => option.value === '16:9',
       );
     }
+    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+      return seedanceVideoAspectRatioOptions;
+    }
     return adobeVideoAspectRatioOptions;
   };
   const getAdobeVideoDefaultDuration = (modelName) =>
-    getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
+    modelName === 'kling-v3' ||
+    modelName === 'seedance-2.0' ||
+    modelName === 'seedance-2.0-fast'
+      ? '5'
+      : getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
   const getAdobeVideoDefaultAspectRatio = (modelName) =>
     getAdobeVideoAspectRatioOptions(modelName)[0]?.value || '16:9';
   const adobeVideoResolutionOptions = [
     { label: '1080p', value: '1080p' },
     { label: '720p', value: '720p' },
   ];
+  const seedanceVideoResolutionOptions = [
+    { label: '480p', value: '480p' },
+    { label: '720p', value: '720p' },
+    { label: '1080p', value: '1080p' },
+  ];
+  const getAdobeVideoResolutionOptions = (modelName) => {
+    if (modelName === 'seedance-2.0-fast') {
+      return seedanceVideoResolutionOptions.filter(
+        (option) => option.value !== '1080p',
+      );
+    }
+    if (modelName === 'seedance-2.0') {
+      return seedanceVideoResolutionOptions;
+    }
+    return adobeVideoResolutionOptions;
+  };
+  const getAdobeVideoDefaultResolution = (modelName) => {
+    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+      return '720p';
+    }
+    return '1080p';
+  };
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const currentAdobeAspectRatioOptions = isGPTImage2Model
     ? gptImage2SizeOptions
@@ -260,6 +323,14 @@ const SettingsPanel = ({
   )
     ? inputs.aspectRatio
     : getAdobeVideoDefaultAspectRatio(inputs.model);
+  const currentAdobeVideoResolutionOptions = getAdobeVideoResolutionOptions(
+    inputs.model,
+  );
+  const selectedAdobeVideoResolution = currentAdobeVideoResolutionOptions.some(
+    (option) => option.value === inputs.videoResolution,
+  )
+    ? inputs.videoResolution
+    : getAdobeVideoDefaultResolution(inputs.model);
 
   return (
     <Card
@@ -488,7 +559,7 @@ const SettingsPanel = ({
           </div>
         )}
 
-        {isVideoModel && (
+        {isVideoModel && !isAdobeVideoModel && (
           <div className={customRequestMode ? 'opacity-50' : ''}>
             <div className='space-y-4'>
               <div>
@@ -578,15 +649,15 @@ const SettingsPanel = ({
                   disabled={customRequestMode}
                 />
               </div>
-              {isAdobeVeoModel && (
+              {(isAdobeVeoModel || isSeedanceVideoModel) && (
                 <div>
                   <Typography.Text strong className='text-sm'>
                     Resolution
                   </Typography.Text>
                   <Select
                     className='!rounded-lg mt-2'
-                    optionList={adobeVideoResolutionOptions}
-                    value={inputs.videoResolution || '1080p'}
+                    optionList={currentAdobeVideoResolutionOptions}
+                    value={selectedAdobeVideoResolution}
                     onChange={(value) => onInputChange('videoResolution', value)}
                     disabled={customRequestMode}
                   />

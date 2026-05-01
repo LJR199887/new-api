@@ -108,7 +108,8 @@ func isVideoGenerationsTaskModel(model string) bool {
 		strings.Contains(model, "/veo") ||
 		strings.HasPrefix(model, "sora-2") ||
 		strings.HasPrefix(model, "sora2") ||
-		model == "kling-v3"
+		model == "kling-v3" ||
+		strings.HasPrefix(model, "seedance-2.0")
 }
 
 func usesVideoGenerationsTaskEndpoint(path string, modelNames ...string) bool {
@@ -499,9 +500,126 @@ func isKlingV3VideoModel(upstreamModel string) bool {
 	return strings.EqualFold(strings.TrimSpace(upstreamModel), "kling-v3")
 }
 
+func isSeedanceVideoModel(upstreamModel string) bool {
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	return strings.HasPrefix(upstreamModel, "seedance-2.0")
+}
+
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel)
+}
+
+func seedanceAspectRatioFromSize(value string) string {
+	switch strings.TrimSpace(value) {
+	case "1280x720", "1920x1080":
+		return "16:9"
+	case "1112x834", "1664x1248":
+		return "4:3"
+	case "960x960", "1024x1024", "1440x1440":
+		return "1:1"
+	case "834x1112", "1248x1664":
+		return "3:4"
+	case "720x1280", "1080x1920":
+		return "9:16"
+	case "1470x630", "2208x944":
+		return "21:9"
+	default:
+		return ""
+	}
+}
+
+func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
+	for _, key := range []string{"image", "image_url", "input_reference"} {
+		if value := stringifyBodyValue(bodyMap[key]); value != "" {
+			return value
+		}
+	}
+	for _, key := range []string{"images", "image_urls"} {
+		switch values := bodyMap[key].(type) {
+		case []interface{}:
+			for _, value := range values {
+				if candidate := stringifyBodyValue(value); candidate != "" {
+					return candidate
+				}
+			}
+		case []string:
+			for _, value := range values {
+				if candidate := strings.TrimSpace(value); candidate != "" {
+					return candidate
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
+	if !isSeedanceVideoModel(upstreamModel) {
+		return
+	}
+
+	seconds := stringifyBodyValue(bodyMap["seconds"])
+	if seconds == "" {
+		seconds = stringifyBodyValue(bodyMap["duration"])
+	}
+	if seconds == "" {
+		seconds = "5"
+	}
+
+	metadata, _ := bodyMap["metadata"].(map[string]interface{})
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+
+	ratio := stringifyBodyValue(metadata["ratio"])
+	if ratio == "" {
+		ratio = stringifyBodyValue(bodyMap["aspect_ratio"])
+	}
+	if ratio == "" {
+		ratio = seedanceAspectRatioFromSize(stringifyBodyValue(bodyMap["size"]))
+	}
+
+	resolution := stringifyBodyValue(metadata["resolution"])
+	if resolution == "" {
+		resolution = stringifyBodyValue(bodyMap["resolution"])
+	}
+	if resolution == "" {
+		resolution = stringifyBodyValue(bodyMap["resolution_name"])
+	}
+	if resolution == "" {
+		resolution = resolutionNameFromQuality(stringifyBodyValue(bodyMap["quality"]))
+	}
+
+	if ratio != "" {
+		metadata["ratio"] = ratio
+	}
+	if resolution != "" {
+		metadata["resolution"] = resolution
+	}
+	if len(metadata) > 0 {
+		bodyMap["metadata"] = metadata
+	}
+
+	if image := firstSeedanceImageValue(bodyMap); image != "" {
+		bodyMap["image"] = image
+	}
+	bodyMap["model"] = upstreamModel
+	bodyMap["seconds"] = seconds
+
+	delete(bodyMap, "duration")
+	delete(bodyMap, "size")
+	delete(bodyMap, "quality")
+	delete(bodyMap, "resolution_name")
+	delete(bodyMap, "video_config")
+	delete(bodyMap, "image_url")
+	delete(bodyMap, "image_urls")
+	delete(bodyMap, "images")
+	delete(bodyMap, "input_reference")
+	delete(bodyMap, "reference_mode")
+	delete(bodyMap, "async")
+	delete(bodyMap, "aspect_ratio")
+	delete(bodyMap, "resolution")
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
@@ -801,6 +919,10 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		if seconds != 6 && seconds != 10 {
 			seconds = 10
 		}
+	} else if isSeedanceVideoModel(info.UpstreamModelName) {
+		if seconds <= 0 {
+			seconds = 5
+		}
 	} else if seconds <= 0 {
 		seconds = 4
 	}
@@ -850,6 +972,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				}
 				c.Request.Header.Set("Content-Type", formContentType)
 				return body, nil
+			}
+			if isSeedanceVideoModel(upstreamModelName) {
+				normalizeSeedanceVideoRequest(bodyMap, upstreamModelName)
 			}
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
 			if isKlingV3VideoModel(upstreamModelName) {

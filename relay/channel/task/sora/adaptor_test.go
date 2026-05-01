@@ -16,13 +16,20 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
-func TestModelListIncludesAdobeVideoVariants(t *testing.T) {
+func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 	models := make(map[string]bool, len(ModelList))
 	for _, modelName := range ModelList {
 		models[modelName] = true
 	}
 
-	for _, modelName := range []string{"veo31", "veo31-fast", "veo31-ref", "kling-v3"} {
+	for _, modelName := range []string{
+		"veo31",
+		"veo31-fast",
+		"veo31-ref",
+		"kling-v3",
+		"seedance-2.0",
+		"seedance-2.0-fast",
+	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
 		}
@@ -303,6 +310,43 @@ func TestNormalizeSoraVideoRequestDefaultsVeoRefToImageMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestBuildsMetadata(t *testing.T) {
+	body := map[string]interface{}{
+		"model":     "seedance-2.0",
+		"duration":  float64(8),
+		"size":      "1280x720",
+		"quality":   "high",
+		"image_url": "https://example.com/frame.png",
+	}
+
+	normalizeSeedanceVideoRequest(body, "seedance-2.0")
+
+	if got := body["model"]; got != "seedance-2.0" {
+		t.Fatalf("expected model to stay seedance-2.0, got %#v", got)
+	}
+	if got := body["seconds"]; got != "8" {
+		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
+	}
+	if got := body["image"]; got != "https://example.com/frame.png" {
+		t.Fatalf("expected image to be normalized from image_url, got %#v", got)
+	}
+	metadata, ok := body["metadata"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metadata map, got %#v", body["metadata"])
+	}
+	if got := metadata["ratio"]; got != "16:9" {
+		t.Fatalf("expected metadata.ratio=16:9, got %#v", got)
+	}
+	if got := metadata["resolution"]; got != "720p" {
+		t.Fatalf("expected metadata.resolution=720p, got %#v", got)
+	}
+	for _, key := range []string{"duration", "size", "quality", "image_url"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("expected %s to be removed after normalization", key)
+		}
+	}
+}
+
 func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -347,6 +391,68 @@ func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	}
 	if got, ok := payload["async"].(bool); !ok || !got {
 		t.Fatalf("expected async=true, got %#v", payload["async"])
+	}
+}
+
+func TestBuildRequestBodyNormalizesSeedanceVideoGenerationPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "seedance-2.0-fast",
+		"prompt": "Animate this key art",
+		"duration": 5,
+		"aspect_ratio": "9:16",
+		"resolution": "720p",
+		"image_url": "https://example.com/source.png"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	if got := payload["model"]; got != "seedance-2.0-fast" {
+		t.Fatalf("expected model=seedance-2.0-fast, got %#v", got)
+	}
+	if got := payload["seconds"]; got != "5" {
+		t.Fatalf("expected seconds=5, got %#v", got)
+	}
+	if got := payload["image"]; got != "https://example.com/source.png" {
+		t.Fatalf("expected image to be forwarded, got %#v", got)
+	}
+	metadata, ok := payload["metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected metadata map, got %#v", payload["metadata"])
+	}
+	if got := metadata["ratio"]; got != "9:16" {
+		t.Fatalf("expected metadata.ratio=9:16, got %#v", got)
+	}
+	if got := metadata["resolution"]; got != "720p" {
+		t.Fatalf("expected metadata.resolution=720p, got %#v", got)
+	}
+	for _, key := range []string{"duration", "aspect_ratio", "resolution", "image_url", "input_reference"} {
+		if _, exists := payload[key]; exists {
+			t.Fatalf("expected %s to be removed from upstream payload", key)
+		}
 	}
 }
 
@@ -478,6 +584,23 @@ func TestBuildRequestURLUsesVideoGenerationsPathForSora(t *testing.T) {
 	}
 	if url != "https://upstream.example/v1/video/generations" {
 		t.Fatalf("expected video generations URL for sora, got %s", url)
+	}
+}
+
+func TestBuildRequestURLUsesVideoGenerationsPathForSeedance(t *testing.T) {
+	adaptor := &TaskAdaptor{baseURL: "https://upstream.example"}
+	url, err := adaptor.BuildRequestURL(&relaycommon.RelayInfo{
+		RequestURLPath:  "/v1/video/generations",
+		OriginModelName: "seedance-2.0",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0",
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildRequestURL returned error: %v", err)
+	}
+	if url != "https://upstream.example/v1/video/generations" {
+		t.Fatalf("expected video generations URL for seedance, got %s", url)
 	}
 }
 
@@ -688,6 +811,21 @@ func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSoraAlias(t *testing.
 	}
 	if url != "https://upstream.example/v1/video/generations/upstream-task" {
 		t.Fatalf("expected video generations fetch URL for sora alias, got %s", url)
+	}
+}
+
+func TestBuildTaskFetchURLUsesStoredVideoGenerationsPathForSeedance(t *testing.T) {
+	url, err := buildTaskFetchURL("https://upstream.example", map[string]any{
+		"task_id":      "upstream-task",
+		"model":        "seedance-2.0",
+		"origin_model": "seedance-2.0",
+		"request_path": "/v1/video/generations",
+	})
+	if err != nil {
+		t.Fatalf("buildTaskFetchURL returned error: %v", err)
+	}
+	if url != "https://upstream.example/v1/video/generations/upstream-task" {
+		t.Fatalf("expected video generations fetch URL for seedance, got %s", url)
 	}
 }
 
