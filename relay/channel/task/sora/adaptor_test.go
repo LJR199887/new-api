@@ -310,13 +310,14 @@ func TestNormalizeSoraVideoRequestDefaultsVeoRefToImageMode(t *testing.T) {
 	}
 }
 
-func TestNormalizeSeedanceVideoRequestBuildsMetadata(t *testing.T) {
+func TestNormalizeSeedanceVideoRequestBuildsLeoPayload(t *testing.T) {
 	body := map[string]interface{}{
-		"model":     "seedance-2.0",
-		"duration":  float64(8),
-		"size":      "1280x720",
-		"quality":   "high",
-		"image_url": "https://example.com/frame.png",
+		"model":        "seedance-2.0",
+		"duration":     float64(8),
+		"quality":      "high",
+		"resolution":   "720p",
+		"aspect_ratio": "16:9",
+		"image_url":    "https://example.com/frame.png",
 	}
 
 	normalizeSeedanceVideoRequest(body, "seedance-2.0")
@@ -324,23 +325,16 @@ func TestNormalizeSeedanceVideoRequestBuildsMetadata(t *testing.T) {
 	if got := body["model"]; got != "seedance-2.0" {
 		t.Fatalf("expected model to stay seedance-2.0, got %#v", got)
 	}
-	if got := body["seconds"]; got != "8" {
-		t.Fatalf("expected seconds to be backfilled from duration, got %#v", got)
+	if got := body["duration"]; got != float64(8) && got != 8 {
+		t.Fatalf("expected duration to be preserved, got %#v", got)
 	}
-	if got := body["image"]; got != "https://example.com/frame.png" {
-		t.Fatalf("expected image to be normalized from image_url, got %#v", got)
+	if got := body["size"]; got != "1280x720" {
+		t.Fatalf("expected size=1280x720, got %#v", got)
 	}
-	metadata, ok := body["metadata"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected metadata map, got %#v", body["metadata"])
+	if got := body["image_url"]; got != "https://example.com/frame.png" {
+		t.Fatalf("expected image_url to stay normalized, got %#v", got)
 	}
-	if got := metadata["ratio"]; got != "16:9" {
-		t.Fatalf("expected metadata.ratio=16:9, got %#v", got)
-	}
-	if got := metadata["resolution"]; got != "720p" {
-		t.Fatalf("expected metadata.resolution=720p, got %#v", got)
-	}
-	for _, key := range []string{"duration", "size", "quality", "image_url"} {
+	for _, key := range []string{"seconds", "quality", "aspect_ratio", "resolution", "metadata"} {
 		if _, exists := body[key]; exists {
 			t.Fatalf("expected %s to be removed after normalization", key)
 		}
@@ -433,23 +427,16 @@ func TestBuildRequestBodyNormalizesSeedanceVideoGenerationPayload(t *testing.T) 
 	if got := payload["model"]; got != "seedance-2.0-fast" {
 		t.Fatalf("expected model=seedance-2.0-fast, got %#v", got)
 	}
-	if got := payload["seconds"]; got != "5" {
-		t.Fatalf("expected seconds=5, got %#v", got)
+	if got := payload["duration"]; got != float64(5) && got != 5 {
+		t.Fatalf("expected duration=5, got %#v", got)
 	}
-	if got := payload["image"]; got != "https://example.com/source.png" {
-		t.Fatalf("expected image to be forwarded, got %#v", got)
+	if got := payload["size"]; got != "720x1280" {
+		t.Fatalf("expected size=720x1280, got %#v", got)
 	}
-	metadata, ok := payload["metadata"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected metadata map, got %#v", payload["metadata"])
+	if got := payload["image_url"]; got != "https://example.com/source.png" {
+		t.Fatalf("expected image_url to be forwarded, got %#v", got)
 	}
-	if got := metadata["ratio"]; got != "9:16" {
-		t.Fatalf("expected metadata.ratio=9:16, got %#v", got)
-	}
-	if got := metadata["resolution"]; got != "720p" {
-		t.Fatalf("expected metadata.resolution=720p, got %#v", got)
-	}
-	for _, key := range []string{"duration", "aspect_ratio", "resolution", "image_url", "input_reference"} {
+	for _, key := range []string{"seconds", "aspect_ratio", "resolution", "input_reference", "metadata"} {
 		if _, exists := payload[key]; exists {
 			t.Fatalf("expected %s to be removed from upstream payload", key)
 		}
@@ -897,6 +884,23 @@ func TestParseTaskResultReadsVideoURLFromDataArray(t *testing.T) {
 	}
 }
 
+func TestParseTaskResultInfersSuccessFromDataArrayWithoutStatus(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"created":1777616686,"model":"seedance-2.0-fast","data":[{"url":"https://cdn.example/from-sync.mp4"}]}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != "SUCCESS" {
+		t.Fatalf("expected inferred success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/from-sync.mp4" {
+		t.Fatalf("expected sync video url, got %s", taskInfo.Url)
+	}
+	if taskInfo.CreatedAt != 1777616686 {
+		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
 func TestParseTaskResultReadsNestedDataObject(t *testing.T) {
 	adaptor := &TaskAdaptor{}
 	taskInfo, err := adaptor.ParseTaskResult([]byte(`{
@@ -1054,5 +1058,43 @@ func TestDoResponseReadsNestedTaskIDFromData(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "\"task_id\":\"task_public_seedance_123\"") {
 		t.Fatalf("expected public task_id in client response, got %s", w.Body.String())
+	}
+}
+
+func TestDoResponseAcceptsSyncSeedanceSuccessWithoutTaskID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(`{
+			"created": 1777616686,
+			"model": "seedance-2.0-fast",
+			"data": [
+				{"url": "https://cdn.example/final.mp4"}
+			]
+		}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		TaskRelayInfo: &relaycommon.TaskRelayInfo{
+			PublicTaskID: "task_public_sync_seedance_123",
+		},
+	}
+
+	upstreamID, _, taskErr := adaptor.DoResponse(c, resp, info)
+	if taskErr != nil {
+		t.Fatalf("DoResponse returned error: %v", taskErr)
+	}
+	if upstreamID != "" {
+		t.Fatalf("expected empty upstream task id for sync response, got %s", upstreamID)
+	}
+	if !strings.Contains(w.Body.String(), "\"status\":\"completed\"") {
+		t.Fatalf("expected completed status in client response, got %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "\"url\":\"https://cdn.example/final.mp4\"") {
+		t.Fatalf("expected final url in client response, got %s", w.Body.String())
 	}
 }

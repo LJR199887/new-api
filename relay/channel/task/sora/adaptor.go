@@ -554,24 +554,62 @@ func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
 	return ""
 }
 
+func seedanceBaseDimensionFromResolution(value string) int {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "", "720p":
+		return 720
+	case "480p":
+		return 480
+	case "1080p":
+		return 1080
+	default:
+		if strings.HasSuffix(value, "p") {
+			if parsed, err := strconv.Atoi(strings.TrimSuffix(value, "p")); err == nil && parsed > 0 {
+				return parsed
+			}
+		}
+	}
+	return 0
+}
+
+func seedanceSizeFromAspectRatioAndResolution(ratio string, resolution string) string {
+	parts := strings.Split(strings.TrimSpace(ratio), ":")
+	if len(parts) != 2 {
+		return ""
+	}
+
+	ratioWidth, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil || ratioWidth <= 0 {
+		return ""
+	}
+	ratioHeight, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil || ratioHeight <= 0 {
+		return ""
+	}
+
+	baseDimension := seedanceBaseDimensionFromResolution(resolution)
+	if baseDimension <= 0 {
+		return ""
+	}
+
+	width := baseDimension
+	height := baseDimension
+	if ratioWidth > ratioHeight {
+		width = (baseDimension*ratioWidth + ratioHeight/2) / ratioHeight
+	} else if ratioHeight > ratioWidth {
+		height = (baseDimension*ratioHeight + ratioWidth/2) / ratioWidth
+	}
+
+	return fmt.Sprintf("%dx%d", width, height)
+}
+
 func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
 	if !isSeedanceVideoModel(upstreamModel) {
 		return
 	}
 
-	seconds := stringifyBodyValue(bodyMap["seconds"])
-	if seconds == "" {
-		seconds = stringifyBodyValue(bodyMap["duration"])
-	}
-	if seconds == "" {
-		seconds = "5"
-	}
-
 	metadata, _ := bodyMap["metadata"].(map[string]interface{})
-	if metadata == nil {
-		metadata = make(map[string]interface{})
-	}
-
 	ratio := stringifyBodyValue(metadata["ratio"])
 	if ratio == "" {
 		ratio = stringifyBodyValue(bodyMap["aspect_ratio"])
@@ -591,28 +629,35 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 		resolution = resolutionNameFromQuality(stringifyBodyValue(bodyMap["quality"]))
 	}
 
-	if ratio != "" {
-		metadata["ratio"] = ratio
-	}
-	if resolution != "" {
-		metadata["resolution"] = resolution
-	}
-	if len(metadata) > 0 {
-		bodyMap["metadata"] = metadata
+	duration := stringifyBodyValue(bodyMap["duration"])
+	if duration == "" {
+		duration = stringifyBodyValue(bodyMap["seconds"])
 	}
 
+	size := stringifyBodyValue(bodyMap["size"])
+	if size == "" {
+		size = seedanceSizeFromAspectRatioAndResolution(ratio, resolution)
+	}
+
+	if duration != "" {
+		bodyMap["duration"] = soraDurationBodyValue(duration)
+	} else {
+		delete(bodyMap, "duration")
+	}
+	if size != "" {
+		bodyMap["size"] = size
+	}
 	if image := firstSeedanceImageValue(bodyMap); image != "" {
-		bodyMap["image"] = image
+		bodyMap["image_url"] = image
 	}
-	bodyMap["model"] = upstreamModel
-	bodyMap["seconds"] = seconds
 
-	delete(bodyMap, "duration")
-	delete(bodyMap, "size")
+	bodyMap["model"] = upstreamModel
+
+	delete(bodyMap, "seconds")
 	delete(bodyMap, "quality")
 	delete(bodyMap, "resolution_name")
 	delete(bodyMap, "video_config")
-	delete(bodyMap, "image_url")
+	delete(bodyMap, "image")
 	delete(bodyMap, "image_urls")
 	delete(bodyMap, "images")
 	delete(bodyMap, "input_reference")
@@ -620,6 +665,7 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "async")
 	delete(bodyMap, "aspect_ratio")
 	delete(bodyMap, "resolution")
+	delete(bodyMap, "metadata")
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
@@ -1345,8 +1391,29 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		upstreamID = dResp.ID
 	}
 	if upstreamID == "" {
-		taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
-		return
+		if parsedTask, parseErr := a.ParseTaskResult(responseBody); parseErr == nil && parsedTask != nil && parsedTask.Status == model.TaskStatusSuccess && parsedTask.Url != "" {
+			if dResp.Object == "" {
+				dResp.Object = "video"
+			}
+			if dResp.Status == "" {
+				dResp.Status = "completed"
+			}
+			if dResp.URL == "" {
+				dResp.URL = parsedTask.Url
+			}
+			if dResp.VideoURL == "" {
+				dResp.VideoURL = dResp.URL
+			}
+			if dResp.Progress == 0 {
+				dResp.Progress = 100
+			}
+			if dResp.CreatedAt == 0 {
+				dResp.CreatedAt = parsedTask.CreatedAt
+			}
+		} else {
+			taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
+			return
+		}
 	}
 	if dResp.URL == "" {
 		dResp.URL = extractVideoURL(responseBody)
@@ -1411,7 +1478,12 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		CompletedAt: resTask.CompletedAt,
 	}
 
-	switch strings.ToLower(strings.TrimSpace(resTask.Status)) {
+	status := strings.ToLower(strings.TrimSpace(resTask.Status))
+	if status == "" && resTask.URL != "" {
+		status = "completed"
+	}
+
+	switch status {
 	case "queued", "pending":
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress", "running":
