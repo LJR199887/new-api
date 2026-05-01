@@ -1,0 +1,345 @@
+# Seedance 异步视频 API 下游调用文档
+
+本文档面向下游系统调用 `Seedance` 视频模型，统一使用异步任务模式。
+
+适用模型：
+- `seedance-2.0`
+- `seedance-2.0-fast`
+
+## 1. 接入信息
+
+Base URL：
+```text
+https://你的域名
+```
+
+认证：
+```http
+Authorization: Bearer sk-你的令牌
+Content-Type: application/json
+```
+
+接口：
+| 用途 | 方法与路径 |
+| --- | --- |
+| 提交异步视频任务 | `POST /v1/video/async-generations` |
+| 查询异步视频任务 | `GET /v1/video/async-generations/{task_id}` |
+
+调用流程：提交任务 -> 获取 `task_id` -> 每 `3-5` 秒轮询 -> `completed` 后读取 `url`。
+
+## 2. 支持能力
+
+### 2.1 文生视频
+
+不传 `image_url` 即可。
+
+### 2.2 图生视频
+
+传入顶层 `image_url` 即可。
+
+说明：
+- `image_url` 必须是公网可访问的图片地址，建议使用 HTTPS。
+- 当前推荐只传一张参考图。
+
+### 2.3 首尾帧模式
+
+可通过顶层 `start_image_url` 和 `end_image_url` 提交首尾帧过渡任务。
+
+说明：
+- `start_image_url` 表示起始画面。
+- `end_image_url` 表示结束画面。
+- 两张图片都建议使用公网可访问的 HTTPS 地址。
+
+### 2.4 多图参考模式
+
+可通过顶层 `images` 数组提交多张参考图。
+
+说明：
+- `images` 为字符串数组，每项为一张参考图 URL。
+- 最多支持 `4` 张参考图。
+- 建议图片地址稳定可访问。
+- 推荐从 `2` 张参考图开始接入和验证。
+
+### 2.5 模型参数范围
+
+`seedance-2.0`：
+- 时长：`4-15` 秒
+- 比例：`9:16`、`16:9`、`1:1`
+- 分辨率：`480p`、`720p`、`1080p`
+
+`seedance-2.0-fast`：
+- 时长：`4-15` 秒
+- 比例：`9:16`、`16:9`、`1:1`
+- 分辨率：`480p`、`720p`
+
+## 3. 提交参数
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | `seedance-2.0` 或 `seedance-2.0-fast` |
+| `prompt` | string | 是 | 视频生成提示词，不能为空 |
+| `duration` | number | 否 | 视频时长，推荐 `4-15` |
+| `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`720x720` |
+| `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
+| `resolution` | string | 否 | 输出分辨率，如 `720p` |
+| `image_url` | string | 否 | 图生视频参考图 URL；不传即为文生视频 |
+| `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
+| `end_image_url` | string | 否 | 首尾帧模式的结束图 URL |
+| `images` | string[] | 否 | 多图参考模式的图片 URL 数组，最多 `4` 张 |
+| `async` | boolean | 否 | 建议固定传 `true` |
+
+说明：
+- 下游调用时建议显式传 `duration`、`aspect_ratio`、`resolution`，不要依赖默认值。
+- 如果你已经能明确给出尺寸，也可以直接传 `size`。
+- 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的尺寸。
+- `seedance-2.0-fast` 不建议传 `1080p`。
+- `prompt` 建议避免违规、侵权、涉政、涉黄等高风险内容。
+
+## 4. 文生视频示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0",
+  "prompt": "一个霓虹夜景街头的时尚模特向前走来，镜头轻微跟拍，人物动作自然，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "9:16",
+  "resolution": "720p",
+  "async": true
+}
+```
+
+## 5. 图生视频示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "让图片中的主体自然动起来，镜头平稳推进，光影真实，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
+  "image_url": "https://example.com/source.png",
+  "async": true
+}
+```
+
+## 6. 首尾帧示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "图一自然过渡到图二，镜头平稳，动作自然，无文字，无logo",
+  "duration": 4,
+  "size": "720x1280",
+  "start_image_url": "https://example.com/start.png",
+  "end_image_url": "https://example.com/end.png",
+  "async": true
+}
+```
+
+## 7. 多图参考示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "结合两张参考图生成一段自然过渡的视频，主体动作自然，镜头平稳，无文字，无logo",
+  "duration": 4,
+  "size": "1280x720",
+  "images": [
+    "https://example.com/image-1.png",
+    "https://example.com/image-2.png"
+  ],
+  "async": true
+}
+```
+
+## 8. 提交响应
+
+提交成功后会先返回异步任务信息：
+
+```json
+{
+  "id": "task_xxx",
+  "task_id": "task_xxx",
+  "object": "video",
+  "model": "seedance-2.0",
+  "status": "queued",
+  "progress": 10,
+  "created_at": 1777618428
+}
+```
+
+下游必须保存 `task_id`，后续通过它查询任务结果。
+
+## 9. 查询任务
+
+处理中：
+
+```json
+{
+  "id": "task_xxx",
+  "task_id": "task_xxx",
+  "object": "video",
+  "model": "seedance-2.0",
+  "status": "queued",
+  "progress": 10,
+  "created_at": 1777618428
+}
+```
+
+完成：
+
+```json
+{
+  "id": "task_xxx",
+  "task_id": "task_xxx",
+  "object": "video",
+  "model": "seedance-2.0",
+  "status": "completed",
+  "url": "https://example.com/result.mp4",
+  "progress": 100,
+  "created_at": 1777618428,
+  "completed_at": 1777618510
+}
+```
+
+失败：
+
+```json
+{
+  "id": "task_xxx",
+  "task_id": "task_xxx",
+  "object": "video",
+  "model": "seedance-2.0",
+  "status": "failed",
+  "progress": 100,
+  "created_at": 1777618428,
+  "completed_at": 1777618450,
+  "error": {
+    "message": "video generation failed",
+    "code": "bad_response"
+  }
+}
+```
+
+补充说明：
+- 部分任务结果里还可能附带 `seconds`、`size` 字段。
+- 生成成功时优先读取顶层 `url`。
+
+## 10. 状态说明
+
+| status | 处理方式 |
+| --- | --- |
+| `submitted` | 继续轮询 |
+| `queued` | 继续轮询 |
+| `processing` | 继续轮询 |
+| `in_progress` | 继续轮询 |
+| `completed` | 读取 `url` |
+| `failed` | 展示 `error.message` |
+
+建议：
+- 轮询间隔使用 `3-5` 秒。
+- 最长轮询 `5-10` 分钟。
+- 若长时间停留在 `queued`，通常表示上游仍在排队，不一定是请求失败。
+
+## 11. cURL 示例
+
+提交任务：
+
+```bash
+curl -X POST "https://你的域名/v1/video/async-generations" \
+  -H "Authorization: Bearer sk-你的令牌" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedance-2.0",
+    "prompt": "一个卡通小狐狸在森林里奔跑，镜头跟随，动作流畅，无文字，无logo",
+    "duration": 4,
+    "aspect_ratio": "9:16",
+    "resolution": "720p",
+    "async": true
+  }'
+```
+
+查询任务：
+
+```bash
+curl "https://你的域名/v1/video/async-generations/task_xxx" \
+  -H "Authorization: Bearer sk-你的令牌"
+```
+
+## 12. JS 调用示例
+
+```js
+async function createSeedanceVideo() {
+  const baseUrl = 'https://你的域名';
+  const apiKey = 'sk-你的令牌';
+
+  const submitRes = await fetch(`${baseUrl}/v1/video/async-generations`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'seedance-2.0',
+      prompt: '一个小机器人在海边散步，镜头缓慢推进，无文字，无logo',
+      duration: 4,
+      aspect_ratio: '16:9',
+      resolution: '720p',
+      async: true,
+    }),
+  });
+
+  if (!submitRes.ok) {
+    throw new Error(`submit failed: ${submitRes.status}`);
+  }
+
+  const submitData = await submitRes.json();
+  const taskId = submitData.task_id;
+  if (!taskId) {
+    throw new Error('missing task_id');
+  }
+
+  for (let i = 0; i < 120; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    const pollRes = await fetch(
+      `${baseUrl}/v1/video/async-generations/${encodeURIComponent(taskId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      },
+    );
+
+    if (!pollRes.ok) {
+      throw new Error(`poll failed: ${pollRes.status}`);
+    }
+
+    const pollData = await pollRes.json();
+
+    if (pollData.status === 'completed' && pollData.url) {
+      return pollData.url;
+    }
+
+    if (pollData.status === 'failed') {
+      throw new Error(pollData.error?.message || 'video generation failed');
+    }
+  }
+
+  throw new Error('poll timeout');
+}
+```
+
+## 13. 推荐接入方式
+
+- Web/H5 场景建议先提交任务，再在前端或服务端轮询结果。
+- 如果需要更稳定的任务管理，建议下游自行落库保存 `task_id`、`status`、`url`。
+- 如果同时支持文生、单图、首尾帧、多图，建议统一使用同一个接口，通过不同字段组合区分模式。
