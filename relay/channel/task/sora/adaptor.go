@@ -554,6 +554,66 @@ func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
 	return ""
 }
 
+func normalizeSeedanceVideoReferenceEntry(value any) map[string]any {
+	switch v := value.(type) {
+	case string:
+		if url := strings.TrimSpace(v); url != "" {
+			return map[string]any{"url": url}
+		}
+	case map[string]any:
+		url := stringifyBodyValue(v["url"])
+		if url == "" {
+			return nil
+		}
+		entry := make(map[string]any, len(v))
+		for key, raw := range v {
+			entry[key] = raw
+		}
+		entry["url"] = url
+		return entry
+	}
+	return nil
+}
+
+func collectSeedanceVideoReferences(bodyMap map[string]interface{}) []map[string]any {
+	refs := make([]map[string]any, 0, 3)
+	appendRef := func(value any) {
+		if ref := normalizeSeedanceVideoReferenceEntry(value); ref != nil {
+			refs = append(refs, ref)
+		}
+	}
+
+	switch values := bodyMap["video_reference"].(type) {
+	case []any:
+		for _, value := range values {
+			appendRef(value)
+		}
+	case []string:
+		for _, value := range values {
+			appendRef(value)
+		}
+	default:
+		if bodyMap["video_reference"] != nil {
+			appendRef(bodyMap["video_reference"])
+		}
+	}
+	if len(refs) > 0 {
+		return refs
+	}
+
+	switch values := bodyMap["video_urls"].(type) {
+	case []any:
+		for _, value := range values {
+			appendRef(value)
+		}
+	case []string:
+		for _, value := range values {
+			appendRef(value)
+		}
+	}
+	return refs
+}
+
 func seedanceBaseDimensionFromResolution(value string) int {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
@@ -650,6 +710,9 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	if image := firstSeedanceImageValue(bodyMap); image != "" {
 		bodyMap["image_url"] = image
 	}
+	if videoReferences := collectSeedanceVideoReferences(bodyMap); len(videoReferences) > 0 {
+		bodyMap["video_reference"] = videoReferences
+	}
 
 	bodyMap["model"] = upstreamModel
 
@@ -660,6 +723,7 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "image")
 	delete(bodyMap, "image_urls")
 	delete(bodyMap, "images")
+	delete(bodyMap, "video_urls")
 	delete(bodyMap, "input_reference")
 	delete(bodyMap, "reference_mode")
 	delete(bodyMap, "async")
