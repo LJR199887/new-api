@@ -109,7 +109,7 @@ func isVideoGenerationsTaskModel(model string) bool {
 		strings.HasPrefix(model, "sora-2") ||
 		strings.HasPrefix(model, "sora2") ||
 		model == "kling-v3" ||
-		strings.HasPrefix(model, "seedance-2.0")
+		isSeedanceVideoModel(model)
 }
 
 func usesVideoGenerationsTaskEndpoint(path string, modelNames ...string) bool {
@@ -502,7 +502,8 @@ func isKlingV3VideoModel(upstreamModel string) bool {
 
 func isSeedanceVideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return strings.HasPrefix(upstreamModel, "seedance-2.0")
+	return strings.HasPrefix(upstreamModel, "seedance-2.0") ||
+		strings.HasPrefix(upstreamModel, "video-2.0")
 }
 
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {

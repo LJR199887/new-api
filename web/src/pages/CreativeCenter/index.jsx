@@ -82,10 +82,14 @@ const ADOBE_VIDEO_MODELS = new Set([
   'kling-v3',
   'seedance-2.0',
   'seedance-2.0-fast',
+  'video-2.0',
+  'video-2.0-fast',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',
   'seedance-2.0-fast',
+  'video-2.0',
+  'video-2.0-fast',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
@@ -102,6 +106,8 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'kling-v3': 2,
   'seedance-2.0': 1,
   'seedance-2.0-fast': 1,
+  'video-2.0': 1,
+  'video-2.0-fast': 1,
 };
 
 const GROK_IMAGE_SIZE_OPTIONS = [
@@ -239,12 +245,12 @@ const SEEDANCE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '1080p', value: '1080p' },
 ];
 const getAdobeVideoResolutionOptions = (modelName) => {
-  if (modelName === 'seedance-2.0-fast') {
+  if (modelName === 'seedance-2.0-fast' || modelName === 'video-2.0-fast') {
     return SEEDANCE_VIDEO_RESOLUTION_OPTIONS.filter(
       (option) => option.value !== '1080p',
     );
   }
-  if (modelName === 'seedance-2.0') {
+  if (modelName === 'seedance-2.0' || modelName === 'video-2.0') {
     return SEEDANCE_VIDEO_RESOLUTION_OPTIONS;
   }
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;

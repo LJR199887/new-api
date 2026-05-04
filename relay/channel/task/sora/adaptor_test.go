@@ -29,9 +29,27 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",
+		"video-2.0",
+		"video-2.0-fast",
 	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
+		}
+	}
+}
+
+func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
+	for _, modelName := range []string{
+		"seedance-2.0",
+		"seedance-2.0-fast",
+		"video-2.0",
+		"video-2.0-fast",
+	} {
+		if !isVideoGenerationsTaskModel(modelName) {
+			t.Fatalf("expected %s to use video generations task endpoint", modelName)
+		}
+		if !isSeedanceVideoModel(modelName) {
+			t.Fatalf("expected %s to be treated as a Seedance video model", modelName)
 		}
 	}
 }

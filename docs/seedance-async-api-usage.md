@@ -5,6 +5,13 @@
 适用模型：
 - `seedance-2.0`
 - `seedance-2.0-fast`
+- `video-2.0`
+- `video-2.0-fast`
+
+说明：
+- `video-2.0` 等价于 `seedance-2.0`
+- `video-2.0-fast` 等价于 `seedance-2.0-fast`
+- 如无特殊要求，建议优先使用上游推荐的新标准模型名：`video-2.0`、`video-2.0-fast`
 
 ## 1. 接入信息
 
@@ -43,7 +50,7 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `seedance-2.0` 或 `seedance-2.0-fast` |
+| `model` | string | 是 | `seedance-2.0`、`seedance-2.0-fast`、`video-2.0` 或 `video-2.0-fast` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空 |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`720x720` |
@@ -64,6 +71,7 @@ Content-Type: application/json
 - 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的 `720p` 尺寸。
 - 多图参考最多上传 `4` 张图片。
 - 上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
+- 视频参考模式下，单个参考视频的分辨率必须在 `720px` 到 `2160px` 之间，否则上游会返回“视频分辨率不支持”错误。
 - `prompt` 建议避免违规、侵权、涉政、涉黄等高风险内容。
 
 ## 4. 文生视频示例
@@ -184,7 +192,33 @@ Content-Type: application/json
 }
 ```
 
-## 11. 提交响应
+## 11. 多图 + 多视频混合参考示例
+
+请求体：
+
+```json
+{
+  "model": "seedance-2.0-fast",
+  "prompt": "龟兔赛跑",
+  "duration": 15,
+  "size": "720x1280",
+  "image_urls": [
+    "https://example.com/image-1.png",
+    "https://example.com/image-2.png"
+  ],
+  "video_reference": [
+    {
+      "url": "https://example.com/video-1.mp4"
+    },
+    {
+      "url": "https://example.com/video-2.mp4"
+    }
+  ],
+  "async": true
+}
+```
+
+## 12. 提交响应
 
 提交成功后会先返回异步任务信息：
 
@@ -202,7 +236,7 @@ Content-Type: application/json
 
 下游必须保存 `task_id`，后续通过它查询任务结果。
 
-## 12. 查询任务
+## 13. 查询任务
 
 处理中：
 
@@ -257,7 +291,7 @@ Content-Type: application/json
 - 部分任务结果里还可能附带 `seconds`、`size` 字段。
 - 生成成功时优先读取顶层 `url`。
 
-## 13. 状态说明
+## 14. 状态说明
 
 | status | 处理方式 |
 | --- | --- |
@@ -273,7 +307,7 @@ Content-Type: application/json
 - 最长轮询 `5-10` 分钟。
 - 若长时间停留在 `queued`，通常表示上游仍在排队，不一定是请求失败。
 
-## 14. cURL 示例
+## 15. cURL 示例
 
 提交任务：
 
@@ -298,7 +332,7 @@ curl "https://你的域名/v1/video/async-generations/task_xxx" \
   -H "Authorization: Bearer sk-你的令牌"
 ```
 
-## 15. JS 调用示例
+## 16. JS 调用示例
 
 ```js
 async function createSeedanceVideo() {
@@ -362,7 +396,7 @@ async function createSeedanceVideo() {
 }
 ```
 
-## 16. 推荐接入方式
+## 17. 推荐接入方式
 
 - Web/H5 场景建议先提交任务，再在前端或服务端轮询结果。
 - 如果需要更稳定的任务管理，建议下游自行落库保存 `task_id`、`status`、`url`。
