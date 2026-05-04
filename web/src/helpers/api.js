@@ -304,6 +304,8 @@ export const buildApiPayload = (
     'kling-v3',
     'seedance-2.0',
     'seedance-2.0-fast',
+    'video-2.0',
+    'video-2.0-fast',
   ]);
   const processedMessages = messages
     .filter(isValidMessage)
@@ -354,7 +356,10 @@ export const buildApiPayload = (
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
   const isSeedanceVideoModel =
-    inputs.model === 'seedance-2.0' || inputs.model === 'seedance-2.0-fast';
+    inputs.model === 'seedance-2.0' ||
+    inputs.model === 'seedance-2.0-fast' ||
+    inputs.model === 'video-2.0' ||
+    inputs.model === 'video-2.0-fast';
   const isVideoModel =
     typeof inputs.model === 'string' &&
     (inputs.model.includes('video') || isAdobeVideoModel);

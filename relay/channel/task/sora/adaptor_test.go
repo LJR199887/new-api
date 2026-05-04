@@ -29,9 +29,27 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",
+		"video-2.0",
+		"video-2.0-fast",
 	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
+		}
+	}
+}
+
+func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
+	for _, modelName := range []string{
+		"seedance-2.0",
+		"seedance-2.0-fast",
+		"video-2.0",
+		"video-2.0-fast",
+	} {
+		if !isVideoGenerationsTaskModel(modelName) {
+			t.Fatalf("expected %s to use video generations task endpoint", modelName)
+		}
+		if !isSeedanceVideoModel(modelName) {
+			t.Fatalf("expected %s to be treated as a Seedance video model", modelName)
 		}
 	}
 }
@@ -409,6 +427,39 @@ func TestNormalizeSeedanceVideoRequestConvertsVideoURLsToVideoReference(t *testi
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestConvertsImagesToImageURLs(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "seedance-2.0-fast",
+		"duration":     float64(15),
+		"aspect_ratio": "16:9",
+		"resolution":   "720p",
+		"images": []interface{}{
+			"https://example.com/ref-1.jpg",
+			"https://example.com/ref-2.jpg",
+			"https://example.com/ref-3.jpg",
+		},
+	}
+
+	normalizeSeedanceVideoRequest(body, "seedance-2.0-fast")
+
+	imageURLs, ok := body["image_urls"].([]string)
+	if !ok {
+		t.Fatalf("expected image_urls to be populated, got %#v", body["image_urls"])
+	}
+	if len(imageURLs) != 3 {
+		t.Fatalf("expected 3 image urls, got %#v", imageURLs)
+	}
+	if imageURLs[0] != "https://example.com/ref-1.jpg" || imageURLs[2] != "https://example.com/ref-3.jpg" {
+		t.Fatalf("unexpected image_urls %#v", imageURLs)
+	}
+	if _, exists := body["images"]; exists {
+		t.Fatalf("expected images to be removed after normalization")
+	}
+	if _, exists := body["image_url"]; exists {
+		t.Fatalf("expected single image_url to be omitted for multi-image payload")
+	}
+}
+
 func TestBuildRequestBodyNormalizesVeoVideoGenerationPayload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -568,6 +619,63 @@ func TestBuildRequestBodyNormalizesSeedanceVideoReferencePayload(t *testing.T) {
 	}
 	if _, exists := payload["video_urls"]; exists {
 		t.Fatalf("expected video_urls to be removed from upstream payload")
+	}
+}
+
+func TestBuildRequestBodyNormalizesSeedanceMultiImagePayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "seedance-2.0-fast",
+		"prompt": "Use multiple references to create a short fashion ad",
+		"duration": 4,
+		"size": "1280x720",
+		"images": [
+			"https://example.com/ref-1.jpg",
+			"https://example.com/ref-2.jpg",
+			"https://example.com/ref-3.jpg"
+		]
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.0-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	imageURLs, ok := payload["image_urls"].([]any)
+	if !ok {
+		t.Fatalf("expected image_urls array, got %#v", payload["image_urls"])
+	}
+	if len(imageURLs) != 3 {
+		t.Fatalf("expected 3 forwarded image urls, got %#v", imageURLs)
+	}
+	if imageURLs[0] != "https://example.com/ref-1.jpg" || imageURLs[2] != "https://example.com/ref-3.jpg" {
+		t.Fatalf("unexpected image_urls %#v", imageURLs)
+	}
+	if _, exists := payload["images"]; exists {
+		t.Fatalf("expected images to be removed from upstream payload")
+	}
+	if _, exists := payload["image_url"]; exists {
+		t.Fatalf("expected single image_url to be omitted for multi-image payload")
 	}
 }
 

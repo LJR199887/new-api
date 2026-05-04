@@ -85,6 +85,8 @@ const SettingsPanel = ({
     'kling-v3',
     'seedance-2.0',
     'seedance-2.0-fast',
+    'video-2.0',
+    'video-2.0-fast',
   ]);
   const isGrokImagineImageModel =
     grokImagineImageModels.has(inputs.model) ||
@@ -99,7 +101,10 @@ const SettingsPanel = ({
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
   const isSeedanceVideoModel =
-    inputs.model === 'seedance-2.0' || inputs.model === 'seedance-2.0-fast';
+    inputs.model === 'seedance-2.0' ||
+    inputs.model === 'seedance-2.0-fast' ||
+    inputs.model === 'video-2.0' ||
+    inputs.model === 'video-2.0-fast';
   const isVideoModel =
     typeof inputs.model === 'string' &&
     (inputs.model.includes('video') || isAdobeVideoModel);
@@ -229,7 +234,12 @@ const SettingsPanel = ({
     if (modelName === 'kling-v3') {
       return adobeKlingDurationOptions;
     }
-    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+    if (
+      modelName === 'seedance-2.0' ||
+      modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.0' ||
+      modelName === 'video-2.0-fast'
+    ) {
       return seedanceVideoDurationOptions;
     }
     return adobeVeoDurationOptions;
@@ -240,7 +250,12 @@ const SettingsPanel = ({
         (option) => option.value === '16:9',
       );
     }
-    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+    if (
+      modelName === 'seedance-2.0' ||
+      modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.0' ||
+      modelName === 'video-2.0-fast'
+    ) {
       return seedanceVideoAspectRatioOptions;
     }
     return adobeVideoAspectRatioOptions;
@@ -248,7 +263,9 @@ const SettingsPanel = ({
   const getAdobeVideoDefaultDuration = (modelName) =>
     modelName === 'kling-v3' ||
     modelName === 'seedance-2.0' ||
-    modelName === 'seedance-2.0-fast'
+    modelName === 'seedance-2.0-fast' ||
+    modelName === 'video-2.0' ||
+    modelName === 'video-2.0-fast'
       ? '5'
       : getAdobeVideoDurationOptions(modelName)[0]?.value || '4';
   const getAdobeVideoDefaultAspectRatio = (modelName) =>
@@ -263,18 +280,23 @@ const SettingsPanel = ({
     { label: '1080p', value: '1080p' },
   ];
   const getAdobeVideoResolutionOptions = (modelName) => {
-    if (modelName === 'seedance-2.0-fast') {
+    if (modelName === 'seedance-2.0-fast' || modelName === 'video-2.0-fast') {
       return seedanceVideoResolutionOptions.filter(
         (option) => option.value !== '1080p',
       );
     }
-    if (modelName === 'seedance-2.0') {
+    if (modelName === 'seedance-2.0' || modelName === 'video-2.0') {
       return seedanceVideoResolutionOptions;
     }
     return adobeVideoResolutionOptions;
   };
   const getAdobeVideoDefaultResolution = (modelName) => {
-    if (modelName === 'seedance-2.0' || modelName === 'seedance-2.0-fast') {
+    if (
+      modelName === 'seedance-2.0' ||
+      modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.0' ||
+      modelName === 'video-2.0-fast'
+    ) {
       return '720p';
     }
     return '1080p';
