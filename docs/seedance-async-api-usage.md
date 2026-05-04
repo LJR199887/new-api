@@ -49,12 +49,13 @@ Content-Type: application/json
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`720x720` |
 | `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
 | `resolution` | string | 否 | 输出分辨率，当前仅支持 `720p` |
-| `image_url` | string | 否 | 图生视频参考图 URL；不传即为文生视频 |
+| `image_url` | string | 否 | 单图参考模式使用的图片 URL；不传即为文生视频 |
+| `image_urls` | string[] | 否 | 多图参考模式使用的图片 URL 数组，最多 `4` 张 |
 | `video_url` | string | 否 | 单视频参考模式使用的视频素材 URL |
 | `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "..." }]`，最多 `3` 个 |
 | `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
 | `end_image_url` | string | 否 | 首尾帧模式的结束图 URL |
-| `images` | string[] | 否 | 多图参考模式的图片 URL 数组，最多 `4` 张 |
+| `images` | string[] | 否 | `image_urls` 的兼容别名，最多 `4` 张 |
 | `async` | boolean | 否 | 建议固定传 `true` |
 
 说明：
@@ -122,7 +123,7 @@ Content-Type: application/json
   "prompt": "结合两张参考图生成一段自然过渡的视频，主体动作自然，镜头平稳，无文字，无logo",
   "duration": 4,
   "size": "1280x720",
-  "images": [
+  "image_urls": [
     "https://example.com/image-1.png",
     "https://example.com/image-2.png"
   ],

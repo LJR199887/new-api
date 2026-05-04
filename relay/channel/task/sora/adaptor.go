@@ -529,27 +529,43 @@ func seedanceAspectRatioFromSize(value string) string {
 	}
 }
 
-func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
-	for _, key := range []string{"image", "image_url", "input_reference"} {
-		if value := stringifyBodyValue(bodyMap[key]); value != "" {
-			return value
+func collectSeedanceImageValues(bodyMap map[string]interface{}) []string {
+	images := make([]string, 0, 4)
+	appendImage := func(value any) {
+		if candidate := stringifyBodyValue(value); candidate != "" {
+			images = append(images, candidate)
 		}
 	}
-	for _, key := range []string{"images", "image_urls"} {
+
+	for _, key := range []string{"image_urls", "images"} {
 		switch values := bodyMap[key].(type) {
 		case []interface{}:
 			for _, value := range values {
-				if candidate := stringifyBodyValue(value); candidate != "" {
-					return candidate
-				}
+				appendImage(value)
 			}
 		case []string:
 			for _, value := range values {
-				if candidate := strings.TrimSpace(value); candidate != "" {
-					return candidate
-				}
+				appendImage(value)
 			}
 		}
+		if len(images) > 0 {
+			return images
+		}
+	}
+
+	for _, key := range []string{"image", "image_url", "input_reference"} {
+		if value := stringifyBodyValue(bodyMap[key]); value != "" {
+			images = append(images, value)
+			break
+		}
+	}
+
+	return images
+}
+
+func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
+	if images := collectSeedanceImageValues(bodyMap); len(images) > 0 {
+		return images[0]
 	}
 	return ""
 }
@@ -707,8 +723,14 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	if size != "" {
 		bodyMap["size"] = size
 	}
-	if image := firstSeedanceImageValue(bodyMap); image != "" {
-		bodyMap["image_url"] = image
+	if images := collectSeedanceImageValues(bodyMap); len(images) > 0 {
+		if len(images) > 1 {
+			bodyMap["image_urls"] = images
+			delete(bodyMap, "image_url")
+		} else {
+			bodyMap["image_url"] = images[0]
+			delete(bodyMap, "image_urls")
+		}
 	}
 	if videoReferences := collectSeedanceVideoReferences(bodyMap); len(videoReferences) > 0 {
 		bodyMap["video_reference"] = videoReferences
@@ -721,7 +743,6 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "resolution_name")
 	delete(bodyMap, "video_config")
 	delete(bodyMap, "image")
-	delete(bodyMap, "image_urls")
 	delete(bodyMap, "images")
 	delete(bodyMap, "video_urls")
 	delete(bodyMap, "input_reference")
