@@ -166,8 +166,14 @@ func initConstantEnv() {
 		}
 		constant.TaskPricePatches = taskPricePatches
 	}
-	if !StringsContains(constant.TaskPricePatches, "kling-v3") {
-		constant.TaskPricePatches = append(constant.TaskPricePatches, "kling-v3")
+	for _, modelName := range []string{
+		"kling-v3",
+		"seedance-2.0",
+		"seedance-2.0-fast",
+		"video-2.0",
+		"video-2.0-fast",
+	} {
+		appendTaskPricePatchDefault(modelName)
 	}
 
 	// Initialize trusted redirect domains for URL validation
@@ -182,4 +188,10 @@ func initConstantEnv() {
 		}
 	}
 	constant.TrustedRedirectDomains = trustedDomains
+}
+
+func appendTaskPricePatchDefault(modelName string) {
+	if !StringsContains(constant.TaskPricePatches, modelName) {
+		constant.TaskPricePatches = append(constant.TaskPricePatches, modelName)
+	}
 }
