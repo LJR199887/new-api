@@ -3,15 +3,8 @@
 本文档面向下游系统调用 `Seedance` 视频模型，统一使用异步任务模式。
 
 适用模型：
-- `seedance-2.0`
-- `seedance-2.0-fast`
 - `video-2.0`
 - `video-2.0-fast`
-
-说明：
-- `video-2.0` 等价于 `seedance-2.0`
-- `video-2.0-fast` 等价于 `seedance-2.0-fast`
-- 如无特殊要求，建议优先使用上游推荐的新标准模型名：`video-2.0`、`video-2.0-fast`
 
 ## 1. 接入信息
 
@@ -36,12 +29,12 @@ Content-Type: application/json
 
 ## 2. 模型参数范围
 
-`seedance-2.0`：
+`video-2.0`：
 - 时长：`4-15` 秒
 - 比例：`9:16`、`16:9`、`1:1`
 - 分辨率：`720p`
 
-`seedance-2.0-fast`：
+`video-2.0-fast`：
 - 时长：`4-15` 秒
 - 比例：`9:16`、`16:9`、`1:1`
 - 分辨率：`720p`
@@ -50,7 +43,7 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `seedance-2.0`、`seedance-2.0-fast`、`video-2.0` 或 `video-2.0-fast` |
+| `model` | string | 是 | `video-2.0` 或 `video-2.0-fast` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空 |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`720x720` |
@@ -80,7 +73,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0",
+  "model": "video-2.0",
   "prompt": "一个霓虹夜景街头的时尚模特向前走来，镜头轻微跟拍，人物动作自然，无文字，无logo",
   "duration": 4,
   "aspect_ratio": "9:16",
@@ -95,7 +88,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "让图片中的主体自然动起来，镜头平稳推进，光影真实，无文字，无logo",
   "duration": 4,
   "aspect_ratio": "16:9",
@@ -111,7 +104,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "图一自然过渡到图二，镜头平稳，动作自然，无文字，无logo",
   "duration": 4,
   "size": "720x1280",
@@ -127,7 +120,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "结合两张参考图生成一段自然过渡的视频，主体动作自然，镜头平稳，无文字，无logo",
   "duration": 4,
   "size": "1280x720",
@@ -145,7 +138,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "广告视频",
   "duration": 4,
   "size": "720x1280",
@@ -160,7 +153,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "广告视频",
   "duration": 8,
   "size": "1280x720",
@@ -182,7 +175,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "广告视频",
   "duration": 4,
   "size": "720x1280",
@@ -198,7 +191,7 @@ Content-Type: application/json
 
 ```json
 {
-  "model": "seedance-2.0-fast",
+  "model": "video-2.0-fast",
   "prompt": "龟兔赛跑",
   "duration": 15,
   "size": "720x1280",
@@ -227,7 +220,7 @@ Content-Type: application/json
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "video",
-  "model": "seedance-2.0",
+  "model": "video-2.0",
   "status": "queued",
   "progress": 10,
   "created_at": 1777618428
@@ -245,7 +238,7 @@ Content-Type: application/json
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "video",
-  "model": "seedance-2.0",
+  "model": "video-2.0",
   "status": "queued",
   "progress": 10,
   "created_at": 1777618428
@@ -259,7 +252,7 @@ Content-Type: application/json
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "video",
-  "model": "seedance-2.0",
+  "model": "video-2.0",
   "status": "completed",
   "url": "https://example.com/result.mp4",
   "progress": 100,
@@ -275,7 +268,7 @@ Content-Type: application/json
   "id": "task_xxx",
   "task_id": "task_xxx",
   "object": "video",
-  "model": "seedance-2.0",
+  "model": "video-2.0",
   "status": "failed",
   "progress": 100,
   "created_at": 1777618428,
@@ -316,7 +309,7 @@ curl -X POST "https://你的域名/v1/video/async-generations" \
   -H "Authorization: Bearer sk-你的令牌" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "seedance-2.0",
+    "model": "video-2.0",
     "prompt": "一个卡通小狐狸在森林里奔跑，镜头跟随，动作流畅，无文字，无logo",
     "duration": 4,
     "aspect_ratio": "9:16",
@@ -346,7 +339,7 @@ async function createSeedanceVideo() {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'seedance-2.0',
+      model: 'video-2.0',
       prompt: '一个小机器人在海边散步，镜头缓慢推进，无文字，无logo',
       duration: 4,
       aspect_ratio: '16:9',

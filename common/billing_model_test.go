@@ -3,6 +3,7 @@ package common
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,4 +28,22 @@ func TestFilterOtherRatiosForResolutionOnlyModel(t *testing.T) {
 	})
 
 	assert.Empty(t, filtered)
+}
+
+func TestAppendTaskPricePatchDefault(t *testing.T) {
+	original := constant.TaskPricePatches
+	t.Cleanup(func() {
+		constant.TaskPricePatches = original
+	})
+
+	constant.TaskPricePatches = []string{"kling-v3"}
+	appendTaskPricePatchDefault("video-2.0")
+	appendTaskPricePatchDefault("video-2.0-fast")
+	appendTaskPricePatchDefault("video-2.0")
+
+	assert.ElementsMatch(t, []string{
+		"kling-v3",
+		"video-2.0",
+		"video-2.0-fast",
+	}, constant.TaskPricePatches)
 }
