@@ -571,6 +571,32 @@ func firstSeedanceImageValue(bodyMap map[string]interface{}) string {
 	return ""
 }
 
+func normalizeSeedanceReferenceFrameEntries(value any) []map[string]any {
+	entries := make([]map[string]any, 0, 2)
+	appendEntry := func(raw any) {
+		if entry := normalizeSeedanceVideoReferenceEntry(raw); entry != nil {
+			entries = append(entries, entry)
+		}
+	}
+
+	switch values := value.(type) {
+	case []any:
+		for _, item := range values {
+			appendEntry(item)
+		}
+	case []string:
+		for _, item := range values {
+			appendEntry(item)
+		}
+	default:
+		if value != nil {
+			appendEntry(value)
+		}
+	}
+
+	return entries
+}
+
 func normalizeSeedanceVideoReferenceEntry(value any) map[string]any {
 	switch v := value.(type) {
 	case string:
@@ -733,8 +759,20 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 			delete(bodyMap, "image_urls")
 		}
 	}
+	if startFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["start_frame"]); len(startFrame) > 0 {
+		bodyMap["start_frame"] = startFrame
+	} else if startImageURL := stringifyBodyValue(bodyMap["start_image_url"]); startImageURL != "" {
+		bodyMap["start_frame"] = []map[string]any{{"url": startImageURL}}
+	}
+	if endFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["end_frame"]); len(endFrame) > 0 {
+		bodyMap["end_frame"] = endFrame
+	} else if endImageURL := stringifyBodyValue(bodyMap["end_image_url"]); endImageURL != "" {
+		bodyMap["end_frame"] = []map[string]any{{"url": endImageURL}}
+	}
 	if videoReferences := collectSeedanceVideoReferences(bodyMap); len(videoReferences) > 0 {
 		bodyMap["video_reference"] = videoReferences
+	} else if videoURL := stringifyBodyValue(bodyMap["video_url"]); videoURL != "" {
+		bodyMap["video_reference"] = []map[string]any{{"url": videoURL}}
 	}
 
 	bodyMap["model"] = upstreamModel
@@ -752,6 +790,9 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "aspect_ratio")
 	delete(bodyMap, "resolution")
 	delete(bodyMap, "metadata")
+	delete(bodyMap, "start_image_url")
+	delete(bodyMap, "end_image_url")
+	delete(bodyMap, "video_url")
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
@@ -1574,7 +1615,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress", "running":
 		taskResult.Status = model.TaskStatusInProgress
-	case "completed":
+	case "completed", "succeeded":
 		if resTask.URL == "" {
 			taskResult.Status = model.TaskStatusFailure
 			taskResult.Reason = "video result url is empty"

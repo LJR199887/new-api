@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	projectcommon "github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -424,6 +425,68 @@ func TestNormalizeSeedanceVideoRequestConvertsVideoURLsToVideoReference(t *testi
 	}
 	if _, exists := body["video_urls"]; exists {
 		t.Fatalf("expected video_urls to be removed after normalization")
+	}
+}
+
+func TestNormalizeSeedanceVideoRequestConvertsVideoURLToVideoReference(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.0-fast",
+		"duration":     float64(4),
+		"aspect_ratio": "16:9",
+		"resolution":   "720p",
+		"video_url":    "https://example.com/source.mp4",
+	}
+
+	normalizeSeedanceVideoRequest(body, "video-2.0-fast")
+
+	videoReference, ok := body["video_reference"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected video_reference to be populated, got %#v", body["video_reference"])
+	}
+	if len(videoReference) != 1 {
+		t.Fatalf("expected 1 video reference, got %#v", videoReference)
+	}
+	if got := videoReference[0]["url"]; got != "https://example.com/source.mp4" {
+		t.Fatalf("unexpected video reference %#v", got)
+	}
+	if _, exists := body["video_url"]; exists {
+		t.Fatalf("expected video_url to be removed after normalization")
+	}
+}
+
+func TestNormalizeSeedanceVideoRequestConvertsStartAndEndImageURLs(t *testing.T) {
+	body := map[string]interface{}{
+		"model":           "video-2.0",
+		"duration":        float64(15),
+		"aspect_ratio":    "9:16",
+		"resolution":      "720p",
+		"start_image_url": "https://example.com/start.png",
+		"end_image_url":   "https://example.com/end.png",
+	}
+
+	normalizeSeedanceVideoRequest(body, "video-2.0")
+
+	startFrame, ok := body["start_frame"].([]map[string]any)
+	if !ok || len(startFrame) != 1 {
+		t.Fatalf("expected start_frame to be populated, got %#v", body["start_frame"])
+	}
+	if got := startFrame[0]["url"]; got != "https://example.com/start.png" {
+		t.Fatalf("unexpected start_frame url %#v", got)
+	}
+
+	endFrame, ok := body["end_frame"].([]map[string]any)
+	if !ok || len(endFrame) != 1 {
+		t.Fatalf("expected end_frame to be populated, got %#v", body["end_frame"])
+	}
+	if got := endFrame[0]["url"]; got != "https://example.com/end.png" {
+		t.Fatalf("unexpected end_frame url %#v", got)
+	}
+
+	if _, exists := body["start_image_url"]; exists {
+		t.Fatalf("expected start_image_url to be removed after normalization")
+	}
+	if _, exists := body["end_image_url"]; exists {
+		t.Fatalf("expected end_image_url to be removed after normalization")
 	}
 }
 
@@ -1103,6 +1166,20 @@ func TestParseTaskResultMapsRunningToInProgress(t *testing.T) {
 	}
 	if taskInfo.CreatedAt != 1776350152 {
 		t.Fatalf("expected created timestamp, got %d", taskInfo.CreatedAt)
+	}
+}
+
+func TestParseTaskResultMapsSucceededToSuccess(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	taskInfo, err := adaptor.ParseTaskResult([]byte(`{"status":"succeeded","progress":100.0,"data":[{"url":"https://cdn.example/success.mp4"}]}`))
+	if err != nil {
+		t.Fatalf("ParseTaskResult returned error: %v", err)
+	}
+	if taskInfo.Status != model.TaskStatusSuccess {
+		t.Fatalf("expected success status, got %s", taskInfo.Status)
+	}
+	if taskInfo.Url != "https://cdn.example/success.mp4" {
+		t.Fatalf("expected success url, got %s", taskInfo.Url)
 	}
 }
 
