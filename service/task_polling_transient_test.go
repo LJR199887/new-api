@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 )
 
 func TestIsTransientVideoNotFoundResponse(t *testing.T) {
@@ -142,5 +143,43 @@ func TestIsTransientVideoNotFoundResponseWithZeroGrace(t *testing.T) {
 
 	if got := isTransientVideoNotFoundResponse(http.StatusNotFound, []byte(`{"detail":"Not Found"}`), 100, 101); got {
 		t.Fatalf("isTransientVideoNotFoundResponse() = %v, want false", got)
+	}
+}
+
+func TestIsTransientSeedanceMediaPreparationError(t *testing.T) {
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+
+	now := int64(1000)
+	task := &model.Task{
+		Action:     constant.TaskActionGenerate,
+		SubmitTime: now - 60,
+		Properties: model.Properties{
+			OriginModelName: "video-2.0-fast",
+		},
+	}
+
+	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); !got {
+		t.Fatalf("isTransientSeedanceMediaPreparationError() = %v, want true", got)
+	}
+
+	task.SubmitTime = now - 11*60
+	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientSeedanceMediaPreparationError() after grace = %v, want false", got)
+	}
+
+	task.SubmitTime = now - 60
+	task.Action = constant.TaskActionTextGenerate
+	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientSeedanceMediaPreparationError() text task = %v, want false", got)
+	}
+
+	task.Action = constant.TaskActionGenerate
+	task.Properties.OriginModelName = "veo31-fast"
+	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientSeedanceMediaPreparationError() non-seedance = %v, want false", got)
 	}
 }

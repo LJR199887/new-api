@@ -119,6 +119,40 @@ func isGracefulVideoGenerationNotFoundModel(modelNames ...string) bool {
 	return false
 }
 
+func isSeedanceVideoPollingModel(modelNames ...string) bool {
+	for _, modelName := range modelNames {
+		modelName = strings.ToLower(strings.TrimSpace(modelName))
+		if strings.HasPrefix(modelName, "video-2.0") || strings.HasPrefix(modelName, "seedance-2.0") {
+			return true
+		}
+	}
+	return false
+}
+
+func isTransientSeedanceMediaPreparationError(task *model.Task, message string, now int64) bool {
+	if task == nil || task.Action == constant.TaskActionTextGenerate {
+		return false
+	}
+	if !isSeedanceVideoPollingModel(task.Properties.OriginModelName, task.Properties.UpstreamModelName) {
+		return false
+	}
+	if constant.TaskNotFoundGraceMinutes <= 0 {
+		return false
+	}
+	submitTime := task.SubmitTime
+	if submitTime <= 0 || now <= 0 {
+		return true
+	}
+	if now-submitTime > int64(constant.TaskNotFoundGraceMinutes)*60 {
+		return false
+	}
+
+	message = strings.Trim(strings.ToLower(strings.TrimSpace(message)), "\"' .")
+	return message == "upstream returned error" ||
+		message == "upstream error: do request failed" ||
+		strings.Contains(message, "upstream returned error")
+}
+
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
 // 每次最多处理 100 条，剩余的下个周期继续处理。
 // 使用 per-task CAS (UpdateWithStatus) 防止覆盖被正常轮询已推进的任务。
@@ -497,6 +531,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				}
 
 				// 其他错误认为是任务失败，记录错误信息并更新任务状态
+				if isTransientSeedanceMediaPreparationError(task, openaiError.Message, now) {
+					logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media is still preparing, keep polling, response: %s", taskId, string(responseBody)))
+					return nil
+				}
 				taskResult = relaycommon.FailTaskInfo("upstream returned error")
 			} else {
 				bodyLower := strings.ToLower(string(responseBody))
@@ -525,10 +563,16 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	switch taskResult.Status {
 	case model.TaskStatusSubmitted:
 		task.Progress = taskcommon.ProgressSubmitted
+		task.FailReason = ""
+		task.FinishTime = 0
 	case model.TaskStatusQueued:
 		task.Progress = taskcommon.ProgressQueued
+		task.FailReason = ""
+		task.FinishTime = 0
 	case model.TaskStatusInProgress:
 		task.Progress = taskcommon.ProgressInProgress
+		task.FailReason = ""
+		task.FinishTime = 0
 		if task.StartTime == 0 {
 			task.StartTime = now
 		}
