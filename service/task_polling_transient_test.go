@@ -186,3 +186,31 @@ func TestIsTransientSeedanceMediaPreparationError(t *testing.T) {
 		t.Fatalf("isTransientSeedanceMediaPreparationError() non-seedance = %v, want false", got)
 	}
 }
+
+func TestShouldRetryTransientAsyncVideoFailure(t *testing.T) {
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+
+	now := int64(1000)
+	task := &model.Task{
+		Status:     model.TaskStatusFailure,
+		Action:     constant.TaskActionGenerate,
+		SubmitTime: now - 60,
+		FailReason: "upstream returned error",
+		Properties: model.Properties{
+			OriginModelName: "video-2.0-fast",
+		},
+	}
+
+	if got := ShouldRetryTransientAsyncVideoFailure(task, now); !got {
+		t.Fatalf("ShouldRetryTransientAsyncVideoFailure() = %v, want true", got)
+	}
+
+	task.FailReason = "invalid image_url"
+	if got := ShouldRetryTransientAsyncVideoFailure(task, now); got {
+		t.Fatalf("ShouldRetryTransientAsyncVideoFailure() with hard error = %v, want false", got)
+	}
+}

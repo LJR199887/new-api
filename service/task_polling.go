@@ -39,7 +39,10 @@ func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	if task == nil {
 		return errors.New("task is nil")
 	}
-	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+	if task.Status == model.TaskStatusSuccess {
+		return nil
+	}
+	if task.Status == model.TaskStatusFailure && !ShouldRetryTransientAsyncVideoFailure(task, time.Now().Unix()) {
 		return nil
 	}
 	if task.ChannelId <= 0 {
@@ -151,6 +154,13 @@ func isTransientSeedanceMediaPreparationError(task *model.Task, message string, 
 	return message == "upstream returned error" ||
 		message == "upstream error: do request failed" ||
 		strings.Contains(message, "upstream returned error")
+}
+
+func ShouldRetryTransientAsyncVideoFailure(task *model.Task, now int64) bool {
+	if task == nil || task.Status != model.TaskStatusFailure {
+		return false
+	}
+	return isTransientSeedanceMediaPreparationError(task, task.FailReason, now)
 }
 
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
