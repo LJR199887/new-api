@@ -565,6 +565,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 	}
+	if taskResult.Status == model.TaskStatusFailure && isTransientSeedanceMediaPreparationError(task, taskResult.Reason, now) {
+		logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media preparation reported transient failure, keep polling, reason: %s", taskId, taskResult.Reason))
+		return nil
+	}
 
 	shouldRefund := false
 	shouldSettle := false

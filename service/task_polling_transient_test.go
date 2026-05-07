@@ -1,11 +1,16 @@
 package service
 
 import (
+	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
 func TestIsTransientVideoNotFoundResponse(t *testing.T) {
@@ -212,5 +217,65 @@ func TestShouldRetryTransientAsyncVideoFailure(t *testing.T) {
 	task.FailReason = "invalid image_url"
 	if got := ShouldRetryTransientAsyncVideoFailure(task, now); got {
 		t.Fatalf("ShouldRetryTransientAsyncVideoFailure() with hard error = %v, want false", got)
+	}
+}
+
+type transientFailureAdaptor struct {
+	responseBody []byte
+	taskInfo     *relaycommon.TaskInfo
+}
+
+func (a *transientFailureAdaptor) Init(info *relaycommon.RelayInfo) {}
+func (a *transientFailureAdaptor) FetchTask(baseURL string, key string, body map[string]any, proxy string) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(string(a.responseBody))),
+	}, nil
+}
+func (a *transientFailureAdaptor) ParseTaskResult(body []byte) (*relaycommon.TaskInfo, error) {
+	return a.taskInfo, nil
+}
+func (a *transientFailureAdaptor) AdjustBillingOnComplete(task *model.Task, taskResult *relaycommon.TaskInfo) int {
+	return 0
+}
+
+func TestUpdateVideoSingleTaskKeepsPollingOnTransientFailureStatus(t *testing.T) {
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+
+	now := time.Now().Unix()
+	task := &model.Task{
+		TaskID:      "public-task",
+		Status:      model.TaskStatusSubmitted,
+		Action:      constant.TaskActionGenerate,
+		SubmitTime:  now - 60,
+		ChannelId:   1,
+		Properties:  model.Properties{OriginModelName: "video-2.0-fast", UpstreamModelName: "video-2.0-fast"},
+		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream-task"},
+	}
+	taskM := map[string]*model.Task{
+		"upstream-task": task,
+	}
+
+	adaptor := &transientFailureAdaptor{
+		responseBody: []byte(`{"status":"failed","error":{"message":"upstream returned error"}}`),
+		taskInfo: &relaycommon.TaskInfo{
+			Status: model.TaskStatusFailure,
+			Reason: "upstream returned error",
+		},
+	}
+	ch := &model.Channel{}
+
+	if err := updateVideoSingleTask(context.Background(), adaptor, ch, "upstream-task", taskM); err != nil {
+		t.Fatalf("updateVideoSingleTask() error = %v", err)
+	}
+	if task.Status != model.TaskStatusSubmitted {
+		t.Fatalf("task.Status = %v, want unchanged submitted", task.Status)
+	}
+	if task.FailReason != "" {
+		t.Fatalf("task.FailReason = %q, want empty", task.FailReason)
 	}
 }
