@@ -39,7 +39,10 @@ func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	if task == nil {
 		return errors.New("task is nil")
 	}
-	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+	if task.Status == model.TaskStatusSuccess {
+		return nil
+	}
+	if task.Status == model.TaskStatusFailure && !ShouldRetryTransientAsyncVideoFailure(task, time.Now().Unix()) {
 		return nil
 	}
 	if task.ChannelId <= 0 {
@@ -117,6 +120,47 @@ func isGracefulVideoGenerationNotFoundModel(modelNames ...string) bool {
 		}
 	}
 	return false
+}
+
+func isSeedanceVideoPollingModel(modelNames ...string) bool {
+	for _, modelName := range modelNames {
+		modelName = strings.ToLower(strings.TrimSpace(modelName))
+		if strings.HasPrefix(modelName, "video-2.0") || strings.HasPrefix(modelName, "seedance-2.0") {
+			return true
+		}
+	}
+	return false
+}
+
+func isTransientSeedanceMediaPreparationError(task *model.Task, message string, now int64) bool {
+	if task == nil || task.Action == constant.TaskActionTextGenerate {
+		return false
+	}
+	if !isSeedanceVideoPollingModel(task.Properties.OriginModelName, task.Properties.UpstreamModelName) {
+		return false
+	}
+	if constant.TaskNotFoundGraceMinutes <= 0 {
+		return false
+	}
+	submitTime := task.SubmitTime
+	if submitTime <= 0 || now <= 0 {
+		return true
+	}
+	if now-submitTime > int64(constant.TaskNotFoundGraceMinutes)*60 {
+		return false
+	}
+
+	message = strings.Trim(strings.ToLower(strings.TrimSpace(message)), "\"' .")
+	return message == "upstream returned error" ||
+		message == "upstream error: do request failed" ||
+		strings.Contains(message, "upstream returned error")
+}
+
+func ShouldRetryTransientAsyncVideoFailure(task *model.Task, now int64) bool {
+	if task == nil || task.Status != model.TaskStatusFailure {
+		return false
+	}
+	return isTransientSeedanceMediaPreparationError(task, task.FailReason, now)
 }
 
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
@@ -488,6 +532,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		//taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
 		errorResult := &dto.GeneralErrorResponse{}
 		if err = common.Unmarshal(responseBody, &errorResult); err == nil {
+			errorMessage := errorResult.ToMessage()
+			if isTransientSeedanceMediaPreparationError(task, errorMessage, now) {
+				logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media is still preparing, keep polling, response: %s", taskId, string(responseBody)))
+				return nil
+			}
 			openaiError := errorResult.TryToOpenAIError()
 			if openaiError != nil {
 				// 返回规范的 OpenAI 错误格式，提取错误信息，判断错误是否为任务失败
@@ -516,6 +565,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 	}
+	if taskResult.Status == model.TaskStatusFailure && isTransientSeedanceMediaPreparationError(task, taskResult.Reason, now) {
+		logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media preparation reported transient failure, keep polling, reason: %s", taskId, taskResult.Reason))
+		return nil
+	}
 
 	shouldRefund := false
 	shouldSettle := false
@@ -525,10 +578,16 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	switch taskResult.Status {
 	case model.TaskStatusSubmitted:
 		task.Progress = taskcommon.ProgressSubmitted
+		task.FailReason = ""
+		task.FinishTime = 0
 	case model.TaskStatusQueued:
 		task.Progress = taskcommon.ProgressQueued
+		task.FailReason = ""
+		task.FinishTime = 0
 	case model.TaskStatusInProgress:
 		task.Progress = taskcommon.ProgressInProgress
+		task.FailReason = ""
+		task.FinishTime = 0
 		if task.StartTime == 0 {
 			task.StartTime = now
 		}

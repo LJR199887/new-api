@@ -4,8 +4,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 
@@ -13,7 +15,12 @@ import (
 )
 
 func TestShouldRefreshAsyncVideoTask(t *testing.T) {
-	t.Parallel()
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+	now := time.Now().Unix()
 
 	tests := []struct {
 		name string
@@ -30,6 +37,40 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 			task: &model.Task{
 				Status:    model.TaskStatusSuccess,
 				ChannelId: 1,
+				PrivateData: model.TaskPrivateData{
+					UpstreamTaskID: "upstream-task",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "terminal transient failure task still refreshes during grace period",
+			task: &model.Task{
+				Status:     model.TaskStatusFailure,
+				Action:     constant.TaskActionGenerate,
+				ChannelId:  1,
+				SubmitTime: now - 60,
+				FailReason: "upstream returned error",
+				Properties: model.Properties{
+					OriginModelName: "video-2.0-fast",
+				},
+				PrivateData: model.TaskPrivateData{
+					UpstreamTaskID: "upstream-task",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "terminal real failure task does not refresh",
+			task: &model.Task{
+				Status:     model.TaskStatusFailure,
+				Action:     constant.TaskActionGenerate,
+				ChannelId:  1,
+				SubmitTime: now - 60,
+				FailReason: "invalid image_url: 404",
+				Properties: model.Properties{
+					OriginModelName: "video-2.0-fast",
+				},
 				PrivateData: model.TaskPrivateData{
 					UpstreamTaskID: "upstream-task",
 				},
@@ -70,7 +111,6 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			if got := shouldRefreshAsyncVideoTask(tt.task); got != tt.want {
 				t.Fatalf("shouldRefreshAsyncVideoTask() = %v, want %v", got, tt.want)
 			}
