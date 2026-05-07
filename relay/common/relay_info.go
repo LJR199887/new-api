@@ -674,6 +674,13 @@ type TaskSubmitReq struct {
 	ImageURLs      []string               `json:"image_urls,omitempty"`
 	Images         []string               `json:"images,omitempty"`
 	ImageReference json.RawMessage        `json:"image_reference,omitempty"`
+	ImageGuidance  json.RawMessage        `json:"image_guidance,omitempty"`
+	StartFrame     json.RawMessage        `json:"start_frame,omitempty"`
+	EndFrame       json.RawMessage        `json:"end_frame,omitempty"`
+	StartImageURL  string                 `json:"start_image_url,omitempty"`
+	EndImageURL    string                 `json:"end_image_url,omitempty"`
+	VideoURL       string                 `json:"video_url,omitempty"`
+	VideoReference json.RawMessage        `json:"video_reference,omitempty"`
 	Size           string                 `json:"size,omitempty"`
 	AspectRatio    string                 `json:"aspect_ratio,omitempty"`
 	Duration       int                    `json:"duration,omitempty"`
@@ -694,16 +701,38 @@ func (t *TaskSubmitReq) HasImage() bool {
 	if len(t.Images) > 0 || len(t.ImageURLs) > 0 {
 		return true
 	}
-	if strings.TrimSpace(t.Image) != "" || strings.TrimSpace(t.ImageURL) != "" || strings.TrimSpace(t.InputReference) != "" {
+	if strings.TrimSpace(t.Image) != "" ||
+		strings.TrimSpace(t.ImageURL) != "" ||
+		strings.TrimSpace(t.InputReference) != "" ||
+		strings.TrimSpace(t.StartImageURL) != "" ||
+		strings.TrimSpace(t.EndImageURL) != "" ||
+		strings.TrimSpace(t.VideoURL) != "" {
 		return true
 	}
-	if len(t.ImageReference) > 0 && common.GetJsonType(t.ImageReference) == "array" {
-		var refs []any
-		if err := common.Unmarshal(t.ImageReference, &refs); err == nil && len(refs) > 0 {
+	for _, raw := range []json.RawMessage{
+		t.ImageReference,
+		t.ImageGuidance,
+		t.StartFrame,
+		t.EndFrame,
+		t.VideoReference,
+	} {
+		if hasTaskReferenceArray(raw) {
 			return true
 		}
 	}
 	return t.hasMessageImage()
+}
+
+func hasTaskReferenceArray(raw json.RawMessage) bool {
+	if len(raw) == 0 || common.GetJsonType(raw) != "array" {
+		return false
+	}
+
+	var refs []any
+	if err := common.Unmarshal(raw, &refs); err != nil {
+		return false
+	}
+	return len(refs) > 0
 }
 
 func (t *TaskSubmitReq) hasMessageImage() bool {
