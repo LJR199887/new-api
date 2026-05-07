@@ -522,6 +522,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		//taskResult = relaycommon.FailTaskInfo("upstream returned empty status")
 		errorResult := &dto.GeneralErrorResponse{}
 		if err = common.Unmarshal(responseBody, &errorResult); err == nil {
+			errorMessage := errorResult.ToMessage()
+			if isTransientSeedanceMediaPreparationError(task, errorMessage, now) {
+				logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media is still preparing, keep polling, response: %s", taskId, string(responseBody)))
+				return nil
+			}
 			openaiError := errorResult.TryToOpenAIError()
 			if openaiError != nil {
 				// 返回规范的 OpenAI 错误格式，提取错误信息，判断错误是否为任务失败
@@ -531,10 +536,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				}
 
 				// 其他错误认为是任务失败，记录错误信息并更新任务状态
-				if isTransientSeedanceMediaPreparationError(task, openaiError.Message, now) {
-					logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media is still preparing, keep polling, response: %s", taskId, string(responseBody)))
-					return nil
-				}
 				taskResult = relaycommon.FailTaskInfo("upstream returned error")
 			} else {
 				bodyLower := strings.ToLower(string(responseBody))

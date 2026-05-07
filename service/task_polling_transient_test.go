@@ -165,6 +165,9 @@ func TestIsTransientSeedanceMediaPreparationError(t *testing.T) {
 	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); !got {
 		t.Fatalf("isTransientSeedanceMediaPreparationError() = %v, want true", got)
 	}
+	if got := isTransientSeedanceMediaPreparationError(task, `{"error":{"message":"upstream returned error","code":"bad_response"}}`, now); !got {
+		t.Fatalf("isTransientSeedanceMediaPreparationError() wrapped error = %v, want true", got)
+	}
 
 	task.SubmitTime = now - 11*60
 	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
