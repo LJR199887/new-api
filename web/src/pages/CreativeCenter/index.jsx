@@ -317,15 +317,15 @@ const CREATIVE_CENTER_PROMPT_MAX_LENGTH = 5000;
 const CREATIVE_BATCH_REQUEST_SPACING_MS = 300;
 const ESTIMATED_PROGRESS_TICK_MS = 500;
 const ESTIMATED_PROGRESS_FINALIZING_MS = 1400;
+const CREATIVE_CENTER_SCROLL_BOTTOM_THRESHOLD = 80;
 
 const clampProgress = (value) => Math.min(Math.max(value, 0), 100);
-const createBatchSeedBase = () =>
+const createBatchRequestBase = () =>
   Math.floor(Date.now() % 1000000000) + Math.floor(Math.random() * 1000000);
-const createTaskSeed = (batchSeedBase, index) => batchSeedBase + index * 9973;
-const createTaskRequestUser = (batchSeedBase, index) =>
-  `creative-center-${batchSeedBase}-${index + 1}`;
-const createTaskRequestId = (batchSeedBase, index) =>
-  `creative-request-${batchSeedBase}-${index + 1}`;
+const createTaskRequestUser = (batchRequestBase, index) =>
+  `creative-center-${batchRequestBase}-${index + 1}`;
+const createTaskRequestId = (batchRequestBase, index) =>
+  `creative-request-${batchRequestBase}-${index + 1}`;
 const waitForMs = (ms) =>
   new Promise((resolve) => {
     window.setTimeout(resolve, Math.max(0, ms));
@@ -3019,6 +3019,8 @@ export default function App() {
   const lastActiveVideoReconcileSignatureRef = useRef('');
   const creativeImagePollingBlockedUntilRef = useRef(0);
   const creativeVideoPollingBlockedUntilRef = useRef(0);
+  const shouldAutoScrollRef = useRef(true);
+  const lastAutoScrollTabRef = useRef('');
   const isLoggedIn = Boolean(userState?.user);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadImageNotice, setUploadImageNotice] = useState('');
@@ -3083,9 +3085,40 @@ export default function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return undefined;
     }
+
+    const syncAutoScrollState = () => {
+      const distanceToBottom =
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+      shouldAutoScrollRef.current =
+        distanceToBottom <= CREATIVE_CENTER_SCROLL_BOTTOM_THRESHOLD;
+    };
+
+    syncAutoScrollState();
+    scrollElement.addEventListener('scroll', syncAutoScrollState, { passive: true });
+
+    return () => {
+      scrollElement.removeEventListener('scroll', syncAutoScrollState);
+    };
+  }, [activeTab, modelsHydrated, historyLoaded]);
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const didTabChange = lastAutoScrollTabRef.current !== activeTab;
+    if (!didTabChange && !shouldAutoScrollRef.current) {
+      return;
+    }
+
+    scrollElement.scrollTop = scrollElement.scrollHeight;
+    shouldAutoScrollRef.current = true;
+    lastAutoScrollTabRef.current = activeTab;
   }, [activeTab, chatMessages, imageRecords, videoRecords, isGenerating]);
 
   useEffect(() => {
@@ -6982,11 +7015,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       const useEstimatedImageProgress =
         shouldUseEstimatedImageProgress(currentModelName);
       const generationCount = Number(params.generationCount) || 1;
-      const batchSeedBase = createBatchSeedBase();
+      const batchRequestBase = createBatchRequestBase();
       const taskRequestMetas = Array.from({ length: generationCount }, (_, index) => ({
-        requestSeed: createTaskSeed(batchSeedBase, index),
-        requestUser: createTaskRequestUser(batchSeedBase, index),
-        requestId: createTaskRequestId(batchSeedBase, index),
+        requestUser: createTaskRequestUser(batchRequestBase, index),
+        requestId: createTaskRequestId(batchRequestBase, index),
       }));
       const recordId = createCreativeRecordId('image');
       const pendingRecord = {
@@ -7037,7 +7069,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         const imageTasks = Array.from({ length: generationCount }, (_, index) =>
           (async () => {
             const taskId = pendingRecord.images[index].id;
-            const requestSeed = taskRequestMetas[index]?.requestSeed;
             const requestUser = taskRequestMetas[index]?.requestUser;
             const requestId = taskRequestMetas[index]?.requestId;
             const submittedAt = Date.now();
@@ -7062,8 +7093,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                       ? 'Edit the provided media.'
                       : ''),
                   request_id: requestId,
-                  seed: requestSeed,
-                  seeds: [requestSeed],
                   user: requestUser,
                 }
               : {
@@ -7076,8 +7105,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   n: 1,
                   response_format: 'url',
                   request_id: requestId,
-                  seed: requestSeed,
-                  seeds: [requestSeed],
                   user: requestUser,
                 };
 
@@ -7256,11 +7283,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       const useEstimatedVideoProgress =
         shouldUseEstimatedVideoProgress(currentModelName);
       const generationCount = Number(params.generationCount) || 1;
-      const batchSeedBase = createBatchSeedBase();
+      const batchRequestBase = createBatchRequestBase();
       const taskRequestMetas = Array.from({ length: generationCount }, (_, index) => ({
-        requestSeed: createTaskSeed(batchSeedBase, index),
-        requestUser: createTaskRequestUser(batchSeedBase, index),
-        requestId: createTaskRequestId(batchSeedBase, index),
+        requestUser: createTaskRequestUser(batchRequestBase, index),
+        requestId: createTaskRequestId(batchRequestBase, index),
       }));
       const recordId = createCreativeRecordId('video');
       const pendingRecord = {
@@ -7314,7 +7340,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         const videoRequests = Array.from({ length: generationCount }, (_, index) =>
           (async () => {
             const localTaskId = pendingRecord.tasks[index].id;
-            const requestSeed = taskRequestMetas[index]?.requestSeed;
             const requestUser = taskRequestMetas[index]?.requestUser;
             const requestId = taskRequestMetas[index]?.requestId;
             const submittedAt = Date.now();
@@ -7329,13 +7354,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             let data;
 
             if (isChatCompletionVideoModel) {
-              basePayload.seed = requestSeed;
-              basePayload.seeds = [requestSeed];
               basePayload.user = requestUser;
               basePayload.request_id = requestId;
               basePayload.metadata = {
                 creative_request_id: requestUser,
-                creative_seed: requestSeed,
                 creative_index: index + 1,
               };
               patchVideoTask(recordId, localTaskId, {
@@ -7404,12 +7426,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   prompt: currentPrompt,
                   async: true,
                   request_id: requestId,
-                  seed: requestSeed,
-                  seeds: [requestSeed],
                   user: requestUser,
                   metadata: {
                     creative_request_id: requestUser,
-                    creative_seed: requestSeed,
                     creative_index: index + 1,
                   },
                 }
@@ -7418,12 +7437,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   group: activeGroup,
                   prompt: currentPrompt,
                   request_id: requestId,
-                  seed: requestSeed,
-                  seeds: [requestSeed],
                   user: requestUser,
                   metadata: {
                     creative_request_id: requestUser,
-                    creative_seed: requestSeed,
                     creative_index: index + 1,
                   },
                 };
