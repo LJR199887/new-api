@@ -317,6 +317,7 @@ const CREATIVE_CENTER_PROMPT_MAX_LENGTH = 5000;
 const CREATIVE_BATCH_REQUEST_SPACING_MS = 300;
 const ESTIMATED_PROGRESS_TICK_MS = 500;
 const ESTIMATED_PROGRESS_FINALIZING_MS = 1400;
+const CREATIVE_CENTER_SCROLL_BOTTOM_THRESHOLD = 80;
 
 const clampProgress = (value) => Math.min(Math.max(value, 0), 100);
 const createBatchRequestBase = () =>
@@ -3018,6 +3019,8 @@ export default function App() {
   const lastActiveVideoReconcileSignatureRef = useRef('');
   const creativeImagePollingBlockedUntilRef = useRef(0);
   const creativeVideoPollingBlockedUntilRef = useRef(0);
+  const shouldAutoScrollRef = useRef(true);
+  const lastAutoScrollTabRef = useRef('');
   const isLoggedIn = Boolean(userState?.user);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadImageNotice, setUploadImageNotice] = useState('');
@@ -3082,9 +3085,40 @@ export default function App() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return undefined;
     }
+
+    const syncAutoScrollState = () => {
+      const distanceToBottom =
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+      shouldAutoScrollRef.current =
+        distanceToBottom <= CREATIVE_CENTER_SCROLL_BOTTOM_THRESHOLD;
+    };
+
+    syncAutoScrollState();
+    scrollElement.addEventListener('scroll', syncAutoScrollState, { passive: true });
+
+    return () => {
+      scrollElement.removeEventListener('scroll', syncAutoScrollState);
+    };
+  }, [activeTab, modelsHydrated, historyLoaded]);
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const didTabChange = lastAutoScrollTabRef.current !== activeTab;
+    if (!didTabChange && !shouldAutoScrollRef.current) {
+      return;
+    }
+
+    scrollElement.scrollTop = scrollElement.scrollHeight;
+    shouldAutoScrollRef.current = true;
+    lastAutoScrollTabRef.current = activeTab;
   }, [activeTab, chatMessages, imageRecords, videoRecords, isGenerating]);
 
   useEffect(() => {
