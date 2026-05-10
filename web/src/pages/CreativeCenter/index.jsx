@@ -320,6 +320,8 @@ const CREATIVE_CENTER_HISTORY_PERSIST_DEBOUNCE_MS = 2000;
 const CREATIVE_CENTER_VIDEO_HISTORY_PERSIST_DEBOUNCE_MS = 6000;
 const CREATIVE_CENTER_HISTORY_PERSIST_429_BACKOFF_MS = 15000;
 const CREATIVE_CENTER_PROMPT_MAX_LENGTH = 5000;
+const CREATIVE_CENTER_SEEDANCE_PROMPT_MAX_LENGTH = 1500;
+const CREATIVE_CENTER_KLING_PROMPT_MAX_LENGTH = 2500;
 const CREATIVE_BATCH_REQUEST_SPACING_MS = 300;
 const ESTIMATED_PROGRESS_TICK_MS = 500;
 const ESTIMATED_PROGRESS_FINALIZING_MS = 1400;
@@ -336,6 +338,16 @@ const waitForMs = (ms) =>
   new Promise((resolve) => {
     window.setTimeout(resolve, Math.max(0, ms));
   });
+
+const getCreativeCenterPromptMaxLength = (modelName) => {
+  if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
+    return CREATIVE_CENTER_SEEDANCE_PROMPT_MAX_LENGTH;
+  }
+  if (modelName === 'kling-v3') {
+    return CREATIVE_CENTER_KLING_PROMPT_MAX_LENGTH;
+  }
+  return CREATIVE_CENTER_PROMPT_MAX_LENGTH;
+};
 
 const parseProgressValue = (value) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -3040,9 +3052,6 @@ export default function App() {
     videoResolution: '1080p',
     referenceMode: 'multi_image',
   });
-  const updatePrompt = useCallback((value) => {
-    setPrompt(String(value || '').slice(0, CREATIVE_CENTER_PROMPT_MAX_LENGTH));
-  }, []);
 
   const textareaRef = useRef(null);
   const scrollRef = useRef(null);
@@ -3645,6 +3654,10 @@ export default function App() {
     currentModelName === 'veo31-fast';
   const isAdobeKlingV3Model = currentModelName === 'kling-v3';
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
+  const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
+  const updatePrompt = useCallback((value) => {
+    setPrompt(String(value || '').slice(0, currentPromptMaxLength));
+  }, [currentPromptMaxLength]);
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending =
@@ -3685,6 +3698,13 @@ export default function App() {
     : isCurrentModelVideoReferenceEnabled
       ? 'video/*'
       : 'image/*';
+  useEffect(() => {
+    setPrompt((prev) =>
+      typeof prev === 'string' && prev.length > currentPromptMaxLength
+        ? prev.slice(0, currentPromptMaxLength)
+        : prev,
+    );
+  }, [currentPromptMaxLength]);
   useEffect(() => {
     if (!currentImageUploadLimit || uploadedImages.length <= currentImageUploadLimit) {
       return;
@@ -9101,7 +9121,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   ref={textareaRef}
                   value={prompt}
                   onChange={(e) => updatePrompt(e.target.value)}
-                  maxLength={CREATIVE_CENTER_PROMPT_MAX_LENGTH}
+                  maxLength={currentPromptMaxLength}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
                   placeholder={!isLoggedIn ? "登录后即可开始对话、图片或视频创作..." : activeTab === 'chat' ? "发送消息..." : "描述你想要的画面，越详细越好..."}
                   className='max-h-32 min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] font-medium leading-relaxed text-slate-800 outline-none placeholder:text-slate-400 sm:max-h-60 sm:min-h-[70px] sm:px-0 sm:py-3 custom-scrollbar'
@@ -9120,13 +9140,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 </button>
               </div>
               <div className={`mt-1 px-3 text-right text-[10px] font-semibold ${
-                prompt.length >= CREATIVE_CENTER_PROMPT_MAX_LENGTH
+                prompt.length >= currentPromptMaxLength
                   ? 'text-red-500'
-                  : prompt.length >= CREATIVE_CENTER_PROMPT_MAX_LENGTH * 0.9
+                  : prompt.length >= currentPromptMaxLength * 0.9
                     ? 'text-amber-500'
                     : 'text-slate-400'
               }`}>
-                {prompt.length}/{CREATIVE_CENTER_PROMPT_MAX_LENGTH}
+                {prompt.length}/{currentPromptMaxLength}
               </div>
 
               {uploadedImages.length > 0 ? (
