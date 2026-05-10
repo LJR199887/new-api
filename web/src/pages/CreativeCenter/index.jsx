@@ -252,7 +252,6 @@ const ADOBE_REFERENCE_MODE_OPTIONS = [
   { label: 'Image', value: 'image' },
 ];
 const SEEDANCE_REFERENCE_MODE_OPTIONS = [
-  { label: '文生视频', value: 'text' },
   { label: '多图参考', value: 'multi_image' },
   { label: '首尾帧', value: 'first_last' },
 ];
@@ -2985,7 +2984,7 @@ export default function App() {
     videoPreset: 'normal',
     videoDuration: '4',
     videoResolution: '1080p',
-    referenceMode: 'text',
+    referenceMode: 'multi_image',
   });
   const updatePrompt = useCallback((value) => {
     setPrompt(String(value || '').slice(0, CREATIVE_CENTER_PROMPT_MAX_LENGTH));
@@ -3982,7 +3981,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             (option) => option.value === next.referenceMode,
           )
         ) {
-          next.referenceMode = 'text';
+          next.referenceMode = 'multi_image';
         }
       }
 
