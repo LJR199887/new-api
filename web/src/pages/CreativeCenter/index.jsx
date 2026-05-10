@@ -3827,6 +3827,9 @@ export default function App() {
             sourceParams.videoResolution ||
             getAdobeVideoDefaultResolution(modelName);
         }
+        if (isCurrentSeedanceVideoModel) {
+          snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
+        }
         if (isCurrentAdobeKlingV3Model) {
           snapshot.generateAudio = true;
         }
