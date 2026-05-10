@@ -3977,7 +3977,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           next.referenceMode = 'frame';
         }
         if (
-          isCurrentSeedanceVideoModel &&
+          isSeedanceVideoModel &&
           !SEEDANCE_REFERENCE_MODE_OPTIONS.some(
             (option) => option.value === next.referenceMode,
           )
