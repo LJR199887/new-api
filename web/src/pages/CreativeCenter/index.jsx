@@ -254,8 +254,7 @@ const ADOBE_REFERENCE_MODE_OPTIONS = [
 const SEEDANCE_REFERENCE_MODE_OPTIONS = [
   { label: '多图参考', value: 'multi_image' },
   { label: '首尾帧', value: 'first_last' },
-  { label: '视频参考', value: 'single_video' },
-  { label: '多视频参考', value: 'multi_video' },
+  { label: '视频参考', value: 'video_reference' },
   { label: '多模态', value: 'multimodal' },
 ];
 const SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS = {
@@ -264,8 +263,7 @@ const SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS = {
   multimodal: 4,
 };
 const SEEDANCE_REFERENCE_MODE_VIDEO_LIMITS = {
-  single_video: 1,
-  multi_video: 3,
+  video_reference: 3,
   multimodal: 3,
 };
 const GENERATION_COUNT_OPTIONS = Array.from({ length: 10 }, (_, index) => ({
@@ -307,6 +305,7 @@ const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
   'kling-v3',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const CREATIVE_CENTER_VIDEO_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
 const CREATIVE_CENTER_IMAGE_UPLOAD_CONCURRENCY = 2;
 const CREATIVE_CENTER_STARTUP_VIDEO_RECOVERY_MAX_TASKS = 20;
 const CREATIVE_CENTER_STARTUP_VIDEO_RECOVERY_CONCURRENCY = 4;
@@ -3067,10 +3066,15 @@ export default function App() {
   const [uploadVideoNotice, setUploadVideoNotice] = useState('');
   const [isUploadDragActive, setIsUploadDragActive] = useState(false);
   const isUploadingImage = uploadedImages.some((item) => item?.status === 'uploading');
+  const isUploadingReferenceVideo = referenceVideos.some(
+    (item) => item?.status === 'uploading',
+  );
   const hasUploadedImageAssets = uploadedImages.some(
     (item) => item?.status === 'uploaded' && item?.url,
   );
-  const hasReferenceVideoAssets = referenceVideos.some((item) => item?.url);
+  const hasReferenceVideoAssets = referenceVideos.some(
+    (item) => item?.status === 'uploaded' && item?.url,
+  );
 
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -3633,7 +3637,8 @@ export default function App() {
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
-  const isSubmitPending = (isChatTab && isGenerating) || isUploadingImage;
+  const isSubmitPending =
+    (isChatTab && isGenerating) || isUploadingImage || isUploadingReferenceVideo;
   const isVideoModel =
     typeof currentModelName === 'string' &&
     (currentModelName.includes('video') || isAdobeVideoModel);
@@ -3661,6 +3666,15 @@ export default function App() {
   );
   const isCurrentModelVideoReferenceEnabled =
     activeTab === 'video' && typeof currentVideoReferenceLimit === 'number';
+  const isCurrentModelMediaUploadEnabled =
+    isCurrentModelImageUploadEnabled || isCurrentModelVideoReferenceEnabled;
+  const currentUploadAccept = isCurrentModelImageUploadEnabled
+    ? isCurrentModelVideoReferenceEnabled
+      ? 'image/*,video/*'
+      : 'image/*'
+    : isCurrentModelVideoReferenceEnabled
+      ? 'video/*'
+      : 'image/*';
   useEffect(() => {
     if (!currentImageUploadLimit || uploadedImages.length <= currentImageUploadLimit) {
       return;
@@ -5284,6 +5298,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           appended.push({
             id: createCreativeRecordId('reference-video'),
             url,
+            name: getCreativeCenterFilenameFromUrl(url) || 'video',
+            size: 0,
+            status: 'uploaded',
           });
         }
       });
@@ -5307,9 +5324,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   };
 
   const handleUploadButtonClick = () => {
-    if (!isCurrentModelImageUploadEnabled) {
-      setUploadImageNotice('当前模型不支持上传图片');
-      showWarning('当前模型不支持上传图片');
+    if (!isCurrentModelMediaUploadEnabled) {
+      setUploadImageNotice('当前模式暂不支持上传素材');
+      showWarning('当前模式暂不支持上传素材');
       return;
     }
     fileInputRef.current?.click();
@@ -5444,6 +5461,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     return uploadCreativeCenterImageViaBackend(file);
   };
 
+  const uploadCreativeCenterReferenceVideo = async (file) => {
+    const uploadConfig = await getCreativeCenterImageUploadConfig();
+    if (uploadConfig?.mode !== 'direct') {
+      throw new Error('当前上传配置暂不支持直接上传视频，请改用视频链接');
+    }
+    return uploadCreativeCenterImageDirectly(file, uploadConfig);
+  };
+
   const handleCreativeCenterImageFiles = async (files) => {
     setIsUploadDragActive(false);
     if (files.length === 0) {
@@ -5560,13 +5585,121 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   const handleImageFileChange = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
-    await handleCreativeCenterImageFiles(files);
+    await handleCreativeCenterMediaFiles(files);
+  };
+
+  const handleCreativeCenterReferenceVideoFiles = async (files) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    if (!isCurrentModelVideoReferenceEnabled) {
+      setUploadVideoNotice('当前模式不支持视频参考');
+      showWarning('当前模式不支持视频参考');
+      return;
+    }
+
+    if (!isLoggedIn) {
+      showWarning('请先登录后再上传视频');
+      return;
+    }
+
+    const rawVideoFiles = files.filter((file) => file.type.startsWith('video/'));
+    if (rawVideoFiles.length !== files.length) {
+      showWarning('请上传视频文件');
+    }
+    if (rawVideoFiles.length === 0) {
+      return;
+    }
+
+    const validVideoFiles = rawVideoFiles.filter(
+      (file) => file.size <= CREATIVE_CENTER_VIDEO_UPLOAD_MAX_BYTES,
+    );
+    if (validVideoFiles.length !== rawVideoFiles.length) {
+      showWarning('视频大小不能超过 200MB');
+    }
+    if (validVideoFiles.length === 0) {
+      setUploadVideoNotice('请重新上传不大于 200MB 的视频文件');
+      return;
+    }
+
+    const remainingSlots =
+      typeof currentVideoReferenceLimit === 'number'
+        ? currentVideoReferenceLimit - referenceVideos.length
+        : null;
+    if (remainingSlots !== null && remainingSlots <= 0) {
+      const message = `当前模式最多添加 ${currentVideoReferenceLimit} 个视频链接`;
+      setUploadVideoNotice(message);
+      showWarning(message);
+      return;
+    }
+
+    const acceptedFiles =
+      remainingSlots !== null ? validVideoFiles.slice(0, remainingSlots) : validVideoFiles;
+    if (acceptedFiles.length === 0) {
+      return;
+    }
+
+    const pendingItems = acceptedFiles.map((file) => ({
+      id: createCreativeRecordId('uploaded-video'),
+      url: '',
+      name: file.name,
+      fileName: file.name,
+      size: file.size,
+      status: 'uploading',
+    }));
+
+    setReferenceVideos((prev) => [...prev, ...pendingItems]);
+
+    await Promise.all(
+      acceptedFiles.map(async (file, index) => {
+        const pendingItem = pendingItems[index];
+        try {
+          const uploaded = await uploadCreativeCenterReferenceVideo(file);
+          setReferenceVideos((prev) =>
+            prev.map((item) =>
+              item.id === pendingItem.id
+                ? {
+                    ...item,
+                    url: uploaded.url,
+                    name: uploaded.name || file.name,
+                    fileName: uploaded.filename || file.name,
+                    size: uploaded.size || file.size,
+                    status: 'uploaded',
+                  }
+                : item,
+            ),
+          );
+        } catch (error) {
+          console.error('Failed to upload creative center reference video:', error);
+          setReferenceVideos((prev) =>
+            prev.filter((item) => item.id !== pendingItem.id),
+          );
+          setUploadVideoNotice(error?.message || '视频上传失败，请稍后重试');
+        }
+      }),
+    );
+  };
+
+  const handleCreativeCenterMediaFiles = async (files) => {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    const videoFiles = files.filter((file) => file.type.startsWith('video/'));
+
+    if (imageFiles.length > 0) {
+      await handleCreativeCenterImageFiles(imageFiles);
+    }
+    if (videoFiles.length > 0) {
+      await handleCreativeCenterReferenceVideoFiles(videoFiles);
+    }
+    if (imageFiles.length === 0 && videoFiles.length === 0 && files.length > 0) {
+      showWarning('仅支持上传图片或视频文件');
+    }
   };
 
   const handleUploadDragEnter = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!isCurrentModelImageUploadEnabled) {
+    if (!isCurrentModelMediaUploadEnabled) {
       return;
     }
     setIsUploadDragActive(true);
@@ -5575,7 +5708,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   const handleUploadDragOver = (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!isCurrentModelImageUploadEnabled) {
+    if (!isCurrentModelMediaUploadEnabled) {
       return;
     }
     if (event.dataTransfer) {
@@ -5603,7 +5736,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     event.stopPropagation();
     setIsUploadDragActive(false);
     const files = Array.from(event.dataTransfer?.files || []);
-    await handleCreativeCenterImageFiles(files);
+    await handleCreativeCenterMediaFiles(files);
   };
 
   useEffect(() => {
@@ -7079,6 +7212,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       }));
     const uploadedImageUrls = currentUploadedImageItems.map((item) => item.url);
     const currentReferenceVideoUrls = referenceVideos
+      .filter((item) => item?.status === 'uploaded' && item?.url)
       .map((item) => String(item?.url || '').trim())
       .filter(Boolean);
     if (
@@ -7102,12 +7236,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         showWarning('首尾帧模式需要上传 2 张图片');
         return;
       }
-      if (activeReferenceMode === 'single_video' && currentReferenceVideoUrls.length < 1) {
+      if (activeReferenceMode === 'video_reference' && currentReferenceVideoUrls.length < 1) {
         showWarning('视频参考模式至少需要 1 个视频链接');
-        return;
-      }
-      if (activeReferenceMode === 'multi_video' && currentReferenceVideoUrls.length < 2) {
-        showWarning('多视频参考模式至少需要 2 个视频链接');
         return;
       }
       if (
@@ -7688,13 +7818,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 } else if (seedanceImageUrls[0]) {
                   payload.image_url = seedanceImageUrls[0];
                 }
-              } else if (currentParamsSnapshot.referenceMode === 'single_video') {
-                if (seedanceVideoUrls[0]) {
-                  payload.video_url = seedanceVideoUrls[0];
-                }
-              } else if (currentParamsSnapshot.referenceMode === 'multi_video') {
-                if (seedanceVideoUrls.length > 0) {
+              } else if (currentParamsSnapshot.referenceMode === 'video_reference') {
+                if (seedanceVideoUrls.length > 1) {
                   payload.video_reference = seedanceVideoUrls.map((url) => ({ url }));
+                } else if (seedanceVideoUrls[0]) {
+                  payload.video_url = seedanceVideoUrls[0];
                 }
               } else if (currentParamsSnapshot.referenceMode === 'multimodal') {
                 if (seedanceImageUrls.length > 1) {
@@ -8906,13 +9034,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               <input
                 ref={fileInputRef}
                 type='file'
-                accept='image/*'
+                accept={currentUploadAccept}
                 multiple
                 className='hidden'
                 onChange={handleImageFileChange}
               />
               <div className='flex items-end gap-2 px-0 sm:gap-5 sm:px-3'>
-                {isCurrentModelImageUploadEnabled ? (
+                {isCurrentModelMediaUploadEnabled ? (
                   <div className='shrink-0'>
                     <div
                       onDragEnter={handleUploadDragEnter}
@@ -8933,13 +9061,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                       }`}
                     >
                       <div className='flex flex-col items-center gap-1 sm:gap-2'>
-                        {isUploadingImage ? (
+                        {isUploadingImage || isUploadingReferenceVideo ? (
                           <Loader2 size={20} className='animate-spin text-blue-400 sm:h-6 sm:w-6' />
                         ) : (
                           <ImagePlus size={20} className='sm:h-6 sm:w-6' />
                         )}
                         <span className='hidden text-[11px] font-bold tracking-wide sm:block sm:whitespace-nowrap'>
-                          {uploadedImages.length > 0 ? '继续上传' : '上传图片'}
+                          {uploadedImages.length > 0 || referenceVideos.length > 0 ? '继续上传' : '上传素材'}
                         </span>
                       </div>
                     </button>
@@ -9040,7 +9168,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                           <span className='shrink-0 font-semibold text-slate-500'>
                             视频{index + 1}
                           </span>
-                          <span className='truncate'>{videoItem.url}</span>
+                          <span className='truncate'>
+                            {videoItem.status === 'uploading'
+                              ? videoItem.name || '上传中...'
+                              : videoItem.url}
+                          </span>
                           <button
                             type='button'
                             onClick={() => removeReferenceVideo(videoItem.id)}
@@ -9078,7 +9210,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，总大小不超过 <span className="text-blue-600 font-bold">200MB</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，总大小不超过 <span className="text-blue-600 font-bold">200MB</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
                 </div>
               ) : null}
 
