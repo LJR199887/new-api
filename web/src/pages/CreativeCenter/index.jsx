@@ -104,10 +104,10 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'veo31-fast': 2,
   'veo31-ref': 3,
   'kling-v3': 2,
-  'seedance-2.0': 1,
-  'seedance-2.0-fast': 1,
-  'video-2.0': 1,
-  'video-2.0-fast': 1,
+  'seedance-2.0': 4,
+  'seedance-2.0-fast': 4,
+  'video-2.0': 4,
+  'video-2.0-fast': 4,
 };
 
 const GROK_IMAGE_SIZE_OPTIONS = [
@@ -195,11 +195,8 @@ const ADOBE_VIDEO_ASPECT_RATIO_OPTIONS = [
 ];
 const SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '16:9', value: '16:9' },
-  { label: '4:3', value: '4:3' },
   { label: '1:1', value: '1:1' },
-  { label: '3:4', value: '3:4' },
   { label: '9:16', value: '9:16' },
-  { label: '21:9', value: '21:9' },
 ];
 const getAdobeVideoDurationOptions = (modelName) => {
   if (modelName === 'veo31-ref') {
@@ -240,17 +237,10 @@ const ADOBE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '720p', value: '720p' },
 ];
 const SEEDANCE_VIDEO_RESOLUTION_OPTIONS = [
-  { label: '480p', value: '480p' },
   { label: '720p', value: '720p' },
-  { label: '1080p', value: '1080p' },
 ];
 const getAdobeVideoResolutionOptions = (modelName) => {
-  if (modelName === 'seedance-2.0-fast' || modelName === 'video-2.0-fast') {
-    return SEEDANCE_VIDEO_RESOLUTION_OPTIONS.filter(
-      (option) => option.value !== '1080p',
-    );
-  }
-  if (modelName === 'seedance-2.0' || modelName === 'video-2.0') {
+  if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
     return SEEDANCE_VIDEO_RESOLUTION_OPTIONS;
   }
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;
@@ -260,6 +250,11 @@ const getAdobeVideoDefaultResolution = (modelName) =>
 const ADOBE_REFERENCE_MODE_OPTIONS = [
   { label: 'Frame', value: 'frame' },
   { label: 'Image', value: 'image' },
+];
+const SEEDANCE_REFERENCE_MODE_OPTIONS = [
+  { label: '文生视频', value: 'text' },
+  { label: '多图参考', value: 'multi_image' },
+  { label: '首尾帧', value: 'first_last' },
 ];
 const GENERATION_COUNT_OPTIONS = Array.from({ length: 10 }, (_, index) => ({
   label: `${index + 1}条`,
@@ -2990,7 +2985,7 @@ export default function App() {
     videoPreset: 'normal',
     videoDuration: '4',
     videoResolution: '1080p',
-    referenceMode: 'frame',
+    referenceMode: 'text',
   });
   const updatePrompt = useCallback((value) => {
     setPrompt(String(value || '').slice(0, CREATIVE_CENTER_PROMPT_MAX_LENGTH));
@@ -3980,6 +3975,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           )
         ) {
           next.referenceMode = 'frame';
+        }
+        if (
+          isCurrentSeedanceVideoModel &&
+          !SEEDANCE_REFERENCE_MODE_OPTIONS.some(
+            (option) => option.value === next.referenceMode,
+          )
+        ) {
+          next.referenceMode = 'text';
         }
       }
 
@@ -7470,6 +7473,22 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               if (currentUploadedImageUrls.length > 1) {
                 payload.image_urls = currentUploadedImageUrls.slice(0, 2);
               }
+            } else if (isSeedanceVideoModel) {
+              const seedanceImageUrls = currentUploadedImageUrls.slice(0, 4);
+              if (currentParamsSnapshot.referenceMode === 'first_last') {
+                if (seedanceImageUrls[0]) {
+                  payload.start_image_url = seedanceImageUrls[0];
+                }
+                if (seedanceImageUrls[1]) {
+                  payload.end_image_url = seedanceImageUrls[1];
+                }
+              } else if (currentParamsSnapshot.referenceMode === 'multi_image') {
+                if (seedanceImageUrls.length > 1) {
+                  payload.image_urls = seedanceImageUrls;
+                } else if (seedanceImageUrls[0]) {
+                  payload.image_url = seedanceImageUrls[0];
+                }
+              }
             } else if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
               payload.image_url = currentUploadedImageUrls[0];
             } else if (
@@ -8996,16 +9015,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         />
                       )}
 
-                      {false && currentModelName === 'veo31' && (
+                      {isSeedanceVideoModel && (
                         <DropSelectButton
                           menuKey='referenceMode'
                           icon={<Layers size={14} />}
                           label={`参考 ${getOptionLabel(
-                            ADOBE_REFERENCE_MODE_OPTIONS,
+                            SEEDANCE_REFERENCE_MODE_OPTIONS,
                             params.referenceMode,
                           )}`}
                           value={params.referenceMode}
-                          options={ADOBE_REFERENCE_MODE_OPTIONS}
+                          options={SEEDANCE_REFERENCE_MODE_OPTIONS}
                           openMenu={openMenu}
                           setOpenMenu={setOpenMenu}
                           onSelect={(value) =>
