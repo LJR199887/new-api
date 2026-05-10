@@ -2366,6 +2366,17 @@ const normalizeVideoHistoryRecords = (snapshot) => {
             )
             .filter(Boolean)
         : [],
+      sourceVideos: Array.isArray(entry?.sourceVideos || entry?.source_videos)
+        ? (entry?.sourceVideos || entry?.source_videos)
+            .map((item) =>
+              typeof item === 'string'
+                ? item.trim()
+                : typeof item?.url === 'string'
+                  ? item.url.trim()
+                  : '',
+            )
+            .filter(Boolean)
+        : [],
       group: entry?.group || snapshot?.group || '',
       status: summary.status,
       tasks,
@@ -3062,7 +3073,6 @@ export default function App() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadImageNotice, setUploadImageNotice] = useState('');
   const [referenceVideos, setReferenceVideos] = useState([]);
-  const [referenceVideoInput, setReferenceVideoInput] = useState('');
   const [uploadVideoNotice, setUploadVideoNotice] = useState('');
   const [isUploadDragActive, setIsUploadDragActive] = useState(false);
   const isUploadingImage = uploadedImages.some((item) => item?.status === 'uploading');
@@ -3728,7 +3738,6 @@ export default function App() {
     }
 
     setReferenceVideos([]);
-    setReferenceVideoInput('');
     setUploadVideoNotice('');
   }, [isCurrentModelVideoReferenceEnabled, referenceVideos.length]);
   const renderPendingTaskProgress = ({
@@ -5262,7 +5271,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
   const clearReferenceVideos = () => {
     setReferenceVideos([]);
-    setReferenceVideoInput('');
     setUploadVideoNotice('');
   };
 
@@ -5320,7 +5328,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       setUploadVideoNotice('');
       return next;
     });
-    setReferenceVideoInput('');
   };
 
   const handleUploadButtonClick = () => {
@@ -6159,14 +6166,30 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
   const applyReusedReferenceVideos = (sourceVideos = []) => {
     const nextVideos = (Array.isArray(sourceVideos) ? sourceVideos : [])
-      .map((item) => String(item || '').trim())
-      .filter(Boolean)
-      .map((url, index) => ({
-        id: createCreativeRecordId(`reused-video-${index + 1}`),
-        url,
-      }));
+      .map((item, index) => {
+        const rawUrl =
+          typeof item === 'string'
+            ? item
+            : typeof item?.url === 'string'
+              ? item.url
+              : '';
+        const url = rawUrl.trim();
+        if (!url) {
+          return null;
+        }
+        const fallbackName =
+          getCreativeCenterFilenameFromUrl(url) || `video-${index + 1}.mp4`;
+        return {
+          id: createCreativeRecordId(`reused-video-${index + 1}`),
+          url,
+          name: fallbackName,
+          fileName: fallbackName,
+          size: typeof item?.size === 'number' ? item.size : 0,
+          status: 'uploaded',
+        };
+      })
+      .filter(Boolean);
     setReferenceVideos(nextVideos);
-    setReferenceVideoInput('');
     setUploadVideoNotice('');
   };
 
@@ -9135,31 +9158,8 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 rounded-2xl border border-slate-200/60 bg-slate-50/60 px-3 py-3 sm:mt-5 sm:px-5 sm:py-4'>
-                  <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
-                    <input
-                      type='text'
-                      value={referenceVideoInput}
-                      onChange={(event) => setReferenceVideoInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          appendReferenceVideos(referenceVideoInput);
-                        }
-                      }}
-                      placeholder='输入视频 URL，支持一次粘贴多个链接（换行或逗号分隔）'
-                      className='h-11 min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
-                    />
-                    <button
-                      type='button'
-                      onClick={() => appendReferenceVideos(referenceVideoInput)}
-                      className='inline-flex h-11 shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-bold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100'
-                    >
-                      添加视频链接
-                    </button>
-                  </div>
-
                   {referenceVideos.length > 0 ? (
-                    <div className='mt-3 flex flex-wrap gap-2'>
+                    <div className='flex flex-wrap gap-2'>
                       {referenceVideos.map((videoItem, index) => (
                         <div
                           key={videoItem.id}
@@ -9210,7 +9210,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，总大小不超过 <span className="text-blue-600 font-bold">200MB</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，总大小不超过 <span className="text-blue-600 font-bold">200MB</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
                 </div>
               ) : null}
 
