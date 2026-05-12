@@ -360,6 +360,26 @@ func TestNormalizeSeedanceVideoRequestBuildsLeoPayload(t *testing.T) {
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestBuildsSquareSizeForSeedance(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.0",
+		"duration":     float64(8),
+		"resolution":   "720p",
+		"aspect_ratio": "1:1",
+	}
+
+	normalizeSeedanceVideoRequest(body, "video-2.0")
+
+	if got := body["size"]; got != "960x960" {
+		t.Fatalf("expected 1:1 720p to map to size=960x960, got %#v", got)
+	}
+	for _, key := range []string{"aspect_ratio", "resolution"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("expected %s to be removed after normalization", key)
+		}
+	}
+}
+
 func TestNormalizeSeedanceVideoRequestPreservesVideoReference(t *testing.T) {
 	body := map[string]interface{}{
 		"model":    "seedance-2.0-fast",

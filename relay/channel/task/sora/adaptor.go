@@ -698,7 +698,13 @@ func seedanceSizeFromAspectRatioAndResolution(ratio string, resolution string) s
 
 	width := baseDimension
 	height := baseDimension
-	if ratioWidth > ratioHeight {
+	if ratioWidth == ratioHeight {
+		// Seedance square outputs use the same pixel area tier as 16:9/9:16,
+		// so 720p maps to 960x960 instead of 720x720.
+		squareDimension := (baseDimension * 4) / 3
+		width = squareDimension
+		height = squareDimension
+	} else if ratioWidth > ratioHeight {
 		width = (baseDimension*ratioWidth + ratioHeight/2) / ratioHeight
 	} else if ratioHeight > ratioWidth {
 		height = (baseDimension*ratioHeight + ratioWidth/2) / ratioWidth
