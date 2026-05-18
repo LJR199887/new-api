@@ -24,7 +24,6 @@ import {
   Card,
   Button,
   Input,
-  Badge,
   Space,
 } from '@douyinfe/semi-ui';
 import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
@@ -193,42 +192,6 @@ const InvitationCard = ({
           />
         </Card>
 
-        {/* 奖励说明 */}
-        <Card
-          className='!rounded-xl w-full'
-          title={<Text type='tertiary'>{t('奖励说明')}</Text>}
-        >
-          <div className='space-y-3'>
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('邀请好友注册，好友充值后您可获得相应的')}
-                <Text
-                  strong
-                  type='danger'
-                  className='text-sm'
-                  style={{ marginLeft: 2 }}
-                >
-                  {t('10%奖励')}
-                </Text>
-              </Text>
-            </div>
-
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('通过划转功能将奖励额度转入到您的账户余额中')}
-              </Text>
-            </div>
-
-            <div className='flex items-start gap-2'>
-              <Badge dot type='success' />
-              <Text type='tertiary' className='text-sm'>
-                {t('邀请的好友越多，获得的奖励越多')}
-              </Text>
-            </div>
-          </div>
-        </Card>
       </Space>
     </Card>
   );

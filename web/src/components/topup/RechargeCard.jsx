@@ -79,8 +79,6 @@ const RechargeCard = ({
   setRedemptionCode,
   topUp,
   isSubmitting,
-  topUpLink,
-  openTopUpLink,
   userState,
   renderQuota,
   statusLoading,
@@ -587,25 +585,9 @@ const RechargeCard = ({
             showClear
             style={{ width: '100%' }}
             extraText={
-              topUpLink && (
-                <div className='flex flex-wrap items-center gap-2 text-sm'>
-                  <Text type='tertiary'>
-                    {t('联系管理员充值或者使用兑换码充值。')}
-                  </Text>
-                  <button
-                    type='button'
-                    className='inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 font-semibold text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-800'
-                    onClick={openTopUpLink}
-                  >
-                    <img
-                      src='https://img688.com/file/1777013056575_ChatGPT_Image_2026年4月24日_14_43_35.png'
-                      alt={t('购买兑换码')}
-                      className='mr-1.5 h-[70px] w-[70px] rounded-sm object-cover'
-                    />
-                    {t('购买兑换码')}
-                  </button>
-                </div>
-              )
+              <Text type='danger' className='text-base font-medium'>
+                {t('暂停开放个人充值，B端客户如有需要，可联系管理员拿码测试。')}
+              </Text>
             }
           />
         </Form>
