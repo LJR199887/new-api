@@ -585,7 +585,7 @@ const RechargeCard = ({
             showClear
             style={{ width: '100%' }}
             extraText={
-              <Text type='tertiary' className='text-sm'>
+              <Text type='danger' className='text-base font-medium'>
                 {t('暂停开放个人充值，B端客户如有需要，可联系管理员拿码测试。')}
               </Text>
             }
