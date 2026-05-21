@@ -167,6 +167,7 @@ func initConstantEnv() {
 		constant.TaskPricePatches = taskPricePatches
 	}
 	for _, modelName := range []string{
+		"ko3",
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",

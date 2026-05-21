@@ -35,6 +35,7 @@ var (
 		"nano-banana-pro": {},
 	}
 	playgroundChatVideoModels = map[string]struct{}{
+		"ko3":               {},
 		"sora2":             {},
 		"sora2-pro":         {},
 		"veo31":             {},

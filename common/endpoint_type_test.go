@@ -43,6 +43,18 @@ func TestGetEndpointTypesByChannelTypeRecognizesGrokImagineImageModels(t *testin
 			model:    "grok-imagine-video",
 			expected: constant.EndpointTypeOpenAIVideo,
 		},
+		{
+			name:     "ko3 video generation",
+			channel:  constant.ChannelTypeSora,
+			model:    "ko3",
+			expected: constant.EndpointTypeOpenAIVideo,
+		},
+		{
+			name:     "ko3 compatibility alias",
+			channel:  constant.ChannelTypeSora,
+			model:    "kling-video-o-3",
+			expected: constant.EndpointTypeOpenAIVideo,
+		},
 	}
 
 	for _, tt := range tests {
