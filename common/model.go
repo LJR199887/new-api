@@ -24,6 +24,9 @@ var (
 		"exact:grok-imagine-image-edit",
 	}
 	OpenAIVideoModels = []string{
+		"exact:ko3",
+		"exact:kling-o3",
+		"exact:kling-video-o-3",
 		"exact:grok-imagine-video",
 		"exact:seedance-2.0",
 		"exact:seedance-2.0-fast",

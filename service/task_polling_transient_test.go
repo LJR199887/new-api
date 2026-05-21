@@ -151,7 +151,7 @@ func TestIsTransientVideoNotFoundResponseWithZeroGrace(t *testing.T) {
 	}
 }
 
-func TestIsTransientSeedanceMediaPreparationError(t *testing.T) {
+func TestIsTransientVideoMediaPreparationError(t *testing.T) {
 	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
 	constant.TaskNotFoundGraceMinutes = 10
 	defer func() {
@@ -167,28 +167,50 @@ func TestIsTransientSeedanceMediaPreparationError(t *testing.T) {
 		},
 	}
 
-	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); !got {
-		t.Fatalf("isTransientSeedanceMediaPreparationError() = %v, want true", got)
+	if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); !got {
+		t.Fatalf("isTransientVideoMediaPreparationError() = %v, want true", got)
 	}
-	if got := isTransientSeedanceMediaPreparationError(task, `{"error":{"message":"upstream returned error","code":"bad_response"}}`, now); !got {
-		t.Fatalf("isTransientSeedanceMediaPreparationError() wrapped error = %v, want true", got)
+	if got := isTransientVideoMediaPreparationError(task, `{"error":{"message":"upstream returned error","code":"bad_response"}}`, now); !got {
+		t.Fatalf("isTransientVideoMediaPreparationError() wrapped error = %v, want true", got)
 	}
 
 	task.SubmitTime = now - 11*60
-	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
-		t.Fatalf("isTransientSeedanceMediaPreparationError() after grace = %v, want false", got)
+	if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientVideoMediaPreparationError() after grace = %v, want false", got)
 	}
 
 	task.SubmitTime = now - 60
 	task.Action = constant.TaskActionTextGenerate
-	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
-		t.Fatalf("isTransientSeedanceMediaPreparationError() text task = %v, want false", got)
+	if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientVideoMediaPreparationError() text task = %v, want false", got)
 	}
 
 	task.Action = constant.TaskActionGenerate
 	task.Properties.OriginModelName = "veo31-fast"
-	if got := isTransientSeedanceMediaPreparationError(task, "upstream returned error", now); got {
-		t.Fatalf("isTransientSeedanceMediaPreparationError() non-seedance = %v, want false", got)
+	if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); got {
+		t.Fatalf("isTransientVideoMediaPreparationError() non-media-prep model = %v, want false", got)
+	}
+}
+
+func TestIsTransientVideoMediaPreparationErrorForKo3(t *testing.T) {
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+
+	now := int64(1000)
+	for _, modelName := range []string{"ko3", "kling-o3", "kling-video-o-3"} {
+		task := &model.Task{
+			Action:     constant.TaskActionGenerate,
+			SubmitTime: now - 60,
+			Properties: model.Properties{
+				OriginModelName: modelName,
+			},
+		}
+		if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); !got {
+			t.Fatalf("isTransientVideoMediaPreparationError(%s) = %v, want true", modelName, got)
+		}
 	}
 }
 
@@ -212,6 +234,12 @@ func TestShouldRetryTransientAsyncVideoFailure(t *testing.T) {
 
 	if got := ShouldRetryTransientAsyncVideoFailure(task, now); !got {
 		t.Fatalf("ShouldRetryTransientAsyncVideoFailure() = %v, want true", got)
+	}
+
+	task.Properties.OriginModelName = "ko3"
+	task.FailReason = `{"error":{"message":"upstream returned error","code":"bad_response"}}`
+	if got := ShouldRetryTransientAsyncVideoFailure(task, now); !got {
+		t.Fatalf("ShouldRetryTransientAsyncVideoFailure() ko3 wrapped transient = %v, want true", got)
 	}
 
 	task.FailReason = "invalid image_url"

@@ -108,6 +108,7 @@ func isVideoGenerationsTaskModel(model string) bool {
 		strings.Contains(model, "/veo") ||
 		strings.HasPrefix(model, "sora-2") ||
 		strings.HasPrefix(model, "sora2") ||
+		isKo3VideoModel(model) ||
 		model == "kling-v3" ||
 		isSeedanceVideoModel(model)
 }
@@ -500,6 +501,20 @@ func isKlingV3VideoModel(upstreamModel string) bool {
 	return strings.EqualFold(strings.TrimSpace(upstreamModel), "kling-v3")
 }
 
+func isKo3VideoModel(upstreamModel string) bool {
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	return upstreamModel == "ko3" ||
+		upstreamModel == "kling-o3" ||
+		upstreamModel == "kling-video-o-3"
+}
+
+func normalizeKo3ModelName(upstreamModel string) string {
+	if isKo3VideoModel(upstreamModel) {
+		return "ko3"
+	}
+	return strings.TrimSpace(upstreamModel)
+}
+
 func isSeedanceVideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return strings.HasPrefix(upstreamModel, "seedance-2.0") ||
@@ -508,7 +523,7 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel)
+	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel)
 }
 
 func seedanceAspectRatioFromSize(value string) string {
@@ -936,6 +951,169 @@ func normalizeKlingV3VideoRequest(bodyMap map[string]interface{}) error {
 	return nil
 }
 
+func normalizeKo3Duration(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 3, nil
+	}
+	duration, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("duration must be an integer between 3 and 15")
+	}
+	if duration < 3 || duration > 15 {
+		return 0, fmt.Errorf("duration must be between 3 and 15 for ko3")
+	}
+	return duration, nil
+}
+
+func normalizeKo3Size(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "1080x1920", nil
+	}
+	switch value {
+	case "1440x1440", "1080x1920", "1920x1080":
+		return value, nil
+	default:
+		return "", fmt.Errorf("size must be 1440x1440, 1080x1920, or 1920x1080 for ko3")
+	}
+}
+
+func ko3SizeFromAspectRatio(value string) string {
+	switch strings.TrimSpace(value) {
+	case "1:1":
+		return "1440x1440"
+	case "9:16":
+		return "1080x1920"
+	case "16:9":
+		return "1920x1080"
+	default:
+		return ""
+	}
+}
+
+func appendKo3ImageURL(target []string, value interface{}) []string {
+	if value == nil {
+		return target
+	}
+	switch v := value.(type) {
+	case string:
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			target = append(target, trimmed)
+		}
+	case []string:
+		for _, item := range v {
+			target = appendKo3ImageURL(target, item)
+		}
+	case []interface{}:
+		for _, item := range v {
+			target = appendKo3ImageURL(target, item)
+		}
+	case map[string]interface{}:
+		target = appendKo3ImageURL(target, v["url"])
+		target = appendKo3ImageURL(target, v["image"])
+		target = appendKo3ImageURL(target, v["image_url"])
+	case map[string]string:
+		target = appendKo3ImageURL(target, v["url"])
+		target = appendKo3ImageURL(target, v["image"])
+		target = appendKo3ImageURL(target, v["image_url"])
+	}
+	return target
+}
+
+func collectKo3ImageURLs(bodyMap map[string]interface{}) []string {
+	for _, key := range []string{"image_urls", "images"} {
+		images := appendKo3ImageURL(nil, bodyMap[key])
+		if len(images) > 0 {
+			return images
+		}
+	}
+	for _, key := range []string{"image_url", "image", "input_reference", "image_reference"} {
+		if images := appendKo3ImageURL(nil, bodyMap[key]); len(images) > 0 {
+			return []string{images[0]}
+		}
+	}
+	return nil
+}
+
+func normalizeKo3VideoRequest(bodyMap map[string]interface{}, upstreamModel string) error {
+	bodyMap["model"] = normalizeKo3ModelName(upstreamModel)
+
+	hasVideoReference := stringifyBodyValue(bodyMap["video_url"]) != ""
+	if !hasVideoReference {
+		if refs := collectSeedanceVideoReferences(bodyMap); len(refs) > 0 {
+			if len(refs) > 1 {
+				return fmt.Errorf("only one video_url is supported for ko3")
+			}
+			if url := stringifyBodyValue(refs[0]["url"]); url != "" {
+				bodyMap["video_url"] = url
+				hasVideoReference = true
+			}
+		}
+	}
+
+	if images := collectKo3ImageURLs(bodyMap); len(images) > 0 {
+		maxImages := 7
+		if hasVideoReference {
+			maxImages = 4
+		}
+		if len(images) > maxImages {
+			return fmt.Errorf("image_urls supports at most %d images for ko3", maxImages)
+		}
+		if len(images) > 1 {
+			imageURLValues := make([]interface{}, 0, len(images))
+			for _, imageURL := range images {
+				imageURLValues = append(imageURLValues, imageURL)
+			}
+			bodyMap["image_urls"] = imageURLValues
+			delete(bodyMap, "image_url")
+		} else {
+			bodyMap["image_url"] = images[0]
+			delete(bodyMap, "image_urls")
+		}
+	}
+
+	if hasVideoReference {
+		delete(bodyMap, "duration")
+		delete(bodyMap, "size")
+	} else {
+		duration := stringifyBodyValue(bodyMap["duration"])
+		if duration == "" {
+			duration = stringifyBodyValue(bodyMap["seconds"])
+		}
+		normalizedDuration, err := normalizeKo3Duration(duration)
+		if err != nil {
+			return err
+		}
+		size := stringifyBodyValue(bodyMap["size"])
+		if size == "" {
+			size = ko3SizeFromAspectRatio(stringifyBodyValue(bodyMap["aspect_ratio"]))
+		}
+		normalizedSize, err := normalizeKo3Size(size)
+		if err != nil {
+			return err
+		}
+		bodyMap["duration"] = normalizedDuration
+		bodyMap["size"] = normalizedSize
+	}
+
+	delete(bodyMap, "seconds")
+	delete(bodyMap, "aspect_ratio")
+	delete(bodyMap, "resolution")
+	delete(bodyMap, "resolution_name")
+	delete(bodyMap, "quality")
+	delete(bodyMap, "reference_mode")
+	delete(bodyMap, "async")
+	delete(bodyMap, "input_reference")
+	delete(bodyMap, "image")
+	delete(bodyMap, "images")
+	delete(bodyMap, "image_reference")
+	delete(bodyMap, "video_reference")
+	delete(bodyMap, "video_urls")
+	delete(bodyMap, "metadata")
+	return nil
+}
+
 func hasMultipartFieldValue(values map[string][]string, key string) bool {
 	items := values[key]
 	for _, item := range items {
@@ -970,7 +1148,7 @@ func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	if !usesImageURLVideoGenerationsModel(upstreamModel) {
 		return
 	}
-	if isKlingV3VideoModel(upstreamModel) {
+	if isKlingV3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel) {
 		return
 	}
 
@@ -1263,7 +1441,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if err != nil {
 		return nil
 	}
-	if isKlingV3VideoModel(info.UpstreamModelName) {
+	if isKlingV3VideoModel(info.UpstreamModelName) || isKo3VideoModel(info.UpstreamModelName) {
 		return nil
 	}
 
@@ -1333,6 +1511,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				normalizeSeedanceVideoRequest(bodyMap, upstreamModelName)
 			}
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
+			if isKo3VideoModel(upstreamModelName) {
+				if err := normalizeKo3VideoRequest(bodyMap, upstreamModelName); err != nil {
+					return nil, err
+				}
+			}
 			if isKlingV3VideoModel(upstreamModelName) {
 				if err := normalizeKlingV3VideoRequest(bodyMap); err != nil {
 					return nil, err
@@ -1357,7 +1540,8 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		upstreamModelName := common.NormalizeGrokImagineModelName(info.UpstreamModelName)
 		isGrokVideo := isGrokImagineVideoModel(upstreamModelName)
 		isKlingV3Video := isKlingV3VideoModel(upstreamModelName)
-		writer.WriteField("model", upstreamModelName)
+		isKo3Video := isKo3VideoModel(upstreamModelName)
+		writer.WriteField("model", normalizeKo3ModelName(upstreamModelName))
 		hasSeconds := false
 		hasDuration := false
 		durationValue := ""
@@ -1399,6 +1583,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			if usesImageURLVideoGenerationsModel(upstreamModelName) && (key == "seconds" || key == "size") {
 				continue
 			}
+			if isKo3Video && (key == "duration" || key == "aspect_ratio" || key == "resolution" || key == "resolution_name" || key == "quality" || key == "reference_mode" || key == "video_reference" || key == "video_urls") {
+				continue
+			}
 			if isKlingV3Video && (key == "resolution" || key == "reference_mode") {
 				continue
 			}
@@ -1410,30 +1597,52 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			writer.WriteField("seconds", durationValue)
 		}
 		if usesImageURLVideoGenerationsModel(upstreamModelName) {
-			if !hasDuration {
-				if durationValue == "" {
-					if isKlingV3Video {
-						durationValue = "5"
-					} else {
-						durationValue = "4"
+			hasVideoReference := hasMultipartFieldValue(formData.Value, "video_url")
+			if isKo3Video {
+				if !hasVideoReference {
+					normalizedDuration, err := normalizeKo3Duration(durationValue)
+					if err != nil {
+						return nil, err
 					}
-				}
-				writer.WriteField("duration", durationValue)
-			}
-			if !hasAspectRatio {
-				if aspectRatioValue == "" && hasSize {
-					aspectRatioValue = soraAspectRatioFromSize(sizeValue)
-				}
-				if aspectRatioValue == "" {
-					if isKlingV3Video {
-						aspectRatioValue = "16:9"
-					} else {
-						aspectRatioValue = "9:16"
+					writer.WriteField("duration", strconv.Itoa(normalizedDuration))
+
+					if sizeValue == "" {
+						sizeValue = ko3SizeFromAspectRatio(aspectRatioValue)
 					}
+					normalizedSize, err := normalizeKo3Size(sizeValue)
+					if err != nil {
+						return nil, err
+					}
+					writer.WriteField("size", normalizedSize)
 				}
-				writer.WriteField("aspect_ratio", aspectRatioValue)
+			} else {
+				if !hasDuration {
+					if durationValue == "" {
+						if isKlingV3Video {
+							durationValue = "5"
+						} else {
+							durationValue = "4"
+						}
+					}
+					writer.WriteField("duration", durationValue)
+				}
+				if !hasAspectRatio {
+					if aspectRatioValue == "" && hasSize {
+						aspectRatioValue = soraAspectRatioFromSize(sizeValue)
+					}
+					if aspectRatioValue == "" {
+						if isKlingV3Video {
+							aspectRatioValue = "16:9"
+						} else {
+							aspectRatioValue = "9:16"
+						}
+					}
+					writer.WriteField("aspect_ratio", aspectRatioValue)
+				}
 			}
-			writer.WriteField("async", "true")
+			if !isKo3Video {
+				writer.WriteField("async", "true")
+			}
 			if isKlingV3Video && !hasMultipartFieldValue(formData.Value, "generate_audio") {
 				writer.WriteField("generate_audio", "true")
 			}

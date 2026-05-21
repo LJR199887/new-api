@@ -27,6 +27,7 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"veo31",
 		"veo31-fast",
 		"veo31-ref",
+		"ko3",
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",
@@ -35,6 +36,21 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
+		}
+	}
+}
+
+func TestKo3AliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
+	for _, modelName := range []string{
+		"ko3",
+		"kling-o3",
+		"kling-video-o-3",
+	} {
+		if !isVideoGenerationsTaskModel(modelName) {
+			t.Fatalf("expected %s to use video generations task endpoint", modelName)
+		}
+		if !isKo3VideoModel(modelName) {
+			t.Fatalf("expected %s to be treated as a ko3 video model", modelName)
 		}
 	}
 }
@@ -52,6 +68,270 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		if !isSeedanceVideoModel(modelName) {
 			t.Fatalf("expected %s to be treated as a Seedance video model", modelName)
 		}
+	}
+}
+
+func TestNormalizeKo3VideoRequestTextToVideoDefaults(t *testing.T) {
+	body := map[string]interface{}{
+		"model":  "ko3",
+		"prompt": "cinematic motion",
+	}
+
+	if err := normalizeKo3VideoRequest(body, "ko3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+
+	if got := body["model"]; got != "ko3" {
+		t.Fatalf("expected model=ko3, got %#v", got)
+	}
+	if got := body["duration"]; got != 3 {
+		t.Fatalf("expected default duration=3, got %#v", got)
+	}
+	if got := body["size"]; got != "1080x1920" {
+		t.Fatalf("expected default size=1080x1920, got %#v", got)
+	}
+}
+
+func TestNormalizeKo3VideoRequestMultiImageAndAlias(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "kling-o3",
+		"prompt":       "cinematic motion",
+		"seconds":      "8",
+		"aspect_ratio": "16:9",
+		"images": []interface{}{
+			"https://example.com/a.png",
+			"https://example.com/b.png",
+			"https://example.com/c.png",
+		},
+		"reference_mode": "frame",
+	}
+
+	if err := normalizeKo3VideoRequest(body, "kling-o3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+
+	if got := body["model"]; got != "ko3" {
+		t.Fatalf("expected alias to normalize to ko3, got %#v", got)
+	}
+	if got := body["duration"]; got != 8 {
+		t.Fatalf("expected duration=8, got %#v", got)
+	}
+	if got := body["size"]; got != "1920x1080" {
+		t.Fatalf("expected 16:9 size=1920x1080, got %#v", got)
+	}
+	imageURLs, ok := body["image_urls"].([]interface{})
+	if !ok || len(imageURLs) != 3 {
+		t.Fatalf("expected three image_urls, got %#v", body["image_urls"])
+	}
+	if _, exists := body["image_url"]; exists {
+		t.Fatalf("expected image_url to be omitted for multi-image ko3 payload")
+	}
+	if _, exists := body["images"]; exists {
+		t.Fatalf("expected images alias to be removed")
+	}
+	if _, exists := body["reference_mode"]; exists {
+		t.Fatalf("expected reference_mode to be removed")
+	}
+}
+
+func TestNormalizeKo3VideoRequestKeepsStartEndFrames(t *testing.T) {
+	body := map[string]interface{}{
+		"model":           "ko3",
+		"prompt":          "transition",
+		"start_image_url": "https://example.com/start.png",
+		"end_image_url":   "https://example.com/end.png",
+		"duration":        float64(5),
+		"size":            "1440x1440",
+	}
+
+	if err := normalizeKo3VideoRequest(body, "ko3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+
+	if got := body["start_image_url"]; got != "https://example.com/start.png" {
+		t.Fatalf("expected start_image_url to be preserved, got %#v", got)
+	}
+	if got := body["end_image_url"]; got != "https://example.com/end.png" {
+		t.Fatalf("expected end_image_url to be preserved, got %#v", got)
+	}
+	if got := body["duration"]; got != 5 {
+		t.Fatalf("expected numeric duration to normalize to 5, got %#v", got)
+	}
+	if got := body["size"]; got != "1440x1440" {
+		t.Fatalf("expected size to be preserved, got %#v", got)
+	}
+}
+
+func TestNormalizeKo3VideoRequestVideoReferenceDropsDurationAndSize(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "ko3",
+		"prompt":   "replace subject",
+		"duration": 8,
+		"size":     "1920x1080",
+		"image_urls": []interface{}{
+			"https://example.com/a.png",
+			"https://example.com/b.png",
+		},
+		"video_url": "https://example.com/source.mp4",
+	}
+
+	if err := normalizeKo3VideoRequest(body, "ko3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+
+	if got := body["video_url"]; got != "https://example.com/source.mp4" {
+		t.Fatalf("expected video_url to be preserved, got %#v", got)
+	}
+	if _, exists := body["duration"]; exists {
+		t.Fatalf("expected duration to be omitted for video reference ko3 payload")
+	}
+	if _, exists := body["size"]; exists {
+		t.Fatalf("expected size to be omitted for video reference ko3 payload")
+	}
+	imageURLs, ok := body["image_urls"].([]interface{})
+	if !ok || len(imageURLs) != 2 {
+		t.Fatalf("expected image_urls to be preserved for multi-image video reference, got %#v", body["image_urls"])
+	}
+}
+
+func TestNormalizeKo3VideoRequestAllowsFifteenSecondDuration(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "ko3",
+		"prompt":   "cinematic motion",
+		"duration": 15,
+	}
+
+	if err := normalizeKo3VideoRequest(body, "ko3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+	if got := body["duration"]; got != 15 {
+		t.Fatalf("expected duration 15 to be preserved, got %#v", got)
+	}
+}
+
+func TestNormalizeKo3VideoRequestRejectsInvalidLimits(t *testing.T) {
+	t.Run("duration", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":    "ko3",
+			"prompt":   "cinematic motion",
+			"duration": 16,
+		}
+
+		if err := normalizeKo3VideoRequest(body, "ko3"); err == nil {
+			t.Fatalf("expected ko3 duration above 15 to fail")
+		}
+	})
+
+	t.Run("multi image count", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":  "ko3",
+			"prompt": "cinematic motion",
+			"image_urls": []interface{}{
+				"https://example.com/1.png",
+				"https://example.com/2.png",
+				"https://example.com/3.png",
+				"https://example.com/4.png",
+				"https://example.com/5.png",
+				"https://example.com/6.png",
+				"https://example.com/7.png",
+				"https://example.com/8.png",
+			},
+		}
+
+		if err := normalizeKo3VideoRequest(body, "ko3"); err == nil {
+			t.Fatalf("expected ko3 multi-image count above 7 to fail")
+		}
+	})
+
+	t.Run("multi image with video count", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":  "ko3",
+			"prompt": "cinematic motion",
+			"image_urls": []interface{}{
+				"https://example.com/1.png",
+				"https://example.com/2.png",
+				"https://example.com/3.png",
+				"https://example.com/4.png",
+				"https://example.com/5.png",
+			},
+			"video_url": "https://example.com/source.mp4",
+		}
+
+		if err := normalizeKo3VideoRequest(body, "ko3"); err == nil {
+			t.Fatalf("expected ko3 multi-image plus video count above 4 to fail")
+		}
+	})
+
+	t.Run("multiple videos", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":  "ko3",
+			"prompt": "cinematic motion",
+			"video_reference": []interface{}{
+				map[string]interface{}{"url": "https://example.com/1.mp4"},
+				map[string]interface{}{"url": "https://example.com/2.mp4"},
+			},
+		}
+
+		if err := normalizeKo3VideoRequest(body, "ko3"); err == nil {
+			t.Fatalf("expected multiple ko3 video references to fail")
+		}
+	})
+}
+
+func TestBuildRequestBodyNormalizesKo3MultipartPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("model", "kling-video-o-3")
+	_ = writer.WriteField("prompt", "animate it")
+	_ = writer.WriteField("duration", "8")
+	_ = writer.WriteField("size", "1920x1080")
+	_ = writer.WriteField("image_url", "https://example.com/source.png")
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer failed: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", bytes.NewReader(body.Bytes()))
+	c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "kling-video-o-3",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+	_, params, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type failed: %v", err)
+	}
+	form, err := multipart.NewReader(bytes.NewReader(raw), params["boundary"]).ReadForm(1024 * 1024)
+	if err != nil {
+		t.Fatalf("read multipart form failed: %v", err)
+	}
+	if got := form.Value["model"][0]; got != "ko3" {
+		t.Fatalf("expected ko3 model alias normalization, got %q", got)
+	}
+	if got := form.Value["duration"][0]; got != "8" {
+		t.Fatalf("expected duration=8, got %q", got)
+	}
+	if got := form.Value["size"][0]; got != "1920x1080" {
+		t.Fatalf("expected size=1920x1080, got %q", got)
+	}
+	if _, exists := form.Value["async"]; exists {
+		t.Fatalf("expected ko3 multipart payload not to include async")
 	}
 }
 

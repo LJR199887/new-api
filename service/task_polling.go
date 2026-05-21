@@ -132,11 +132,25 @@ func isSeedanceVideoPollingModel(modelNames ...string) bool {
 	return false
 }
 
-func isTransientSeedanceMediaPreparationError(task *model.Task, message string, now int64) bool {
+func isKo3VideoPollingModel(modelNames ...string) bool {
+	for _, modelName := range modelNames {
+		modelName = strings.ToLower(strings.TrimSpace(modelName))
+		if modelName == "ko3" || modelName == "kling-o3" || modelName == "kling-video-o-3" {
+			return true
+		}
+	}
+	return false
+}
+
+func isMediaPreparationPollingModel(modelNames ...string) bool {
+	return isSeedanceVideoPollingModel(modelNames...) || isKo3VideoPollingModel(modelNames...)
+}
+
+func isTransientVideoMediaPreparationError(task *model.Task, message string, now int64) bool {
 	if task == nil || task.Action == constant.TaskActionTextGenerate {
 		return false
 	}
-	if !isSeedanceVideoPollingModel(task.Properties.OriginModelName, task.Properties.UpstreamModelName) {
+	if !isMediaPreparationPollingModel(task.Properties.OriginModelName, task.Properties.UpstreamModelName) {
 		return false
 	}
 	if constant.TaskNotFoundGraceMinutes <= 0 {
@@ -160,7 +174,7 @@ func ShouldRetryTransientAsyncVideoFailure(task *model.Task, now int64) bool {
 	if task == nil || task.Status != model.TaskStatusFailure {
 		return false
 	}
-	return isTransientSeedanceMediaPreparationError(task, task.FailReason, now)
+	return isTransientVideoMediaPreparationError(task, task.FailReason, now)
 }
 
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
@@ -533,7 +547,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		errorResult := &dto.GeneralErrorResponse{}
 		if err = common.Unmarshal(responseBody, &errorResult); err == nil {
 			errorMessage := errorResult.ToMessage()
-			if isTransientSeedanceMediaPreparationError(task, errorMessage, now) {
+			if isTransientVideoMediaPreparationError(task, errorMessage, now) {
 				logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media is still preparing, keep polling, response: %s", taskId, string(responseBody)))
 				return nil
 			}
@@ -565,7 +579,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 	}
-	if taskResult.Status == model.TaskStatusFailure && isTransientSeedanceMediaPreparationError(task, taskResult.Reason, now) {
+	if taskResult.Status == model.TaskStatusFailure && isTransientVideoMediaPreparationError(task, taskResult.Reason, now) {
 		logger.LogInfo(ctx, fmt.Sprintf("Task %s upstream media preparation reported transient failure, keep polling, reason: %s", taskId, taskResult.Reason))
 		return nil
 	}

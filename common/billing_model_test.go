@@ -37,11 +37,17 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 	})
 
 	constant.TaskPricePatches = []string{"kling-v3"}
+	appendTaskPricePatchDefault("ko3")
+	appendTaskPricePatchDefault("kling-o3")
+	appendTaskPricePatchDefault("kling-video-o-3")
 	appendTaskPricePatchDefault("video-2.0")
 	appendTaskPricePatchDefault("video-2.0-fast")
 	appendTaskPricePatchDefault("video-2.0")
 
 	assert.ElementsMatch(t, []string{
+		"ko3",
+		"kling-o3",
+		"kling-video-o-3",
 		"kling-v3",
 		"video-2.0",
 		"video-2.0-fast",
