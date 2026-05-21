@@ -194,16 +194,31 @@ func TestNormalizeKo3VideoRequestVideoReferenceDropsDurationAndSize(t *testing.T
 	}
 }
 
+func TestNormalizeKo3VideoRequestAllowsFifteenSecondDuration(t *testing.T) {
+	body := map[string]interface{}{
+		"model":    "ko3",
+		"prompt":   "cinematic motion",
+		"duration": 15,
+	}
+
+	if err := normalizeKo3VideoRequest(body, "ko3"); err != nil {
+		t.Fatalf("normalizeKo3VideoRequest returned error: %v", err)
+	}
+	if got := body["duration"]; got != 15 {
+		t.Fatalf("expected duration 15 to be preserved, got %#v", got)
+	}
+}
+
 func TestNormalizeKo3VideoRequestRejectsInvalidLimits(t *testing.T) {
 	t.Run("duration", func(t *testing.T) {
 		body := map[string]interface{}{
 			"model":    "ko3",
 			"prompt":   "cinematic motion",
-			"duration": 11,
+			"duration": 16,
 		}
 
 		if err := normalizeKo3VideoRequest(body, "ko3"); err == nil {
-			t.Fatalf("expected ko3 duration above 10 to fail")
+			t.Fatalf("expected ko3 duration above 15 to fail")
 		}
 	})
 

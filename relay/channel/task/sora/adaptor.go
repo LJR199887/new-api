@@ -960,8 +960,8 @@ func normalizeKo3Duration(value string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("duration must be an integer between 3 and 15")
 	}
-	if duration < 3 || duration > 10 {
-		return 0, fmt.Errorf("duration must be between 3 and 10 for ko3")
+	if duration < 3 || duration > 15 {
+		return 0, fmt.Errorf("duration must be between 3 and 15 for ko3")
 	}
 	return duration, nil
 }

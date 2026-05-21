@@ -250,7 +250,7 @@ curl https://linksky.top/v1/video/async-generations \
 - `ko3` 下游统一使用 `POST /v1/video/generations`，对外仍调用本站 `POST /v1/video/async-generations`。
 - 兼容别名：`kling-o3`、`kling-video-o-3`，新接入建议使用 `ko3`。
 - `size` 支持 `1440x1440`、`1080x1920`、`1920x1080`，分别对应 `1:1`、`9:16`、`16:9`。
-- 文生视频、单图生视频、多图生视频、首尾帧模式可传 `duration` 和 `size`；`duration` 支持 `3-10` 秒。
+- 文生视频、单图生视频、多图生视频、首尾帧模式可传 `duration` 和 `size`；`duration` 支持 `3-15` 秒。
 - 图片大小不能超过 `5MB`；多图模式最多上传 `7` 张图。
 - 视频只能上传 `1` 个，视频时长需在 `3-10` 秒内，大小不能超过 `200MB`。
 - 多图 + 视频模式下，图片最多上传 `4` 张。
@@ -261,7 +261,7 @@ curl https://linksky.top/v1/video/async-generations \
 | --- | --- | --- | --- |
 | `model` | string | 是 | 固定传 `ko3` |
 | `prompt` | string | 是 | 视频提示词 |
-| `duration` | number | 否 | 文生/图生/首尾帧可传，允许 `3-10` 秒 |
+| `duration` | number | 否 | 文生/图生/首尾帧可传，允许 `3-15` 秒 |
 | `size` | string | 否 | `1440x1440` / `1080x1920` / `1920x1080` |
 | `image_url` | string | 否 | 单图参考图 URL |
 | `image_urls` | array | 否 | 多图参考图 URL；纯多图最多 `7` 张，多图 + 视频最多 `4` 张 |
