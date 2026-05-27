@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -316,6 +318,19 @@ func GenerateAccessToken(c *gin.Context) {
 	return
 }
 
+func getQuotaDisplayAmount(quota int) float64 {
+	amount := float64(quota)
+	switch operation_setting.GetQuotaDisplayType() {
+	case operation_setting.QuotaDisplayTypeTokens:
+		return amount
+	case operation_setting.QuotaDisplayTypeCNY, operation_setting.QuotaDisplayTypeCustom:
+		amount = amount / common.QuotaPerUnit * operation_setting.GetUsdToCurrencyRate(operation_setting.USDExchangeRate)
+	default:
+		amount = amount / common.QuotaPerUnit
+	}
+	return math.Round(amount*100) / 100
+}
+
 type TransferAffQuotaRequest struct {
 	Quota int `json:"quota" binding:"required"`
 }
@@ -384,37 +399,55 @@ func GetSelf(c *gin.Context) {
 
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
-		"id":                user.Id,
-		"username":          user.Username,
-		"display_name":      user.DisplayName,
-		"role":              user.Role,
-		"status":            user.Status,
-		"email":             user.Email,
-		"github_id":         user.GitHubId,
-		"discord_id":        user.DiscordId,
-		"oidc_id":           user.OidcId,
-		"wechat_id":         user.WeChatId,
-		"telegram_id":       user.TelegramId,
-		"group":             user.Group,
-		"quota":             user.Quota,
-		"used_quota":        user.UsedQuota,
-		"request_count":     user.RequestCount,
-		"aff_code":          user.AffCode,
-		"aff_count":         user.AffCount,
-		"aff_quota":         user.AffQuota,
-		"aff_history_quota": user.AffHistoryQuota,
-		"inviter_id":        user.InviterId,
-		"linux_do_id":       user.LinuxDOId,
-		"setting":           user.Setting,
-		"stripe_customer":   user.StripeCustomer,
-		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":       permissions,                // 新增权限字段
+		"id":                        user.Id,
+		"username":                  user.Username,
+		"display_name":              user.DisplayName,
+		"role":                      user.Role,
+		"status":                    user.Status,
+		"email":                     user.Email,
+		"github_id":                 user.GitHubId,
+		"discord_id":                user.DiscordId,
+		"oidc_id":                   user.OidcId,
+		"wechat_id":                 user.WeChatId,
+		"telegram_id":               user.TelegramId,
+		"group":                     user.Group,
+		"quota":                     user.Quota,
+		"used_quota":                user.UsedQuota,
+		"quota_display_amount":      getQuotaDisplayAmount(user.Quota),
+		"used_quota_display_amount": getQuotaDisplayAmount(user.UsedQuota),
+		"quota_display_type":        operation_setting.GetQuotaDisplayType(),
+		"request_count":             user.RequestCount,
+		"aff_code":                  user.AffCode,
+		"aff_count":                 user.AffCount,
+		"aff_quota":                 user.AffQuota,
+		"aff_history_quota":         user.AffHistoryQuota,
+		"inviter_id":                user.InviterId,
+		"linux_do_id":               user.LinuxDOId,
+		"setting":                   user.Setting,
+		"stripe_customer":           user.StripeCustomer,
+		"sidebar_modules":           userSetting.SidebarModules, // 正确提取sidebar_modules字段
+		"permissions":               permissions,                // 新增权限字段
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    responseData,
+	})
+	return
+}
+
+func GetSelfQuota(c *gin.Context) {
+	id := c.GetInt("id")
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"quota_display_amount":      getQuotaDisplayAmount(user.Quota),
+		"used_quota_display_amount": getQuotaDisplayAmount(user.UsedQuota),
 	})
 	return
 }

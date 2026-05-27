@@ -74,6 +74,7 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				selfRoute.GET("/self", controller.GetSelf)
+				selfRoute.GET("/self/quota", controller.GetSelfQuota)
 				selfRoute.GET("/models", controller.GetUserModels)
 				selfRoute.GET("/creative-center/history", controller.GetCreativeCenterHistory)
 				selfRoute.PUT("/creative-center/history", controller.SaveCreativeCenterHistory)
