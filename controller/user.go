@@ -437,6 +437,21 @@ func GetSelf(c *gin.Context) {
 	return
 }
 
+func GetSelfQuota(c *gin.Context) {
+	id := c.GetInt("id")
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"quota_display_amount":      getQuotaDisplayAmount(user.Quota),
+		"used_quota_display_amount": getQuotaDisplayAmount(user.UsedQuota),
+	})
+	return
+}
+
 // 计算用户权限的辅助函数
 func calculateUserPermissions(userRole int) map[string]interface{} {
 	permissions := map[string]interface{}{}
