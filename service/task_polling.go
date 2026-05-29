@@ -142,8 +142,18 @@ func isKo3VideoPollingModel(modelNames ...string) bool {
 	return false
 }
 
+func isSora2VideoPollingModel(modelNames ...string) bool {
+	for _, modelName := range modelNames {
+		modelName = strings.ToLower(strings.TrimSpace(modelName))
+		if modelName == "sora2" || modelName == "sora-2" || strings.HasPrefix(modelName, "sora2-") || strings.HasPrefix(modelName, "sora-2-") {
+			return true
+		}
+	}
+	return false
+}
+
 func isMediaPreparationPollingModel(modelNames ...string) bool {
-	return isSeedanceVideoPollingModel(modelNames...) || isKo3VideoPollingModel(modelNames...)
+	return isSeedanceVideoPollingModel(modelNames...) || isKo3VideoPollingModel(modelNames...) || isSora2VideoPollingModel(modelNames...)
 }
 
 func isTransientVideoMediaPreparationError(task *model.Task, message string, now int64) bool {

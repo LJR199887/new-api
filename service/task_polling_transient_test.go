@@ -214,6 +214,28 @@ func TestIsTransientVideoMediaPreparationErrorForKo3(t *testing.T) {
 	}
 }
 
+func TestIsTransientVideoMediaPreparationErrorForSora2(t *testing.T) {
+	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
+	constant.TaskNotFoundGraceMinutes = 10
+	defer func() {
+		constant.TaskNotFoundGraceMinutes = oldGraceMinutes
+	}()
+
+	now := int64(1000)
+	for _, modelName := range []string{"sora2", "sora-2", "sora2-pro", "sora-2-pro"} {
+		task := &model.Task{
+			Action:     constant.TaskActionGenerate,
+			SubmitTime: now - 60,
+			Properties: model.Properties{
+				OriginModelName: modelName,
+			},
+		}
+		if got := isTransientVideoMediaPreparationError(task, "upstream returned error", now); !got {
+			t.Fatalf("isTransientVideoMediaPreparationError(%s) = %v, want true", modelName, got)
+		}
+	}
+}
+
 func TestShouldRetryTransientAsyncVideoFailure(t *testing.T) {
 	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
 	constant.TaskNotFoundGraceMinutes = 10
