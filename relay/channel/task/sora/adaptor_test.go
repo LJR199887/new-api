@@ -754,6 +754,82 @@ func TestNormalizeSeedanceVideoRequestConvertsVideoURLToVideoReference(t *testin
 	}
 }
 
+func TestNormalizeSeedanceVideoRequestConvertsAudioURLToAudioReference(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.0-fast",
+		"duration":     float64(4),
+		"aspect_ratio": "16:9",
+		"resolution":   "720p",
+		"audio_url":    "https://example.com/music.mp3",
+	}
+
+	normalizeSeedanceVideoRequest(body, "video-2.0-fast")
+
+	audioReference, ok := body["audio_reference"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected audio_reference to be populated, got %#v", body["audio_reference"])
+	}
+	if len(audioReference) != 1 {
+		t.Fatalf("expected 1 audio reference, got %#v", audioReference)
+	}
+	if got := audioReference[0]["url"]; got != "https://example.com/music.mp3" {
+		t.Fatalf("unexpected audio reference %#v", got)
+	}
+	if _, exists := body["audio_url"]; exists {
+		t.Fatalf("expected audio_url to be removed after normalization")
+	}
+}
+
+func TestNormalizeSeedanceVideoRequestConvertsGuidanceAudioReference(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.0",
+		"duration":     float64(4),
+		"aspect_ratio": "1:1",
+		"resolution":   "720p",
+		"guidances": map[string]interface{}{
+			"audio_reference": []interface{}{
+				map[string]interface{}{
+					"audio": map[string]interface{}{
+						"id":       "9be72770-3a31-4791-84bb-5047fc0d1fa9",
+						"type":     "UPLOADED",
+						"duration": float64(14.915917),
+					},
+				},
+			},
+			"custom_guidance": "preserve-me",
+		},
+	}
+
+	normalizeSeedanceVideoRequest(body, "video-2.0")
+
+	audioReference, ok := body["audio_reference"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected audio_reference to be populated, got %#v", body["audio_reference"])
+	}
+	if len(audioReference) != 1 {
+		t.Fatalf("expected 1 audio reference, got %#v", audioReference)
+	}
+	if got := audioReference[0]["id"]; got != "9be72770-3a31-4791-84bb-5047fc0d1fa9" {
+		t.Fatalf("unexpected audio reference id %#v", got)
+	}
+	if got := audioReference[0]["type"]; got != "UPLOADED" {
+		t.Fatalf("expected audio reference type to be preserved, got %#v", got)
+	}
+	if got := audioReference[0]["duration"]; got != float64(14.915917) {
+		t.Fatalf("expected audio reference duration to be preserved, got %#v", got)
+	}
+	guidances, ok := body["guidances"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected non-audio guidances to be preserved, got %#v", body["guidances"])
+	}
+	if _, exists := guidances["audio_reference"]; exists {
+		t.Fatalf("expected guidances.audio_reference to be removed after normalization")
+	}
+	if got := guidances["custom_guidance"]; got != "preserve-me" {
+		t.Fatalf("expected custom guidance to be preserved, got %#v", got)
+	}
+}
+
 func TestNormalizeSeedanceVideoRequestConvertsStartAndEndImageURLs(t *testing.T) {
 	body := map[string]interface{}{
 		"model":           "video-2.0",
@@ -982,6 +1058,61 @@ func TestBuildRequestBodyNormalizesSeedanceVideoReferencePayload(t *testing.T) {
 	}
 	if _, exists := payload["video_urls"]; exists {
 		t.Fatalf("expected video_urls to be removed from upstream payload")
+	}
+}
+
+func TestBuildRequestBodyNormalizesSeedanceAudioReferencePayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/video/async-generations", strings.NewReader(`{
+		"model": "video-2.0-fast",
+		"prompt": "cute rabbit playing with background music @audio1",
+		"duration": 4,
+		"size": "720x1280",
+		"image_url": "https://example.com/rabbit.png",
+		"audio_url": "https://example.com/music.mp3"
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adaptor := &TaskAdaptor{}
+	info := &relaycommon.RelayInfo{
+		RequestURLPath: "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "video-2.0-fast",
+		},
+	}
+
+	bodyReader, err := adaptor.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("BuildRequestBody returned error: %v", err)
+	}
+
+	raw, err := io.ReadAll(bodyReader)
+	if err != nil {
+		t.Fatalf("read request body failed: %v", err)
+	}
+
+	var payload map[string]any
+	if err := projectcommon.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal request payload failed: %v", err)
+	}
+	audioReference, ok := payload["audio_reference"].([]any)
+	if !ok {
+		t.Fatalf("expected audio_reference array, got %#v", payload["audio_reference"])
+	}
+	if len(audioReference) != 1 {
+		t.Fatalf("expected 1 audio reference, got %#v", audioReference)
+	}
+	first, ok := audioReference[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first audio reference object, got %#v", audioReference[0])
+	}
+	if got := first["url"]; got != "https://example.com/music.mp3" {
+		t.Fatalf("unexpected first audio reference url %#v", got)
+	}
+	if _, exists := payload["audio_url"]; exists {
+		t.Fatalf("expected audio_url to be removed from upstream payload")
 	}
 }
 
