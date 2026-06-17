@@ -91,6 +91,10 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'video-2.0',
   'video-2.0-fast',
 ]);
+const VIDEO_2_0_PROMPT_5000_MODELS = new Set([
+  'video-2.0',
+  'video-2.0-fast',
+]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
   'grok-imagine-video': 7,
@@ -343,6 +347,9 @@ const waitForMs = (ms) =>
 const getCreativeCenterPromptMaxLength = (modelName) => {
   if (modelName === 'sora2' || modelName === 'sora2-pro') {
     return CREATIVE_CENTER_SORA2_PROMPT_MAX_LENGTH;
+  }
+  if (VIDEO_2_0_PROMPT_5000_MODELS.has(modelName)) {
+    return CREATIVE_CENTER_PROMPT_MAX_LENGTH;
   }
   if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
     return CREATIVE_CENTER_SEEDANCE_PROMPT_MAX_LENGTH;

@@ -44,7 +44,7 @@ Content-Type: application/json
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `model` | string | 是 | `video-2.0` 或 `video-2.0-fast` |
-| `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `1500` |
+| `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`960x960` |
 | `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
@@ -53,6 +53,9 @@ Content-Type: application/json
 | `image_urls` | string[] | 否 | 多图参考模式使用的图片 URL 数组，最多 `4` 张 |
 | `video_url` | string | 否 | 单视频参考模式使用的视频素材 URL |
 | `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "..." }]`，最多 `3` 个 |
+| `audio_url` | string | 否 | 音频参考素材 URL，仅 `video-2.0` 和 `video-2.0-fast` 支持 |
+| `audio_reference` | object[] | 否 | 音频参考数组，格式为 `[{ "url": "..." }]` 或 `[{ "id": "...", "type": "UPLOADED", "duration": 14.9 }]` |
+| `guidances.audio_reference` | object[] | 否 | 兼容 Leonardo Web 原始音频参考结构，会自动归一化为 `audio_reference` |
 | `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
 | `end_image_url` | string | 否 | 首尾帧模式的结束图 URL |
 | `images` | string[] | 否 | `image_urls` 的兼容别名，最多 `4` 张 |
@@ -65,7 +68,10 @@ Content-Type: application/json
 - 多图参考最多上传 `4` 张图片。
 - 上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
 - 视频参考模式下，单个参考视频的分辨率必须在 `720px` 到 `2160px` 之间，否则上游会返回“视频分辨率不支持”错误。
-- `prompt` 字符数不能超过 `1500`，超过后可能会被上游拒绝或导致生成失败。
+- 音频参考支持 `mp3`、`wav`、`m4a`、`aac`、`ogg`、`webm` 等常见音频格式。
+- 使用 `audio_url` 时，服务会将远程音频交给上游处理并归一化为 `audio_reference`。
+- 如果已经有上游侧上传好的音频 ID，可以直接传 `audio_reference[].id`，建议同时传 `type` 和 `duration`。
+- `prompt` 字符数不能超过 `5000`，超过后可能会被上游拒绝或导致生成失败。
 - `prompt` 建议避免违规、侵权、涉政、涉黄等高风险内容。
 
 ## 4. 文生视频示例
@@ -212,7 +218,67 @@ Content-Type: application/json
 }
 ```
 
-## 12. 提交响应
+## 12. 图片 + 音频参考示例
+
+请求体：
+
+```json
+{
+  "model": "video-2.0-fast",
+  "prompt": "可爱的兔子在玩耍，背景音乐是 @音频1",
+  "duration": 4,
+  "size": "720x1280",
+  "image_url": "https://example.com/rabbit.png",
+  "audio_url": "https://example.com/music.mp3",
+  "async": true
+}
+```
+
+如果已经有上游侧上传好的音频 ID，也可以直接传 `audio_reference`：
+
+```json
+{
+  "model": "video-2.0-fast",
+  "prompt": "可爱的兔子在玩耍，背景音乐是 @音频1",
+  "duration": 4,
+  "size": "720x1280",
+  "image_url": "https://example.com/rabbit.png",
+  "audio_reference": [
+    {
+      "id": "9be72770-3a31-4791-84bb-5047fc0d1fa9",
+      "type": "UPLOADED",
+      "duration": 14.915917
+    }
+  ],
+  "async": true
+}
+```
+
+也兼容 Leonardo Web 原始 `guidances.audio_reference` 结构：
+
+```json
+{
+  "model": "video-2.0-fast",
+  "prompt": "可爱的兔子在玩耍，背景音乐是 @音频1",
+  "duration": 4,
+  "size": "720x1280",
+  "image_url": "https://example.com/rabbit.png",
+  "guidances": {
+    "audio_reference": [
+      {
+        "audio": {
+          "id": "9be72770-3a31-4791-84bb-5047fc0d1fa9",
+          "type": "UPLOADED",
+          "duration": 14.915917
+        }
+      }
+    ]
+  },
+  "async": true
+}
+```
+
+## 13. 提交响应
 
 提交成功后会先返回异步任务信息：
 
@@ -230,7 +296,7 @@ Content-Type: application/json
 
 下游必须保存 `task_id`，后续通过它查询任务结果。
 
-## 13. 查询任务
+## 14. 查询任务
 
 处理中：
 
@@ -285,7 +351,7 @@ Content-Type: application/json
 - 部分任务结果里还可能附带 `seconds`、`size` 字段。
 - 生成成功时优先读取顶层 `url`。
 
-## 14. 状态说明
+## 15. 状态说明
 
 | status | 处理方式 |
 | --- | --- |
@@ -301,7 +367,7 @@ Content-Type: application/json
 - 最长轮询 `5-10` 分钟。
 - 若长时间停留在 `queued`，通常表示上游仍在排队，不一定是请求失败。
 
-## 15. cURL 示例
+## 16. cURL 示例
 
 提交任务：
 
@@ -326,7 +392,7 @@ curl "https://你的域名/v1/video/async-generations/task_xxx" \
   -H "Authorization: Bearer sk-你的令牌"
 ```
 
-## 16. JS 调用示例
+## 17. JS 调用示例
 
 ```js
 async function createSeedanceVideo() {
@@ -390,7 +456,7 @@ async function createSeedanceVideo() {
 }
 ```
 
-## 17. 推荐接入方式
+## 18. 推荐接入方式
 
 - Web/H5 场景建议先提交任务，再在前端或服务端轮询结果。
 - 如果需要更稳定的任务管理，建议下游自行落库保存 `task_id`、`status`、`url`。

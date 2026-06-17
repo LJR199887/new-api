@@ -672,6 +672,93 @@ func collectSeedanceVideoReferences(bodyMap map[string]interface{}) []map[string
 	return refs
 }
 
+func normalizeSeedanceAudioReferenceEntry(value any) map[string]any {
+	switch v := value.(type) {
+	case string:
+		if url := strings.TrimSpace(v); url != "" {
+			return map[string]any{"url": url}
+		}
+	case map[string]any:
+		entrySource := v
+		if audio, ok := v["audio"].(map[string]any); ok {
+			entrySource = audio
+		}
+		id := stringifyBodyValue(entrySource["id"])
+		url := stringifyBodyValue(entrySource["url"])
+		if id == "" && url == "" {
+			return nil
+		}
+		entry := make(map[string]any, len(entrySource))
+		for key, raw := range entrySource {
+			entry[key] = raw
+		}
+		if id != "" {
+			entry["id"] = id
+		}
+		if url != "" {
+			entry["url"] = url
+		}
+		return entry
+	}
+	return nil
+}
+
+func collectSeedanceAudioReferences(bodyMap map[string]interface{}) []map[string]any {
+	refs := make([]map[string]any, 0, 1)
+	appendRef := func(value any) {
+		if ref := normalizeSeedanceAudioReferenceEntry(value); ref != nil {
+			refs = append(refs, ref)
+		}
+	}
+
+	switch values := bodyMap["audio_reference"].(type) {
+	case []any:
+		for _, value := range values {
+			appendRef(value)
+		}
+	case []string:
+		for _, value := range values {
+			appendRef(value)
+		}
+	default:
+		if bodyMap["audio_reference"] != nil {
+			appendRef(bodyMap["audio_reference"])
+		}
+	}
+	if len(refs) > 0 {
+		return refs
+	}
+
+	if guidances, ok := bodyMap["guidances"].(map[string]any); ok {
+		switch values := guidances["audio_reference"].(type) {
+		case []any:
+			for _, value := range values {
+				appendRef(value)
+			}
+		case []string:
+			for _, value := range values {
+				appendRef(value)
+			}
+		default:
+			if guidances["audio_reference"] != nil {
+				appendRef(guidances["audio_reference"])
+			}
+		}
+	}
+	return refs
+}
+
+func removeSeedanceGuidanceAudioReference(bodyMap map[string]interface{}) {
+	guidances, ok := bodyMap["guidances"].(map[string]any)
+	if !ok {
+		return
+	}
+	delete(guidances, "audio_reference")
+	if len(guidances) == 0 {
+		delete(bodyMap, "guidances")
+	}
+}
+
 func seedanceBaseDimensionFromResolution(value string) int {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
@@ -795,6 +882,11 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	} else if videoURL := stringifyBodyValue(bodyMap["video_url"]); videoURL != "" {
 		bodyMap["video_reference"] = []map[string]any{{"url": videoURL}}
 	}
+	if audioReferences := collectSeedanceAudioReferences(bodyMap); len(audioReferences) > 0 {
+		bodyMap["audio_reference"] = audioReferences
+	} else if audioURL := stringifyBodyValue(bodyMap["audio_url"]); audioURL != "" {
+		bodyMap["audio_reference"] = []map[string]any{{"url": audioURL}}
+	}
 
 	bodyMap["model"] = upstreamModel
 
@@ -814,6 +906,8 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "start_image_url")
 	delete(bodyMap, "end_image_url")
 	delete(bodyMap, "video_url")
+	delete(bodyMap, "audio_url")
+	removeSeedanceGuidanceAudioReference(bodyMap)
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
