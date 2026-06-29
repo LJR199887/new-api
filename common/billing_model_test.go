@@ -42,6 +42,10 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 	appendTaskPricePatchDefault("kling-video-o-3")
 	appendTaskPricePatchDefault("video-2.0")
 	appendTaskPricePatchDefault("video-2.0-fast")
+	appendTaskPricePatchDefault("video-2.0-mini")
+	appendTaskPricePatchDefault("video-2.0-480p")
+	appendTaskPricePatchDefault("video-2.0-fast-480p")
+	appendTaskPricePatchDefault("video-2.0-mini-480p")
 	appendTaskPricePatchDefault("video-2.0")
 
 	assert.ElementsMatch(t, []string{
@@ -51,5 +55,9 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 		"kling-v3",
 		"video-2.0",
 		"video-2.0-fast",
+		"video-2.0-mini",
+		"video-2.0-480p",
+		"video-2.0-fast-480p",
+		"video-2.0-mini-480p",
 	}, constant.TaskPricePatches)
 }

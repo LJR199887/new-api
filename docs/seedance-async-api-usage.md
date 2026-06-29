@@ -5,6 +5,10 @@
 适用模型：
 - `video-2.0`
 - `video-2.0-fast`
+- `video-2.0-mini`
+- `video-2.0-480p`
+- `video-2.0-fast-480p`
+- `video-2.0-mini-480p`
 
 ## 1. 接入信息
 
@@ -39,21 +43,32 @@ Content-Type: application/json
 - 比例：`9:16`、`16:9`、`1:1`
 - 分辨率：`720p`
 
+`video-2.0-mini`：
+- 时长：`4-15` 秒
+- 比例：`9:16`、`16:9`、`1:1`
+- 分辨率：`720p`
+
+`video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p`：
+- 时长：`4-15` 秒
+- 比例：`9:16`、`16:9`、`1:1`
+- 分辨率：固定 `480p`
+- 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`
+
 ## 3. 提交参数
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `video-2.0` 或 `video-2.0-fast` |
+| `model` | string | 是 | `video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`960x960` |
 | `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
-| `resolution` | string | 否 | 输出分辨率，当前仅支持 `720p` |
+| `resolution` | string | 否 | 输出分辨率，`video-2.0*` 默认 `720p`；`*-480p` 模型固定 `480p` |
 | `image_url` | string | 否 | 单图参考模式使用的图片 URL；不传即为文生视频 |
 | `image_urls` | string[] | 否 | 多图参考模式使用的图片 URL 数组，最多 `4` 张 |
 | `video_url` | string | 否 | 单视频参考模式使用的视频素材 URL |
 | `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "..." }]`，最多 `3` 个 |
-| `audio_url` | string | 否 | 音频参考素材 URL，仅 `video-2.0` 和 `video-2.0-fast` 支持 |
+| `audio_url` | string | 否 | 音频参考素材 URL，`video-2.0`、`video-2.0-fast`、`video-2.0-mini` 和 `*-480p` 模型支持 |
 | `audio_reference` | object[] | 否 | 音频参考数组，格式为 `[{ "url": "..." }]` 或 `[{ "id": "...", "type": "UPLOADED", "duration": 14.9 }]` |
 | `guidances.audio_reference` | object[] | 否 | 兼容 Leonardo Web 原始音频参考结构，会自动归一化为 `audio_reference` |
 | `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
@@ -64,7 +79,7 @@ Content-Type: application/json
 说明：
 - 下游调用时建议显式传 `duration`、`aspect_ratio`、`resolution`，不要依赖默认值。
 - 如果你已经能明确给出尺寸，也可以直接传 `size`。
-- 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的 `720p` 尺寸；其中 `1:1` 对应 `960x960`。
+- 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的尺寸；`720p` 下 `1:1` 对应 `960x960`，`480p` 下 `9:16` 对应 `496x864`、`16:9` 对应 `864x496`、`1:1` 对应 `640x640`。
 - 多图参考最多上传 `4` 张图片。
 - 上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
 - 视频参考模式下，单个参考视频的分辨率必须在 `720px` 到 `2160px` 之间，否则上游会返回“视频分辨率不支持”错误。
@@ -104,6 +119,23 @@ Content-Type: application/json
   "async": true
 }
 ```
+
+## 5.1 480p 模型示例
+
+请求体：
+
+```json
+{
+  "model": "video-2.0-mini-480p",
+  "prompt": "一个霓虹夜景街头的时尚模特向前走来，镜头轻微跟拍，人物动作自然，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "9:16",
+  "resolution": "480p",
+  "async": true
+}
+```
+
+说明：`video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式与 `video-2.0` 系列一致，但分辨率固定为 `480p`。
 
 ## 6. 首尾帧示例
 

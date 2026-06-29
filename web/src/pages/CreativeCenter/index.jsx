@@ -84,12 +84,25 @@ const ADOBE_VIDEO_MODELS = new Set([
   'seedance-2.0-fast',
   'video-2.0',
   'video-2.0-fast',
+  'video-2.0-mini',
+  'video-2.0-480p',
+  'video-2.0-fast-480p',
+  'video-2.0-mini-480p',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',
   'seedance-2.0-fast',
   'video-2.0',
   'video-2.0-fast',
+  'video-2.0-mini',
+  'video-2.0-480p',
+  'video-2.0-fast-480p',
+  'video-2.0-mini-480p',
+]);
+const SEEDANCE_480P_VIDEO_MODELS = new Set([
+  'video-2.0-480p',
+  'video-2.0-fast-480p',
+  'video-2.0-mini-480p',
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
@@ -108,6 +121,10 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'seedance-2.0-fast': 4,
   'video-2.0': 4,
   'video-2.0-fast': 4,
+  'video-2.0-mini': 4,
+  'video-2.0-480p': 4,
+  'video-2.0-fast-480p': 4,
+  'video-2.0-mini-480p': 4,
 };
 
 const GROK_IMAGE_SIZE_OPTIONS = [
@@ -239,14 +256,22 @@ const ADOBE_VIDEO_RESOLUTION_OPTIONS = [
 const SEEDANCE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '720p', value: '720p' },
 ];
+const SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS = [
+  { label: '480p', value: '480p' },
+];
 const getAdobeVideoResolutionOptions = (modelName) => {
+  if (SEEDANCE_480P_VIDEO_MODELS.has(modelName)) {
+    return SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS;
+  }
   if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
     return SEEDANCE_VIDEO_RESOLUTION_OPTIONS;
   }
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;
 };
 const getAdobeVideoDefaultResolution = (modelName) =>
-  SEEDANCE_VIDEO_MODELS.has(modelName) ? '720p' : '1080p';
+  SEEDANCE_480P_VIDEO_MODELS.has(modelName)
+    ? '480p'
+    : SEEDANCE_VIDEO_MODELS.has(modelName) ? '720p' : '1080p';
 const ADOBE_REFERENCE_MODE_OPTIONS = [
   { label: 'Frame', value: 'frame' },
   { label: 'Image', value: 'image' },
