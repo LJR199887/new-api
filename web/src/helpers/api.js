@@ -306,6 +306,15 @@ export const buildApiPayload = (
     'seedance-2.0-fast',
     'video-2.0',
     'video-2.0-fast',
+    'video-2.0-mini',
+    'video-2.0-480p',
+    'video-2.0-fast-480p',
+    'video-2.0-mini-480p',
+  ]);
+  const seedance480PVideoModels = new Set([
+    'video-2.0-480p',
+    'video-2.0-fast-480p',
+    'video-2.0-mini-480p',
   ]);
   const processedMessages = messages
     .filter(isValidMessage)
@@ -359,7 +368,12 @@ export const buildApiPayload = (
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.0' ||
-    inputs.model === 'video-2.0-fast';
+    inputs.model === 'video-2.0-fast' ||
+    inputs.model === 'video-2.0-mini' ||
+    inputs.model === 'video-2.0-480p' ||
+    inputs.model === 'video-2.0-fast-480p' ||
+    inputs.model === 'video-2.0-mini-480p';
+  const isSeedance480PVideoModel = seedance480PVideoModels.has(inputs.model);
   const isVideoModel =
     typeof inputs.model === 'string' &&
     (inputs.model.includes('video') || isAdobeVideoModel);
@@ -475,7 +489,9 @@ export const buildApiPayload = (
       payload.metadata = {
         ...(payload.metadata || {}),
         ratio: forcedAspectRatio || '16:9',
-        resolution: inputs.videoResolution || '720p',
+        resolution: isSeedance480PVideoModel
+          ? '480p'
+          : inputs.videoResolution || '720p',
       };
     } else {
       payload.duration = forcedDuration;

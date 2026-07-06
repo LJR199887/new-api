@@ -521,6 +521,10 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 		strings.HasPrefix(upstreamModel, "video-2.0")
 }
 
+func isSeedance480PVideoModel(upstreamModel string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(upstreamModel)), "-480p")
+}
+
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel)
@@ -528,15 +532,15 @@ func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 
 func seedanceAspectRatioFromSize(value string) string {
 	switch strings.TrimSpace(value) {
-	case "1280x720", "1920x1080":
+	case "864x496", "1280x720", "1920x1080":
 		return "16:9"
 	case "1112x834", "1664x1248":
 		return "4:3"
-	case "960x960", "1024x1024", "1440x1440":
+	case "640x640", "960x960", "1024x1024", "1440x1440":
 		return "1:1"
 	case "834x1112", "1248x1664":
 		return "3:4"
-	case "720x1280", "1080x1920":
+	case "496x864", "720x1280", "1080x1920":
 		return "9:16"
 	case "1470x630", "2208x944":
 		return "21:9"
@@ -779,7 +783,20 @@ func seedanceBaseDimensionFromResolution(value string) int {
 }
 
 func seedanceSizeFromAspectRatioAndResolution(ratio string, resolution string) string {
-	parts := strings.Split(strings.TrimSpace(ratio), ":")
+	normalizedRatio := strings.TrimSpace(ratio)
+	normalizedResolution := strings.ToLower(strings.TrimSpace(resolution))
+	if normalizedResolution == "480p" {
+		switch normalizedRatio {
+		case "16:9":
+			return "864x496"
+		case "9:16":
+			return "496x864"
+		case "1:1":
+			return "640x640"
+		}
+	}
+
+	parts := strings.Split(normalizedRatio, ":")
 	if len(parts) != 2 {
 		return ""
 	}
@@ -838,6 +855,9 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	}
 	if resolution == "" {
 		resolution = resolutionNameFromQuality(stringifyBodyValue(bodyMap["quality"]))
+	}
+	if isSeedance480PVideoModel(upstreamModel) {
+		resolution = "480p"
 	}
 
 	duration := stringifyBodyValue(bodyMap["duration"])

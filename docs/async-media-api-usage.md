@@ -1,6 +1,6 @@
 # 异步媒体 API 下游调用文档示例
 
-本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
+本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`video-2.0`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
 
 适用模型：
 
@@ -11,6 +11,12 @@
   - `veo31-ref`
   - `ko3`
   - `kling-v3`
+  - `video-2.0`
+  - `video-2.0-fast`
+  - `video-2.0-mini`
+  - `video-2.0-480p`
+  - `video-2.0-fast-480p`
+  - `video-2.0-mini-480p`
   - `grok-imagine-video`
 - 图片：
   - `nano-banana`
@@ -57,6 +63,7 @@ Content-Type: application/json
 | `veo31` / `veo31-fast` / `veo31-ref` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `ko3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `kling-v3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
+| `video-2.0*` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `grok-imagine-video` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `nano-banana*` | 图片 | `POST /v1/images/async-generations` | `GET /v1/images/async-generations/{task_id}` |
 | `gpt-image2` | 图片 | `POST /v1/images/async-generations` | `GET /v1/images/async-generations/{task_id}` |
@@ -346,7 +353,69 @@ curl https://linksky.top/v1/video/async-generations \
 | `image_urls` | array | 否 | 首尾帧参考图 URL，最多前 `2` 张 |
 | `async` | boolean | 否 | 建议传 `true` |
 
-### 3.5 `grok-imagine-video`
+### 3.5 `video-2.0` / `video-2.0-fast` / `video-2.0-mini` / `*-480p`
+
+文生视频：
+
+```json
+{
+  "model": "video-2.0-mini",
+  "prompt": "一个霓虹夜景街头的时尚模特向前走来，镜头轻微跟拍，人物动作自然，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "9:16",
+  "resolution": "720p",
+  "async": true
+}
+```
+
+图生视频：
+
+```json
+{
+  "model": "video-2.0-mini",
+  "prompt": "让图片中的主体自然动起来，镜头平稳推进，光影真实，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
+  "image_url": "https://example.com/source.png",
+  "async": true
+}
+```
+
+480p 模型：
+
+```json
+{
+  "model": "video-2.0-fast-480p",
+  "prompt": "一个产品广告短片，镜头平稳推进，真实光影，无文字，无logo",
+  "duration": 4,
+  "aspect_ratio": "16:9",
+  "resolution": "480p",
+  "async": true
+}
+```
+
+说明：
+
+- `video-2.0-mini` 的请求格式与 `video-2.0` / `video-2.0-fast` 一致。
+- `duration` 推荐 `4-15` 秒，`aspect_ratio` 支持 `9:16` / `16:9` / `1:1`，`resolution` 当前使用 `720p`。
+- `video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式一致，但 `resolution` 固定为 `480p`。
+- 480p 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`。
+- 多图、首尾帧、视频参考、音频参考等高级格式见：[`docs/seedance-async-api-usage.md`](./seedance-async-api-usage.md)
+
+提交参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | `video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
+| `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
+| `duration` | number | 否 | 视频时长，推荐 `4-15` 秒 |
+| `aspect_ratio` | string | 否 | `9:16` / `16:9` / `1:1` |
+| `resolution` | string | 否 | 普通模型使用 `720p`；`*-480p` 模型固定 `480p` |
+| `image_url` | string | 否 | 图生视频参考图 URL，不传则为文生视频 |
+| `async` | boolean | 否 | 建议传 `true` |
+
+### 3.6 `grok-imagine-video`
 
 文生视频：
 

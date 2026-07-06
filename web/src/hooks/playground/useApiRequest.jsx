@@ -53,12 +53,20 @@ const TASK_VIDEO_MODELS = new Set([
   'seedance-2.0-fast',
   'video-2.0',
   'video-2.0-fast',
+  'video-2.0-mini',
+  'video-2.0-480p',
+  'video-2.0-fast-480p',
+  'video-2.0-mini-480p',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',
   'seedance-2.0-fast',
   'video-2.0',
   'video-2.0-fast',
+  'video-2.0-mini',
+  'video-2.0-480p',
+  'video-2.0-fast-480p',
+  'video-2.0-mini-480p',
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
