@@ -33,6 +33,10 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"seedance-2.0-fast",
 		"video-2.0",
 		"video-2.0-fast",
+		"video-2.0-mini",
+		"video-2.0-480p",
+		"video-2.0-fast-480p",
+		"video-2.0-mini-480p",
 	} {
 		if !models[modelName] {
 			t.Fatalf("expected ModelList to include %s", modelName)
@@ -61,6 +65,10 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		"seedance-2.0-fast",
 		"video-2.0",
 		"video-2.0-fast",
+		"video-2.0-mini",
+		"video-2.0-480p",
+		"video-2.0-fast-480p",
+		"video-2.0-mini-480p",
 	} {
 		if !isVideoGenerationsTaskModel(modelName) {
 			t.Fatalf("expected %s to use video generations task endpoint", modelName)
@@ -657,6 +665,56 @@ func TestNormalizeSeedanceVideoRequestBuildsSquareSizeForSeedance(t *testing.T) 
 		if _, exists := body[key]; exists {
 			t.Fatalf("expected %s to be removed after normalization", key)
 		}
+	}
+}
+
+func TestNormalizeSeedance480PVideoRequestBuildsFixedSizes(t *testing.T) {
+	tests := []struct {
+		name        string
+		model       string
+		aspectRatio string
+		wantSize    string
+	}{
+		{
+			name:        "portrait",
+			model:       "video-2.0-480p",
+			aspectRatio: "9:16",
+			wantSize:    "496x864",
+		},
+		{
+			name:        "landscape",
+			model:       "video-2.0-fast-480p",
+			aspectRatio: "16:9",
+			wantSize:    "864x496",
+		},
+		{
+			name:        "square",
+			model:       "video-2.0-mini-480p",
+			aspectRatio: "1:1",
+			wantSize:    "640x640",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":        tt.model,
+				"duration":     float64(8),
+				"resolution":   "720p",
+				"aspect_ratio": tt.aspectRatio,
+			}
+
+			normalizeSeedanceVideoRequest(body, tt.model)
+
+			if got := body["size"]; got != tt.wantSize {
+				t.Fatalf("expected size=%s, got %#v", tt.wantSize, got)
+			}
+			for _, key := range []string{"aspect_ratio", "resolution"} {
+				if _, exists := body[key]; exists {
+					t.Fatalf("expected %s to be removed after normalization", key)
+				}
+			}
+		})
 	}
 }
 

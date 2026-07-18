@@ -32,6 +32,10 @@ var (
 		"exact:seedance-2.0-fast",
 		"exact:video-2.0",
 		"exact:video-2.0-fast",
+		"exact:video-2.0-mini",
+		"exact:video-2.0-480p",
+		"exact:video-2.0-fast-480p",
+		"exact:video-2.0-mini-480p",
 	}
 	OpenAITextModels = []string{
 		"gpt-",
