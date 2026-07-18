@@ -97,7 +97,9 @@ func RelayAsyncVideoFetch(c *gin.Context) {
 		respondAsyncVideoOpenAIError(c, http.StatusNotFound, "task_not_exist", types.ErrorCodeInvalidRequest)
 		return
 	}
-	if shouldRefreshAsyncVideoTask(task) {
+	// 创作中心通过 /pg 查询时保留原有的同步刷新行为；外部 /v1 查询只
+	// 读取数据库，避免下游请求被渠道上游的慢查询阻塞。
+	if shouldRefreshAsyncVideoForRequest(c) && shouldRefreshAsyncVideoTask(task) {
 		if err := service.RefreshVideoTask(c.Request.Context(), task); err != nil {
 			common.SysLog("refresh async video task failed: " + err.Error())
 		}
@@ -112,6 +114,10 @@ func RelayAsyncVideoFetch(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, buildAsyncVideoTaskResponse(task))
+}
+
+func shouldRefreshAsyncVideoForRequest(c *gin.Context) bool {
+	return c != nil && c.Request != nil && c.Request.URL != nil && strings.HasPrefix(c.Request.URL.Path, "/pg/")
 }
 
 func shouldRefreshAsyncVideoTask(task *model.Task) bool {
