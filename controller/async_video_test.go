@@ -118,6 +118,37 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 	}
 }
 
+func TestShouldRefreshAsyncVideoForRequestOnlyRefreshesPlayground(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "external v1 async video", path: "/v1/video/async-generations/task-1", want: false},
+		{name: "creative center async video", path: "/pg/video/async-generations/task-1", want: true},
+		{name: "nil context", path: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			if tt.path != "" {
+				c.Request = httptest.NewRequest("GET", tt.path, nil)
+			}
+			if got := shouldRefreshAsyncVideoForRequest(c); got != tt.want {
+				t.Fatalf("shouldRefreshAsyncVideoForRequest() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	if shouldRefreshAsyncVideoForRequest(nil) {
+		t.Fatal("nil context must not trigger an upstream refresh")
+	}
+}
+
 func TestReadAsyncVideoTaskRequestPreservesAspectRatioAndResolution(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

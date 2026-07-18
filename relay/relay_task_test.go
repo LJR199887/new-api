@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -8,9 +9,39 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestShouldRealtimeFetchForRequestOnlyRefreshesPlayground(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{name: "external v1 video", path: "/v1/video/generations/task-1", want: false},
+		{name: "external openai video", path: "/v1/videos/task-1", want: false},
+		{name: "creative center video", path: "/pg/video/generations/task-1", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest("GET", tt.path, nil)
+			if got := shouldRealtimeFetchForRequest(c); got != tt.want {
+				t.Fatalf("shouldRealtimeFetchForRequest() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	if shouldRealtimeFetchForRequest(nil) {
+		t.Fatal("nil context must not trigger an upstream refresh")
+	}
+}
 
 func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 	original := ratio_setting.ModelPriceBySeconds2JSONString()
