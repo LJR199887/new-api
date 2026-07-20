@@ -294,6 +294,12 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		}
 	}
 
+	// Capture the original client request before an adaptor changes headers or payload shape.
+	requestSnapshot, snapshotErr := service.BuildTaskRequestSnapshot(c, info.PublicTaskID)
+	if snapshotErr != nil {
+		common.SysError("build task request snapshot error: " + snapshotErr.Error())
+	}
+
 	// 8. 构建请求体
 	requestBody, err := adaptor.BuildRequestBody(c, info)
 	if err != nil {
@@ -301,6 +307,11 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 
 	upsertPendingRelayTaskRecord(c, info, platform)
+	if requestSnapshot != nil {
+		if snapshotErr := service.PersistTaskRequestSnapshot(requestSnapshot); snapshotErr != nil {
+			common.SysError("persist task request snapshot error: " + snapshotErr.Error())
+		}
+	}
 
 	// 9. 发送请求
 	resp, err := adaptor.DoRequest(c, info, requestBody)

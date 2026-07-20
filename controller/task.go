@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -66,6 +68,50 @@ func GetUserTask(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(tasksToDto(items, false))
 	common.ApiSuccess(c, pageInfo)
+}
+
+func GetTaskRequestSnapshot(c *gin.Context) {
+	taskID := strings.TrimSpace(c.Param("task_id"))
+	if taskID == "" {
+		common.ApiError(c, fmt.Errorf("task_id is required"))
+		return
+	}
+	if _, exists, err := model.GetByOnlyTaskId(taskID); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if !exists {
+		common.ApiError(c, fmt.Errorf("task not found"))
+		return
+	}
+
+	snapshot, exists, err := model.GetTaskRequestSnapshot(taskID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !exists || snapshot == nil {
+		common.ApiSuccess(c, gin.H{
+			"recorded": false,
+			"task_id":  taskID,
+		})
+		return
+	}
+
+	var body any
+	if err := common.Unmarshal([]byte(snapshot.Body), &body); err != nil {
+		body = string(snapshot.Body)
+	}
+	common.ApiSuccess(c, gin.H{
+		"recorded":      true,
+		"task_id":       snapshot.TaskID,
+		"created_at":    snapshot.CreatedAt,
+		"method":        snapshot.Method,
+		"request_path":  snapshot.RequestPath,
+		"content_type":  snapshot.ContentType,
+		"body":          body,
+		"original_size": snapshot.OriginalSize,
+		"truncated":     snapshot.Truncated,
+	})
 }
 
 func ResolveUserTask(c *gin.Context) {

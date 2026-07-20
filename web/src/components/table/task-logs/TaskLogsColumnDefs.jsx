@@ -18,13 +18,22 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Avatar, Progress, Space, Tag, Typography } from '@douyinfe/semi-ui';
+import {
+  Avatar,
+  Button,
+  Progress,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from '@douyinfe/semi-ui';
 import {
   CheckCircle,
   Clock,
   HelpCircle,
   List,
   Loader,
+  FileJson2,
   Pause,
   Play,
   XCircle,
@@ -409,7 +418,11 @@ const renderStatus = (status, t) => {
   switch (status) {
     case 'SUCCESS':
       return (
-        <Tag color='green' shape='circle' prefixIcon={<CheckCircle size={14} />}>
+        <Tag
+          color='green'
+          shape='circle'
+          prefixIcon={<CheckCircle size={14} />}
+        >
           {t('成功')}
         </Tag>
       );
@@ -473,6 +486,7 @@ export const getTaskLogsColumns = ({
   openVideoModal,
   openImageModal,
   openAudioModal,
+  openRequestModal,
 }) => {
   return [
     {
@@ -600,7 +614,11 @@ export const getTaskLogsColumns = ({
               text || '-'
             ) : (
               <Progress
-                stroke={record.status === 'FAILURE' ? 'var(--semi-color-warning)' : null}
+                stroke={
+                  record.status === 'FAILURE'
+                    ? 'var(--semi-color-warning)'
+                    : null
+                }
                 percent={text ? parseInt(text.replace('%', ''), 10) : 0}
                 showInfo={true}
                 aria-label='task progress'
@@ -617,13 +635,30 @@ export const getTaskLogsColumns = ({
       dataIndex: 'fail_reason',
       fixed: 'right',
       render: (text, record) => {
+        const requestButton = isAdminUser ? (
+          <Tooltip content={t('查看请求')}>
+            <Button
+              theme='borderless'
+              type='tertiary'
+              icon={<FileJson2 size={16} />}
+              aria-label={t('查看请求')}
+              onClick={() => openRequestModal?.(record)}
+            />
+          </Tooltip>
+        ) : null;
+        const renderDetail = (content) => (
+          <Space spacing={6}>
+            {content}
+            {requestButton}
+          </Space>
+        );
         const isSunoSuccess =
           record.platform === 'suno' &&
           record.status === 'SUCCESS' &&
           Array.isArray(record.data) &&
           record.data.some((clip) => clip.audio_url);
         if (isSunoSuccess) {
-          return (
+          return renderDetail(
             <a
               href='#'
               onClick={(e) => {
@@ -632,7 +667,7 @@ export const getTaskLogsColumns = ({
               }}
             >
               {t('点击预览音乐')}
-            </a>
+            </a>,
           );
         }
 
@@ -648,10 +683,11 @@ export const getTaskLogsColumns = ({
         const isSuccess = record.status === 'SUCCESS';
         const resultUrl = record.result_url;
         const hasResultUrl =
-          typeof resultUrl === 'string' && /^(https?:\/\/|data:)/.test(resultUrl);
+          typeof resultUrl === 'string' &&
+          /^(https?:\/\/|data:)/.test(resultUrl);
 
         if (isSuccess && isVideoTask && hasResultUrl) {
-          return (
+          return renderDetail(
             <a
               href='#'
               onClick={(e) => {
@@ -660,12 +696,12 @@ export const getTaskLogsColumns = ({
               }}
             >
               {t('点击预览视频')}
-            </a>
+            </a>,
           );
         }
 
         if (isSuccess && isImageTask && hasResultUrl) {
-          return (
+          return renderDetail(
             <a
               href='#'
               onClick={(e) => {
@@ -674,15 +710,15 @@ export const getTaskLogsColumns = ({
               }}
             >
               {t('点击预览图片')}
-            </a>
+            </a>,
           );
         }
 
         if (!text) {
-          return t('无');
+          return renderDetail(<span>{t('无')}</span>);
         }
 
-        return (
+        return renderDetail(
           <Typography.Text
             ellipsis={{ showTooltip: true }}
             style={{ width: 100 }}
@@ -691,7 +727,7 @@ export const getTaskLogsColumns = ({
             }}
           >
             {text}
-          </Typography.Text>
+          </Typography.Text>,
         );
       },
     },
