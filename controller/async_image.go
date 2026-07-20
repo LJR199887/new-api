@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -116,6 +117,9 @@ func relayAsyncImage(c *gin.Context, action string, relayPath string) {
 	if err := task.Insert(); err != nil {
 		respondAsyncImageOpenAIError(c, http.StatusInternalServerError, err.Error(), types.ErrorCodeQueryDataError)
 		return
+	}
+	if err := service.CaptureTaskRequestSnapshot(c, task.TaskID); err != nil {
+		common.SysError("capture async image request snapshot error: " + err.Error())
 	}
 
 	job := asyncImageJob{

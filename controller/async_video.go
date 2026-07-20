@@ -57,10 +57,14 @@ func RelayAsyncVideoGenerations(c *gin.Context) {
 	}
 
 	req := readAsyncVideoTaskRequest(c, bodyBytes)
+	c.Set("task_request", req)
 	task := initAsyncVideoTask(c, req)
 	if err := task.Insert(); err != nil {
 		respondAsyncVideoOpenAIError(c, http.StatusInternalServerError, err.Error(), types.ErrorCodeQueryDataError)
 		return
+	}
+	if err := service.CaptureTaskRequestSnapshot(c, task.TaskID); err != nil {
+		common.SysError("capture async video request snapshot error: " + err.Error())
 	}
 
 	job := asyncVideoJob{

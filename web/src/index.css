@@ -865,6 +865,16 @@ html.dark .with-pastel-balls::before {
     height: calc(100vh - 77px);
     max-height: calc(100vh - 77px);
   }
+
+  .table-scroll-card.task-logs-card {
+    height: auto;
+    max-height: none;
+  }
+
+  .table-scroll-card.task-logs-card .semi-card-body {
+    flex: none;
+    overflow-y: visible;
+  }
 }
 
 /* ==================== 模型定价页面布局 ==================== */

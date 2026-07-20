@@ -26,6 +26,7 @@ import TaskLogsDashboard from './TaskLogsDashboard';
 import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import ContentModal from './modals/ContentModal';
 import AudioPreviewModal from './modals/AudioPreviewModal';
+import TaskRequestModal from './modals/TaskRequestModal';
 import { useTaskLogsData } from '../../../hooks/task-logs/useTaskLogsData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -56,9 +57,11 @@ const TaskLogsPage = () => {
         setIsModalOpen={taskLogsData.setIsAudioModalOpen}
         audioClips={taskLogsData.audioClips}
       />
+      <TaskRequestModal {...taskLogsData} />
 
       <Layout>
         <CardPro
+          className='task-logs-card'
           type='type2'
           statsArea={<TaskLogsDashboard {...taskLogsData} />}
           searchArea={<TaskLogsFilters {...taskLogsData} />}

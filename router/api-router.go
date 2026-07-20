@@ -342,6 +342,7 @@ func SetApiRouter(router *gin.Engine) {
 			taskRoute.GET("/self/stats", middleware.UserAuth(), controller.GetUserTaskStats)
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
 			taskRoute.GET("/stats", middleware.AdminAuth(), controller.GetAllTaskStats)
+			taskRoute.GET("/:task_id/request", middleware.AdminAuth(), controller.GetTaskRequestSnapshot)
 		}
 
 		assetRoute := apiRouter.Group("/asset")
