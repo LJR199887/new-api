@@ -61,6 +61,7 @@ const TaskLogsPage = () => {
 
       <Layout>
         <CardPro
+          className='task-logs-card'
           type='type2'
           statsArea={<TaskLogsDashboard {...taskLogsData} />}
           searchArea={<TaskLogsFilters {...taskLogsData} />}

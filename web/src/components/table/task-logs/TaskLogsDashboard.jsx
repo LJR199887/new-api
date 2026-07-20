@@ -29,19 +29,24 @@ const StatGridCard = ({ loading, title, icon, accentClass, stats }) => {
   ];
 
   return (
-    <div className='rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'>
-      <div className='mb-4 flex items-center justify-between'>
-        <div className='text-lg font-bold text-slate-900'>{title}</div>
+    <div className='rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-2xl sm:p-5'>
+      <div className='mb-2 flex items-center justify-between sm:mb-4'>
+        <div className='text-base font-bold text-slate-900 sm:text-lg'>
+          {title}
+        </div>
         <div
-          className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${accentClass}`}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-2xl ${accentClass}`}
         >
           {icon}
         </div>
       </div>
 
-      <div className='grid grid-cols-3 gap-3'>
+      <div className='grid grid-cols-3 gap-2 sm:gap-3'>
         {items.map((item) => (
-          <div key={item.key} className='rounded-2xl bg-slate-50 px-3 py-3'>
+          <div
+            key={item.key}
+            className='rounded-lg bg-slate-50 px-2 py-2 sm:rounded-2xl sm:px-3 sm:py-3'
+          >
             <div className='text-xs font-medium text-slate-500'>
               {item.label}
             </div>
@@ -59,7 +64,7 @@ const StatGridCard = ({ loading, title, icon, accentClass, stats }) => {
                 />
               }
             >
-              <div className='mt-2 text-xl font-bold text-slate-900'>
+              <div className='mt-1 text-lg font-bold text-slate-900 sm:mt-2 sm:text-xl'>
                 {item.value}
               </div>
             </Skeleton>
@@ -79,7 +84,7 @@ const TaskLogsDashboard = ({
   t,
 }) => {
   return (
-    <div className='w-full space-y-4'>
+    <div className='w-full space-y-3 sm:space-y-4'>
       <div className='flex flex-wrap gap-2'>
         {taskStatsRangePresets.map((preset) => (
           <Button
@@ -94,7 +99,7 @@ const TaskLogsDashboard = ({
         ))}
       </div>
 
-      <div className='grid grid-cols-1 gap-4 xl:grid-cols-3'>
+      <div className='grid grid-cols-1 gap-3 sm:gap-4 xl:grid-cols-3'>
         <StatGridCard
           loading={statsLoading}
           title={t('总任务')}
