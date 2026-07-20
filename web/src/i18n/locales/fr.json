@@ -1,5 +1,13 @@
 {
   "translation": {
+    "查看请求": "Voir la requête",
+    "加载任务请求失败": "Échec du chargement de la requête de la tâche",
+    "请求方法": "Méthode de requête",
+    "内容类型": "Type de contenu",
+    "任务请求详情": "Détails de la requête de la tâche",
+    "该任务未记录请求内容或快照已过期": "Aucun contenu de requête enregistré ou l'instantané a expiré",
+    "请求内容": "Contenu de la requête",
+    "已截断": "Tronqué",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

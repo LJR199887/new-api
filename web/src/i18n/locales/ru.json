@@ -1,5 +1,13 @@
 {
   "translation": {
+    "查看请求": "Просмотреть запрос",
+    "加载任务请求失败": "Не удалось загрузить запрос задачи",
+    "请求方法": "Метод запроса",
+    "内容类型": "Тип содержимого",
+    "任务请求详情": "Сведения о запросе задачи",
+    "该任务未记录请求内容或快照已过期": "Содержимое запроса не записано или срок хранения снимка истёк",
+    "请求内容": "Содержимое запроса",
+    "已截断": "Обрезано",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web-поиск {{count}} раз / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_few": " + Web-поиск {{count}} раза / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Web-поиск {{count}} раз / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

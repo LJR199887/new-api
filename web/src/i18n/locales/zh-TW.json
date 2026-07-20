@@ -1,5 +1,13 @@
 {
   "translation": {
+    "查看请求": "查看請求",
+    "加载任务请求失败": "載入任務請求失敗",
+    "请求方法": "請求方法",
+    "内容类型": "內容類型",
+    "任务请求详情": "任務請求詳情",
+    "该任务未记录请求内容或快照已过期": "該任務未記錄請求內容或快照已過期",
+    "请求内容": "請求內容",
+    "已截断": "已截斷",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web搜尋 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 圖片生成調用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}",
     " + 文件搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + 檔案搜尋 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

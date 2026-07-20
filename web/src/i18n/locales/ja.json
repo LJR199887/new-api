@@ -1,5 +1,13 @@
 {
   "translation": {
+    "查看请求": "リクエストを表示",
+    "加载任务请求失败": "タスクリクエストの読み込みに失敗しました",
+    "请求方法": "リクエストメソッド",
+    "内容类型": "コンテンツタイプ",
+    "任务请求详情": "タスクリクエストの詳細",
+    "该任务未记录请求内容或快照已过期": "リクエスト内容が記録されていないか、スナップショットの有効期限が切れています",
+    "请求内容": "リクエスト内容",
+    "已截断": "切り詰め済み",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 画像生成APIコール {{symbol}}{{price}} / 1回 * {{ratioType}} {{ratio}}",

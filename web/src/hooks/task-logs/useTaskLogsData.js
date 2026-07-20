@@ -21,13 +21,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
-import {
-  API,
-  copy,
-  isAdmin,
-  showError,
-  showSuccess,
-} from '../../helpers';
+import { API, copy, isAdmin, showError, showSuccess } from '../../helpers';
 import { timestamp2string } from '../../helpers/utils';
 import { ITEMS_PER_PAGE } from '../../constants/common.constant';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -39,7 +33,10 @@ const TASK_STATS_RANGE_PRESETS = [
   {
     key: 'today',
     label: '今天',
-    getRange: () => [dayjs().startOf('day').toDate(), dayjs().endOf('day').toDate()],
+    getRange: () => [
+      dayjs().startOf('day').toDate(),
+      dayjs().endOf('day').toDate(),
+    ],
   },
   {
     key: 'yesterday',
@@ -52,17 +49,26 @@ const TASK_STATS_RANGE_PRESETS = [
   {
     key: 'last3',
     label: '近3天',
-    getRange: () => [dayjs().subtract(2, 'day').startOf('day').toDate(), dayjs().endOf('day').toDate()],
+    getRange: () => [
+      dayjs().subtract(2, 'day').startOf('day').toDate(),
+      dayjs().endOf('day').toDate(),
+    ],
   },
   {
     key: 'last7',
     label: '近7天',
-    getRange: () => [dayjs().subtract(6, 'day').startOf('day').toDate(), dayjs().endOf('day').toDate()],
+    getRange: () => [
+      dayjs().subtract(6, 'day').startOf('day').toDate(),
+      dayjs().endOf('day').toDate(),
+    ],
   },
   {
     key: 'last30',
     label: '近30天',
-    getRange: () => [dayjs().subtract(29, 'day').startOf('day').toDate(), dayjs().endOf('day').toDate()],
+    getRange: () => [
+      dayjs().subtract(29, 'day').startOf('day').toDate(),
+      dayjs().endOf('day').toDate(),
+    ],
   },
 ];
 
@@ -125,7 +131,9 @@ const normalizeDateValueToTimestamp = (value, fallback = 0) => {
 
 const getRangePreset = (presetKey) =>
   TASK_STATS_RANGE_PRESETS.find((preset) => preset.key === presetKey) ||
-  TASK_STATS_RANGE_PRESETS.find((preset) => preset.key === DEFAULT_RANGE_PRESET);
+  TASK_STATS_RANGE_PRESETS.find(
+    (preset) => preset.key === DEFAULT_RANGE_PRESET,
+  );
 
 const detectStatsRangePreset = (dateRange) => {
   if (!Array.isArray(dateRange) || dateRange.length !== 2) {
@@ -150,7 +158,8 @@ const detectStatsRangePreset = (dateRange) => {
   return matchedPreset ? matchedPreset.key : 'custom';
 };
 
-const getDefaultDateRange = () => getRangePreset(DEFAULT_RANGE_PRESET).getRange();
+const getDefaultDateRange = () =>
+  getRangePreset(DEFAULT_RANGE_PRESET).getRange();
 
 export const useTaskLogsData = () => {
   const { t } = useTranslation();
@@ -195,7 +204,8 @@ export const useTaskLogsData = () => {
   const [logCount, setLogCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
   const [mediaType, setMediaType] = useState(DEFAULT_MEDIA_TYPE);
-  const [statsRangePreset, setStatsRangePreset] = useState(DEFAULT_RANGE_PRESET);
+  const [statsRangePreset, setStatsRangePreset] =
+    useState(DEFAULT_RANGE_PRESET);
   const [statsData, setStatsData] = useState(() => normalizeStatsData(null));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -206,6 +216,10 @@ export const useTaskLogsData = () => {
   const [imageUrl, setImageUrl] = useState('');
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
   const [audioClips, setAudioClips] = useState([]);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestSnapshotLoading, setRequestSnapshotLoading] = useState(false);
+  const [requestSnapshot, setRequestSnapshot] = useState(null);
+  const [requestTask, setRequestTask] = useState(null);
   const [showUserInfo, setShowUserInfoModal] = useState(false);
   const [userInfoData, setUserInfoData] = useState(null);
   const [formApi, setFormApi] = useState(null);
@@ -254,7 +268,14 @@ export const useTaskLogsData = () => {
       }
     }
     initDefaultColumns();
-  }, [COLUMN_KEYS.CHANNEL, COLUMN_KEYS.USERNAME, STORAGE_KEY, getDefaultColumnVisibility, initDefaultColumns, isAdminUser]);
+  }, [
+    COLUMN_KEYS.CHANNEL,
+    COLUMN_KEYS.USERNAME,
+    STORAGE_KEY,
+    getDefaultColumnVisibility,
+    initDefaultColumns,
+    isAdminUser,
+  ]);
 
   useEffect(() => {
     if (Object.keys(visibleColumns).length > 0) {
@@ -264,10 +285,12 @@ export const useTaskLogsData = () => {
 
   const getCurrentFormValues = useCallback(
     (overrideValues = null) => {
-      const rawValues = overrideValues || (formApi ? formApi.getValues() : formInitValues);
-      const dateRange = Array.isArray(rawValues?.dateRange) && rawValues.dateRange.length === 2
-        ? rawValues.dateRange
-        : formInitValues.dateRange;
+      const rawValues =
+        overrideValues || (formApi ? formApi.getValues() : formInitValues);
+      const dateRange =
+        Array.isArray(rawValues?.dateRange) && rawValues.dateRange.length === 2
+          ? rawValues.dateRange
+          : formInitValues.dateRange;
 
       const startTimestamp = normalizeDateValueToTimestamp(
         dateRange[0],
@@ -354,11 +377,18 @@ export const useTaskLogsData = () => {
   );
 
   const loadLogs = useCallback(
-    async (page = 1, size = pageSize, overrideValues = null, nextMediaType = mediaType) => {
+    async (
+      page = 1,
+      size = pageSize,
+      overrideValues = null,
+      nextMediaType = mediaType,
+    ) => {
       setLoading(true);
       const filters = getCurrentFormValues(overrideValues);
       try {
-        const res = await API.get(buildListUrl(page, size, filters, nextMediaType));
+        const res = await API.get(
+          buildListUrl(page, size, filters, nextMediaType),
+        );
         const { success, message, data } = res.data;
         if (success) {
           syncPageData(data);
@@ -507,6 +537,34 @@ export const useTaskLogsData = () => {
     setIsAudioModalOpen(true);
   }, []);
 
+  const openRequestModal = useCallback(
+    async (task) => {
+      if (!isAdminUser || !task?.task_id) {
+        return;
+      }
+      setRequestTask(task);
+      setRequestSnapshot(null);
+      setIsRequestModalOpen(true);
+      setRequestSnapshotLoading(true);
+      try {
+        const res = await API.get(
+          `/api/task/${encodeURIComponent(task.task_id)}/request`,
+        );
+        const { success, message, data } = res.data;
+        if (success) {
+          setRequestSnapshot(data);
+        } else {
+          showError(message);
+        }
+      } catch (error) {
+        showError(error?.message || t('加载任务请求失败'));
+      } finally {
+        setRequestSnapshotLoading(false);
+      }
+    },
+    [isAdminUser, t],
+  );
+
   const showUserInfoFunc = useCallback(
     async (userId) => {
       if (!isAdminUser) {
@@ -528,28 +586,38 @@ export const useTaskLogsData = () => {
     [isAdminUser, t],
   );
 
-  const handleColumnVisibilityChange = useCallback((columnKey, checked) => {
-    const updatedColumns = { ...visibleColumns, [columnKey]: checked };
-    setVisibleColumns(updatedColumns);
-  }, [visibleColumns]);
+  const handleColumnVisibilityChange = useCallback(
+    (columnKey, checked) => {
+      const updatedColumns = { ...visibleColumns, [columnKey]: checked };
+      setVisibleColumns(updatedColumns);
+    },
+    [visibleColumns],
+  );
 
-  const handleSelectAll = useCallback((checked) => {
-    const allKeys = Object.keys(COLUMN_KEYS).map((key) => COLUMN_KEYS[key]);
-    const updatedColumns = {};
+  const handleSelectAll = useCallback(
+    (checked) => {
+      const allKeys = Object.keys(COLUMN_KEYS).map((key) => COLUMN_KEYS[key]);
+      const updatedColumns = {};
 
-    allKeys.forEach((key) => {
-      if ((key === COLUMN_KEYS.CHANNEL || key === COLUMN_KEYS.USERNAME) && !isAdminUser) {
-        updatedColumns[key] = false;
-      } else {
-        updatedColumns[key] = checked;
-      }
-    });
+      allKeys.forEach((key) => {
+        if (
+          (key === COLUMN_KEYS.CHANNEL || key === COLUMN_KEYS.USERNAME) &&
+          !isAdminUser
+        ) {
+          updatedColumns[key] = false;
+        } else {
+          updatedColumns[key] = checked;
+        }
+      });
 
-    setVisibleColumns(updatedColumns);
-  }, [COLUMN_KEYS, isAdminUser]);
+      setVisibleColumns(updatedColumns);
+    },
+    [COLUMN_KEYS, isAdminUser],
+  );
 
   useEffect(() => {
-    const localPageSize = parseInt(localStorage.getItem('task-page-size'), 10) || ITEMS_PER_PAGE;
+    const localPageSize =
+      parseInt(localStorage.getItem('task-page-size'), 10) || ITEMS_PER_PAGE;
     setPageSize(localPageSize);
     void Promise.all([
       loadLogs(1, localPageSize, formInitValues, DEFAULT_MEDIA_TYPE),
@@ -577,6 +645,11 @@ export const useTaskLogsData = () => {
     isAudioModalOpen,
     setIsAudioModalOpen,
     audioClips,
+    isRequestModalOpen,
+    setIsRequestModalOpen,
+    requestSnapshotLoading,
+    requestSnapshot,
+    requestTask,
     formApi,
     setFormApi,
     formInitValues,
@@ -605,6 +678,7 @@ export const useTaskLogsData = () => {
     openVideoModal,
     openImageModal,
     openAudioModal,
+    openRequestModal,
     enrichLogs,
     syncPageData,
     mediaType,
