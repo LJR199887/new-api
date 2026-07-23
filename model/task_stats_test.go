@@ -123,3 +123,46 @@ func TestGetTaskActionsForMediaType(t *testing.T) {
 		t.Fatalf("expected 5 video actions, got %d", len(videoActions))
 	}
 }
+
+func TestCountUserActiveMediaTasks(t *testing.T) {
+	truncateTables(t)
+
+	insertTask(t, &Task{
+		TaskID: "active-image",
+		UserId: 1,
+		Action: "imageGenerate",
+		Status: TaskStatusSubmitted,
+	})
+	insertTask(t, &Task{
+		TaskID: "active-video",
+		UserId: 1,
+		Action: "textGenerate",
+		Status: TaskStatusInProgress,
+	})
+	insertTask(t, &Task{
+		TaskID: "completed-image",
+		UserId: 1,
+		Action: "imageEdit",
+		Status: TaskStatusSuccess,
+	})
+	insertTask(t, &Task{
+		TaskID: "active-non-media",
+		UserId: 1,
+		Action: "speech",
+		Status: TaskStatusInProgress,
+	})
+	insertTask(t, &Task{
+		TaskID: "other-user-video",
+		UserId: 2,
+		Action: "generate",
+		Status: TaskStatusInProgress,
+	})
+
+	count, err := CountUserActiveMediaTasks(1)
+	if err != nil {
+		t.Fatalf("CountUserActiveMediaTasks() error = %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("CountUserActiveMediaTasks() = %d, want 2", count)
+	}
+}

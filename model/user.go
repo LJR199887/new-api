@@ -18,6 +18,7 @@ import (
 )
 
 const UserNameMaxLength = 20
+const DefaultMaxConcurrentMediaTasks = 100
 
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
@@ -40,6 +41,7 @@ type User struct {
 	Quota            int            `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
+	MaxConcurrentMediaTasks int     `json:"max_concurrent_media_tasks" gorm:"type:int;default:100"`
 	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
 	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
@@ -444,6 +446,9 @@ func (user *User) Insert(inviterId int) error {
 		}
 	}
 	user.Quota = common.QuotaForNewUser
+	if user.MaxConcurrentMediaTasks == 0 {
+		user.MaxConcurrentMediaTasks = DefaultMaxConcurrentMediaTasks
+	}
 	//user.SetAccessToken(common.GetUUID())
 	user.AffCode = common.GetRandomString(4)
 
@@ -503,6 +508,9 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		}
 	}
 	user.Quota = common.QuotaForNewUser
+	if user.MaxConcurrentMediaTasks == 0 {
+		user.MaxConcurrentMediaTasks = DefaultMaxConcurrentMediaTasks
+	}
 	user.AffCode = common.GetRandomString(4)
 
 	// 初始化用户设置
@@ -584,6 +592,7 @@ func (user *User) Edit(updatePassword bool) error {
 		"group":        newUser.Group,
 		"quota":        newUser.Quota,
 		"remark":       newUser.Remark,
+		"max_concurrent_media_tasks": newUser.MaxConcurrentMediaTasks,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
