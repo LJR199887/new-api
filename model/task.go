@@ -318,6 +318,25 @@ func GetAllUnFinishSyncTasks(limit int) []*Task {
 	return tasks
 }
 
+func CountUserActiveMediaTasks(userID int) (int64, error) {
+	if userID <= 0 {
+		return 0, nil
+	}
+
+	var count int64
+	err := DB.Model(&Task{}).
+		Where("user_id = ?", userID).
+		Where("status IN ?", []TaskStatus{
+			TaskStatusNotStart,
+			TaskStatusSubmitted,
+			TaskStatusQueued,
+			TaskStatusInProgress,
+		}).
+		Where("action IN ?", getTaskActionsForMediaType(TaskMediaTypeAll)).
+		Count(&count).Error
+	return count, err
+}
+
 func GetByOnlyTaskId(taskId string) (*Task, bool, error) {
 	if taskId == "" {
 		return nil, false, nil

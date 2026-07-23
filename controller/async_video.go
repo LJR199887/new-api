@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +60,12 @@ func RelayAsyncVideoGenerations(c *gin.Context) {
 	req := readAsyncVideoTaskRequest(c, bodyBytes)
 	c.Set("task_request", req)
 	task := initAsyncVideoTask(c, req)
-	if err := task.Insert(); err != nil {
+	if err := service.InsertMediaTaskWithLimit(task); err != nil {
+		var limitErr *service.MediaTaskConcurrencyError
+		if errors.As(err, &limitErr) {
+			respondAsyncVideoOpenAIError(c, http.StatusTooManyRequests, limitErr.Error(), types.ErrorCodeInvalidRequest)
+			return
+		}
 		respondAsyncVideoOpenAIError(c, http.StatusInternalServerError, err.Error(), types.ErrorCodeQueryDataError)
 		return
 	}

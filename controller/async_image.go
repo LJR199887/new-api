@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,7 +115,12 @@ func relayAsyncImage(c *gin.Context, action string, relayPath string) {
 	}
 
 	task := initAsyncImageTask(c, action, imageReq)
-	if err := task.Insert(); err != nil {
+	if err := service.InsertMediaTaskWithLimit(task); err != nil {
+		var limitErr *service.MediaTaskConcurrencyError
+		if errors.As(err, &limitErr) {
+			respondAsyncImageOpenAIError(c, http.StatusTooManyRequests, limitErr.Error(), types.ErrorCodeInvalidRequest)
+			return
+		}
 		respondAsyncImageOpenAIError(c, http.StatusInternalServerError, err.Error(), types.ErrorCodeQueryDataError)
 		return
 	}

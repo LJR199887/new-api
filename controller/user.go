@@ -176,6 +176,7 @@ func Register(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.Username,
 		InviterId:   inviterId,
+		MaxConcurrentMediaTasks: model.DefaultMaxConcurrentMediaTasks,
 		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
 	}
 	if common.EmailVerificationEnabled {
@@ -576,6 +577,10 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	if updatedUser.MaxConcurrentMediaTasks < 0 {
+		common.ApiError(c, errors.New("max concurrent media tasks cannot be negative"))
+		return
+	}
 	if updatedUser.Password == "" {
 		updatedUser.Password = "$I_LOVE_U" // make Validator happy :)
 	}
@@ -857,6 +862,7 @@ func CreateUser(c *gin.Context) {
 		Username:    user.Username,
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
+		MaxConcurrentMediaTasks: model.DefaultMaxConcurrentMediaTasks,
 		Role:        user.Role, // 保持管理员设置的角色
 	}
 	if err := cleanUser.Insert(0); err != nil {
