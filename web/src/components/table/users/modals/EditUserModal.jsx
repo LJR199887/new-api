@@ -85,6 +85,7 @@ const EditUserModal = (props) => {
     linux_do_id: '',
     email: '',
     quota: 0,
+    max_concurrent_media_tasks: 100,
     group: 'default',
     remark: '',
   });
@@ -134,6 +135,9 @@ const EditUserModal = (props) => {
     let payload = { ...values };
     if (typeof payload.quota === 'string')
       payload.quota = parseInt(payload.quota) || 0;
+    if (typeof payload.max_concurrent_media_tasks === 'string')
+      payload.max_concurrent_media_tasks =
+        parseInt(payload.max_concurrent_media_tasks) || 0;
     if (userId) {
       payload.id = parseInt(userId);
     }
@@ -315,7 +319,18 @@ const EditUserModal = (props) => {
                         />
                       </Col>
 
-                      <Col span={14}>
+                      <Col span={10}>
+                        <Form.InputNumber
+                          field='max_concurrent_media_tasks'
+                          label={t('图片/视频最大并发数')}
+                          min={0}
+                          step={1}
+                          extraText={t('0 表示不限制')}
+                          style={{ width: '100%' }}
+                        />
+                      </Col>
+
+                      <Col span={4}>
                         <Form.Slot label={t('添加额度')}>
                           <Button
                             icon={<IconPlus />}
