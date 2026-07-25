@@ -39,10 +39,10 @@ func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	if task == nil {
 		return errors.New("task is nil")
 	}
-	if task.Status == model.TaskStatusSuccess {
-		return nil
-	}
-	if task.Status == model.TaskStatusFailure && !ShouldRetryTransientAsyncVideoFailure(task, time.Now().Unix()) {
+	// Terminal task states are immutable. A transient polling error must never
+	// be exposed as FAILURE and then reopened later, because the failure path
+	// may already have refunded the pre-consumed quota.
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
 		return nil
 	}
 	if task.ChannelId <= 0 {
@@ -180,6 +180,9 @@ func isTransientVideoMediaPreparationError(task *model.Task, message string, now
 		strings.Contains(message, "upstream returned error")
 }
 
+// ShouldRetryTransientAsyncVideoFailure is retained for compatibility with
+// callers that classify legacy records. New polling code must not use it to
+// reopen a terminal task, because terminal task states are immutable.
 func ShouldRetryTransientAsyncVideoFailure(task *model.Task, now int64) bool {
 	if task == nil || task.Status != model.TaskStatusFailure {
 		return false
@@ -531,6 +534,18 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	snap := task.Snapshot()
 
+	// A polling request failure is not the same as a failed generation. Keep
+	// the task non-terminal so the normal polling loop can try again. The
+	// timeout sweeper remains the final safety net for tasks that never recover.
+	if isRetryableVideoPollingHTTPStatus(resp.StatusCode) {
+		logger.LogWarn(ctx, fmt.Sprintf(
+			"Task %s polling returned retryable HTTP status %d, keep polling",
+			taskId,
+			resp.StatusCode,
+		))
+		return nil
+	}
+
 	taskResult := &relaycommon.TaskInfo{}
 	// try parse as New API response format
 	var responseItems dto.TaskResponse[model.Task]
@@ -569,8 +584,15 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 					return nil
 				}
 
-				// 其他错误认为是任务失败，记录错误信息并更新任务状态
-				taskResult = relaycommon.FailTaskInfo("upstream returned error")
+				// An error-shaped response without an explicit task status only
+				// means this polling attempt failed. Keep the task non-terminal;
+				// the timeout sweeper is the final safety net.
+				logger.LogWarn(ctx, fmt.Sprintf(
+					"Task %s upstream polling error, keep polling: %s",
+					taskId,
+					errorMessage,
+				))
+				return nil
 			} else {
 				bodyLower := strings.ToLower(string(responseBody))
 				if isTransientVideoNotFoundResponse(resp.StatusCode, responseBody, task.SubmitTime, now, task.Properties.OriginModelName, task.Properties.UpstreamModelName) {
@@ -691,6 +713,15 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	return nil
+}
+
+func isRetryableVideoPollingHTTPStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	default:
+		return statusCode >= http.StatusInternalServerError
+	}
 }
 
 func redactVideoResponseBody(body []byte) []byte {
