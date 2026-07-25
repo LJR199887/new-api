@@ -44,7 +44,7 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "terminal transient failure task still refreshes during grace period",
+			name: "terminal transient failure task remains terminal",
 			task: &model.Task{
 				Status:     model.TaskStatusFailure,
 				Action:     constant.TaskActionGenerate,
@@ -58,7 +58,7 @@ func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 					UpstreamTaskID: "upstream-task",
 				},
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "terminal real failure task does not refresh",

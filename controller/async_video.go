@@ -134,10 +134,7 @@ func shouldRefreshAsyncVideoTask(task *model.Task) bool {
 	if task == nil {
 		return false
 	}
-	if task.Status == model.TaskStatusSuccess {
-		return false
-	}
-	if task.Status == model.TaskStatusFailure && !service.ShouldRetryTransientAsyncVideoFailure(task, time.Now().Unix()) {
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
 		return false
 	}
 	if task.ChannelId <= 0 {

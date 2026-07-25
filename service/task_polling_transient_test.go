@@ -273,12 +273,17 @@ func TestShouldRetryTransientAsyncVideoFailure(t *testing.T) {
 type transientFailureAdaptor struct {
 	responseBody []byte
 	taskInfo     *relaycommon.TaskInfo
+	statusCode   int
 }
 
 func (a *transientFailureAdaptor) Init(info *relaycommon.RelayInfo) {}
 func (a *transientFailureAdaptor) FetchTask(baseURL string, key string, body map[string]any, proxy string) (*http.Response, error) {
+	statusCode := a.statusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
 	return &http.Response{
-		StatusCode: http.StatusOK,
+		StatusCode: statusCode,
 		Body:       io.NopCloser(strings.NewReader(string(a.responseBody))),
 	}, nil
 }
@@ -324,6 +329,78 @@ func TestUpdateVideoSingleTaskKeepsPollingOnTransientFailureStatus(t *testing.T)
 	}
 	if task.Status != model.TaskStatusSubmitted {
 		t.Fatalf("task.Status = %v, want unchanged submitted", task.Status)
+	}
+	if task.FailReason != "" {
+		t.Fatalf("task.FailReason = %q, want empty", task.FailReason)
+	}
+}
+
+func TestUpdateVideoSingleTaskKeepsPollingOnGenericErrorResponse(t *testing.T) {
+	now := time.Now().Unix()
+	task := &model.Task{
+		TaskID:      "public-task-generic-error",
+		Status:      model.TaskStatusInProgress,
+		Action:      constant.TaskActionTextGenerate,
+		SubmitTime:  now - 60,
+		ChannelId:   1,
+		Properties:  model.Properties{OriginModelName: "video-model", UpstreamModelName: "video-model"},
+		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream-task-generic-error"},
+	}
+	taskM := map[string]*model.Task{
+		"upstream-task-generic-error": task,
+	}
+
+	adaptor := &transientFailureAdaptor{
+		responseBody: []byte(`{"error":{"code":"bad_response","message":"upstream returned error"}}`),
+		taskInfo:     &relaycommon.TaskInfo{},
+	}
+
+	if err := updateVideoSingleTask(context.Background(), adaptor, &model.Channel{}, "upstream-task-generic-error", taskM); err != nil {
+		t.Fatalf("updateVideoSingleTask() error = %v", err)
+	}
+	if task.Status != model.TaskStatusInProgress {
+		t.Fatalf("task.Status = %v, want unchanged in progress", task.Status)
+	}
+	if task.Progress != "" {
+		t.Fatalf("task.Progress = %q, want unchanged", task.Progress)
+	}
+	if task.FailReason != "" {
+		t.Fatalf("task.FailReason = %q, want empty", task.FailReason)
+	}
+	if task.FinishTime != 0 {
+		t.Fatalf("task.FinishTime = %d, want zero", task.FinishTime)
+	}
+}
+
+func TestUpdateVideoSingleTaskKeepsPollingOnRetryableHTTPStatus(t *testing.T) {
+	now := time.Now().Unix()
+	task := &model.Task{
+		TaskID:      "public-task-http-error",
+		Status:      model.TaskStatusInProgress,
+		Action:      constant.TaskActionTextGenerate,
+		SubmitTime:  now - 60,
+		ChannelId:   1,
+		Properties:  model.Properties{OriginModelName: "video-model", UpstreamModelName: "video-model"},
+		PrivateData: model.TaskPrivateData{UpstreamTaskID: "upstream-task-http-error"},
+	}
+	taskM := map[string]*model.Task{
+		"upstream-task-http-error": task,
+	}
+
+	adaptor := &transientFailureAdaptor{
+		responseBody: []byte(`{"status":"failed","error":{"message":"gateway unavailable"}}`),
+		taskInfo: &relaycommon.TaskInfo{
+			Status: model.TaskStatusFailure,
+			Reason: "gateway unavailable",
+		},
+		statusCode: http.StatusBadGateway,
+	}
+
+	if err := updateVideoSingleTask(context.Background(), adaptor, &model.Channel{}, "upstream-task-http-error", taskM); err != nil {
+		t.Fatalf("updateVideoSingleTask() error = %v", err)
+	}
+	if task.Status != model.TaskStatusInProgress {
+		t.Fatalf("task.Status = %v, want unchanged in progress", task.Status)
 	}
 	if task.FailReason != "" {
 		t.Fatalf("task.FailReason = %q, want empty", task.FailReason)
