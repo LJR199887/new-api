@@ -78,6 +78,13 @@ const TASK_MEDIA_TYPE_OPTIONS = [
   { key: 'image', label: '图片' },
 ];
 
+const TASK_STATUS_OPTIONS = [
+  { value: 'queued', label: '队列中' },
+  { value: 'running', label: '执行中' },
+  { value: 'success', label: '成功' },
+  { value: 'failure', label: '失败' },
+];
+
 const createStatsBreakdown = () => ({
   running: 0,
   success: 0,
@@ -192,6 +199,7 @@ export const useTaskLogsData = () => {
     () => ({
       channel_id: '',
       task_id: '',
+      status: '',
       dateRange: initialDateRange,
     }),
     [initialDateRange],
@@ -304,6 +312,7 @@ export const useTaskLogsData = () => {
       return {
         channel_id: rawValues?.channel_id || '',
         task_id: rawValues?.task_id || '',
+        status: rawValues?.status || '',
         dateRange,
         start_timestamp: startTimestamp,
         end_timestamp: endTimestamp,
@@ -343,6 +352,9 @@ export const useTaskLogsData = () => {
       if (filters.task_id) {
         params.set('task_id', filters.task_id);
       }
+      if (filters.status) {
+        params.set('status', filters.status);
+      }
       if (nextMediaType) {
         params.set('media_type', nextMediaType);
       }
@@ -367,6 +379,9 @@ export const useTaskLogsData = () => {
 
       if (isAdminUser && filters.channel_id) {
         params.set('channel_id', filters.channel_id);
+      }
+      if (filters.status) {
+        params.set('status', filters.status);
       }
 
       return isAdminUser
@@ -448,6 +463,7 @@ export const useTaskLogsData = () => {
     const resetValues = {
       channel_id: '',
       task_id: '',
+      status: '',
       dateRange: defaultDateRange,
     };
 
@@ -688,6 +704,7 @@ export const useTaskLogsData = () => {
     statsData,
     taskStatsRangePresets: TASK_STATS_RANGE_PRESETS,
     taskMediaTypeOptions: TASK_MEDIA_TYPE_OPTIONS,
+    taskStatusOptions: TASK_STATUS_OPTIONS,
     t,
   };
 };

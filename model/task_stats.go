@@ -157,7 +157,7 @@ func applySyncTaskQueryFilters(query *gorm.DB, queryParams SyncTaskQueryParams) 
 		query = query.Where("action = ?", queryParams.Action)
 	}
 	if queryParams.Status != "" {
-		query = query.Where("status = ?", queryParams.Status)
+		query = applyTaskStatusFilter(query, queryParams.Status)
 	}
 	if queryParams.StartTimestamp != 0 {
 		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
@@ -183,8 +183,25 @@ const (
 	taskStatsFailReasonExpr = "TRIM(COALESCE(fail_reason, ''))"
 	taskStatsFailureCond    = "(" + taskStatsStatusExpr + " IN ('FAILURE','FAILED','ERROR','CANCELED','CANCELLED') OR (" + taskStatsFailReasonExpr + " <> '' AND " + taskStatsStatusExpr + " NOT IN ('SUCCESS','SUCCEEDED','COMPLETED','DONE')) OR " + taskStatsProgressExpr + " IN ('FAILED','FAILURE','ERROR','CANCELED','CANCELLED'))"
 	taskStatsSuccessCond    = "(" + taskStatsStatusExpr + " IN ('SUCCESS','SUCCEEDED','COMPLETED','DONE') OR (" + taskStatsFailReasonExpr + " = '' AND " + taskStatsProgressExpr + " IN ('100','100%','SUCCESS','SUCCEEDED','COMPLETED','DONE')))"
-	taskStatsRunningCond    = "(" + taskStatsStatusExpr + " IN ('NOT_START','SUBMITTED','QUEUED','IN_PROGRESS','PENDING','PROCESSING','RUNNING') OR (" + taskStatsFailReasonExpr + " = '' AND " + taskStatsStatusExpr + " NOT IN ('SUCCESS','SUCCEEDED','COMPLETED','DONE','FAILURE','FAILED','ERROR','CANCELED','CANCELLED','NOT_START','SUBMITTED','QUEUED','IN_PROGRESS','PENDING','PROCESSING','RUNNING') AND " + taskStatsProgressExpr + " <> '' AND " + taskStatsProgressExpr + " NOT IN ('100','100%','SUCCESS','SUCCEEDED','COMPLETED','DONE','FAILED','FAILURE','ERROR','CANCELED','CANCELLED')))"
+	taskStatsQueuedCond     = "(" + taskStatsStatusExpr + " IN ('NOT_START','SUBMITTED','QUEUED','PENDING'))"
+	taskStatsExecutingCond  = "(" + taskStatsStatusExpr + " IN ('IN_PROGRESS','PROCESSING','RUNNING') OR (" + taskStatsFailReasonExpr + " = '' AND " + taskStatsStatusExpr + " NOT IN ('SUCCESS','SUCCEEDED','COMPLETED','DONE','FAILURE','FAILED','ERROR','CANCELED','CANCELLED','NOT_START','SUBMITTED','QUEUED','IN_PROGRESS','PENDING','PROCESSING','RUNNING') AND " + taskStatsProgressExpr + " <> '' AND " + taskStatsProgressExpr + " NOT IN ('100','100%','SUCCESS','SUCCEEDED','COMPLETED','DONE','FAILED','FAILURE','ERROR','CANCELED','CANCELLED')))"
+	taskStatsRunningCond    = "(" + taskStatsQueuedCond + " OR " + taskStatsExecutingCond + ")"
 )
+
+func applyTaskStatusFilter(query *gorm.DB, status string) *gorm.DB {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "queued":
+		return query.Where(taskStatsQueuedCond)
+	case "running":
+		return query.Where(taskStatsExecutingCond)
+	case "success":
+		return query.Where(taskStatsSuccessCond)
+	case "failure":
+		return query.Where(taskStatsFailureCond)
+	default:
+		return query.Where("status = ?", status)
+	}
+}
 
 func buildTaskStatsBaseQuery(queryParams SyncTaskQueryParams) *gorm.DB {
 	return applySyncTaskQueryFilters(DB.Model(&Task{}), queryParams)

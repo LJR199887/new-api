@@ -30,6 +30,7 @@ const TaskLogsFilters = ({
   loading,
   statsLoading,
   isAdminUser,
+  taskStatusOptions,
   t,
 }) => {
   return (
@@ -44,7 +45,7 @@ const TaskLogsFilters = ({
       stopValidateWithError={false}
     >
       <div className='flex flex-col gap-2'>
-        <div className='grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4'>
+        <div className='grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-5'>
           <div className='col-span-1 lg:col-span-2'>
             <Form.DatePicker
               field='dateRange'
@@ -61,6 +62,18 @@ const TaskLogsFilters = ({
             field='task_id'
             prefix={<IconSearch />}
             placeholder={t('任务 ID')}
+            showClear
+            pure
+            size='small'
+          />
+
+          <Form.Select
+            field='status'
+            optionList={taskStatusOptions.map((option) => ({
+              ...option,
+              label: t(option.label),
+            }))}
+            placeholder={t('任务状态')}
             showClear
             pure
             size='small'

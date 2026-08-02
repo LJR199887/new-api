@@ -569,7 +569,7 @@ export const getTaskLogsColumns = ({
 
         return (
           <Typography.Text
-            ellipsis={{ showTooltip: true }}
+            ellipsis
             style={{ width: 220, display: 'inline-block' }}
             onClick={() => {
               openContentModal(prompt);
@@ -584,18 +584,7 @@ export const getTaskLogsColumns = ({
       key: COLUMN_KEYS.TASK_ID,
       title: t('任务ID'),
       dataIndex: 'task_id',
-      render: (text, record) => {
-        return (
-          <Typography.Text
-            ellipsis={{ showTooltip: true }}
-            onClick={() => {
-              openContentModal(JSON.stringify(record, null, 2));
-            }}
-          >
-            <div>{text}</div>
-          </Typography.Text>
-        );
-      },
+      render: (text) => <div>{text}</div>,
     },
     {
       key: COLUMN_KEYS.TASK_STATUS,
