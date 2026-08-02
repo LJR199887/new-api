@@ -395,6 +395,31 @@ curl https://linksky.top/v1/video/async-generations \
 }
 ```
 
+480p 模型直接传 `size`：
+
+```json
+{
+  "model": "video-2.0-fast-480p",
+  "prompt": "一个产品广告短片，镜头平稳推进，真实光影，无文字，无logo",
+  "duration": 4,
+  "size": "864x496",
+  "async": true
+}
+```
+
+480p 图生视频直接传 `size`：
+
+```json
+{
+  "model": "video-2.0-mini-480p",
+  "prompt": "让图片中的主体自然动起来，镜头平稳推进，光影真实，无文字，无logo",
+  "duration": 4,
+  "size": "496x864",
+  "image_url": "https://example.com/source.png",
+  "async": true
+}
+```
+
 说明：
 
 - `video-2.0-mini` 的请求格式与 `video-2.0` / `video-2.0-fast` 一致。
@@ -410,6 +435,7 @@ curl https://linksky.top/v1/video/async-generations \
 | `model` | string | 是 | `video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` 秒 |
+| `size` | string | 否 | 可直接指定尺寸；480p 支持 `496x864` / `864x496` / `640x640` |
 | `aspect_ratio` | string | 否 | `9:16` / `16:9` / `1:1` |
 | `resolution` | string | 否 | 普通模型使用 `720p`；`*-480p` 模型固定 `480p` |
 | `image_url` | string | 否 | 图生视频参考图 URL，不传则为文生视频 |

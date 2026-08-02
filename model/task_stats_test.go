@@ -107,6 +107,66 @@ func TestTaskGetUserStatsFiltersByUser(t *testing.T) {
 	}
 }
 
+func TestTaskStatusGroupFilters(t *testing.T) {
+	truncateTables(t)
+
+	tasks := []*Task{
+		{TaskID: "queued-not-start", Status: TaskStatusNotStart},
+		{TaskID: "queued-submitted", Status: TaskStatusSubmitted},
+		{TaskID: "queued-queued", Status: TaskStatusQueued},
+		{TaskID: "queued-pending", Status: TaskStatus("PENDING")},
+		{TaskID: "running-in-progress", Status: TaskStatusInProgress},
+		{TaskID: "running-processing", Status: TaskStatus("PROCESSING")},
+		{TaskID: "running-progress", Status: TaskStatusUnknown, Progress: "85%"},
+		{TaskID: "success-status", Status: TaskStatusSuccess, Progress: "100%"},
+		{TaskID: "success-progress", Status: TaskStatusUnknown, Progress: "100%"},
+		{TaskID: "failure-status", Status: TaskStatusFailure, FailReason: "failed"},
+		{TaskID: "failure-reason", Status: TaskStatusUnknown, FailReason: "upstream failed"},
+	}
+
+	for index, task := range tasks {
+		task.UserId = 1
+		task.Action = "generate"
+		task.SubmitTime = int64(1712019600 + index)
+		insertTask(t, task)
+	}
+
+	testCases := []struct {
+		status string
+		want   int64
+	}{
+		{status: "queued", want: 4},
+		{status: "running", want: 3},
+		{status: "success", want: 2},
+		{status: "failure", want: 2},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.status, func(t *testing.T) {
+			params := SyncTaskQueryParams{Status: testCase.status}
+			if got := int64(len(TaskGetAllTasks(0, 100, params))); got != testCase.want {
+				t.Fatalf("TaskGetAllTasks() returned %d tasks, want %d", got, testCase.want)
+			}
+			if got := TaskCountAllTasks(params); got != testCase.want {
+				t.Fatalf("TaskCountAllTasks() = %d, want %d", got, testCase.want)
+			}
+			if got := TaskCountAllUserTask(1, params); got != testCase.want {
+				t.Fatalf("TaskCountAllUserTask() = %d, want %d", got, testCase.want)
+			}
+
+			stats := TaskGetStats(params)
+			gotStatsTotal := stats.TotalStats.Running + stats.TotalStats.Success + stats.TotalStats.Failure
+			if gotStatsTotal != testCase.want {
+				t.Fatalf("TaskGetStats() counted %d tasks, want %d", gotStatsTotal, testCase.want)
+			}
+		})
+	}
+
+	if got := TaskCountAllTasks(SyncTaskQueryParams{Status: string(TaskStatusSubmitted)}); got != 1 {
+		t.Fatalf("exact status filter returned %d tasks, want 1", got)
+	}
+}
+
 func TestGetTaskActionsForMediaType(t *testing.T) {
 	allActions := getTaskActionsForMediaType(TaskMediaTypeAll)
 	if len(allActions) != 7 {
