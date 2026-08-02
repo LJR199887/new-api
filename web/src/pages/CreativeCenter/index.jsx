@@ -90,8 +90,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
-  'seedance-2.0',
-  'seedance-2.0-fast',
+  'seedance-2.0',  'seedance-2.0-fast',
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -3063,7 +3062,7 @@ export default function App() {
   const [userState] = useContext(UserContext);
   const [statusState] = useContext(StatusContext);
   const [activeTab, setActiveTab] = useState('chat');
-  const [activeModel, setActiveModel] = useState('chat1');
+  const [activeModel, setActiveModel] = useState('');
   const [hoveredSidebarModelId, setHoveredSidebarModelId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -3244,36 +3243,6 @@ export default function App() {
       });
     };
   }, []);
-  const fallbackModels = useMemo(
-    () => ({
-      chat: [
-        {
-          id: 'chat1',
-          name: 'GPT-4o',
-          desc: '通用旗舰模型，适合对话问答、写作整理与多场景创作。',
-          icon: renderCreativeModelIcon(1, '', 'chat'),
-        },
-      ],
-      image: [
-        {
-          id: 'img1',
-          name: 'FLUX',
-          desc: '高质量图片生成模型，适合海报、插画与视觉概念创作。',
-          icon: renderCreativeModelIcon(0, '', 'image'),
-        },
-      ],
-      video: [
-        {
-          id: 'v1',
-          name: 'grok-video-3-plus',
-          desc: '视频生成模型，适合生成短片分镜、动态概念与创意演示。',
-          icon: renderCreativeModelIcon(48, '', 'video'),
-        },
-      ],
-    }),
-    [],
-  );
-
   const [syncedModels, setSyncedModels] = useState({
     chat: [],
     image: [],
@@ -3351,6 +3320,7 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     setModelsHydrated(false);
+    setSyncedModels({ chat: [], image: [], video: [] });
 
     const tabTagMap = {
       chat: ['文本', '对话', '聊天'],
@@ -3510,12 +3480,11 @@ export default function App() {
           return map;
         }, {});
 
-        const visibleModelNames =
-          isLoggedIn && userModels.length > 0
-            ? userModels
-            : pricingModels
-                .map((item) => item?.model_name || item?.name || '')
-                .filter(Boolean);
+        const visibleModelNames = isLoggedIn
+          ? userModels
+          : pricingModels
+              .map((item) => item?.model_name || item?.name || '')
+              .filter(Boolean);
 
         const nextModels = { chat: [], image: [], video: [] };
         visibleModelNames.forEach((modelName) => {
@@ -3600,50 +3569,35 @@ export default function App() {
 
   const modelPools = useMemo(
     () => ({
-      chat:
-        syncedModels.chat.length > 0
-          ? syncedModels.chat.map((model) => ({
-              ...model,
-              priceLabel: buildCreativeCenterModelPriceLabel(
-                model.pricingModel,
-                activeGroup,
-                pricingGroupRatio,
-                creativeCenterCurrencyOptions,
-              ),
-            }))
-          : fallbackModels.chat,
-      image:
-        syncedModels.image.length > 0
-          ? syncedModels.image.map((model) => ({
-              ...model,
-              priceLabel: buildCreativeCenterModelPriceLabel(
-                model.pricingModel,
-                activeGroup,
-                pricingGroupRatio,
-                creativeCenterCurrencyOptions,
-              ),
-            }))
-          : fallbackModels.image,
-      video:
-        syncedModels.video.length > 0
-          ? syncedModels.video.map((model) => ({
-              ...model,
-              priceLabel: buildCreativeCenterModelPriceLabel(
-                model.pricingModel,
-                activeGroup,
-                pricingGroupRatio,
-                creativeCenterCurrencyOptions,
-              ),
-            }))
-          : fallbackModels.video,
+      chat: syncedModels.chat.map((model) => ({
+        ...model,
+        priceLabel: buildCreativeCenterModelPriceLabel(
+          model.pricingModel,
+          activeGroup,
+          pricingGroupRatio,
+          creativeCenterCurrencyOptions,
+        ),
+      })),
+      image: syncedModels.image.map((model) => ({
+        ...model,
+        priceLabel: buildCreativeCenterModelPriceLabel(
+          model.pricingModel,
+          activeGroup,
+          pricingGroupRatio,
+          creativeCenterCurrencyOptions,
+        ),
+      })),
+      video: syncedModels.video.map((model) => ({
+        ...model,
+        priceLabel: buildCreativeCenterModelPriceLabel(
+          model.pricingModel,
+          activeGroup,
+          pricingGroupRatio,
+          creativeCenterCurrencyOptions,
+        ),
+      })),
     }),
-    [
-      activeGroup,
-      creativeCenterCurrencyOptions,
-      fallbackModels,
-      pricingGroupRatio,
-      syncedModels,
-    ],
+    [activeGroup, creativeCenterCurrencyOptions, pricingGroupRatio, syncedModels],
   );
 
   const currentDisplayModels = modelPools[activeTab] || [];
@@ -3672,6 +3626,7 @@ export default function App() {
     currentDisplayModels.find((model) => model.id === activeModel) ||
     currentDisplayModels[0] ||
     null;
+  const hasAvailableModel = Boolean(selectedModel);
   const isCreativeCenterBootstrapping = !modelsHydrated || !historyLoaded;
   const currentModelName = selectedModel?.value || selectedModel?.name || '';
   const isGrokImagineImageModel =
@@ -7309,6 +7264,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       }, 250);
       return;
     }
+    if (!hasAvailableModel) {
+      showWarning('当前分类暂无可用模型');
+      return;
+    }
     if (activeTab === 'video' && isSeedanceVideoModel) {
       const activeReferenceMode = params.referenceMode;
       if (activeReferenceMode === 'first_last' && uploadedImageUrls.length < 2) {
@@ -8274,6 +8233,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               </div>
             </button>
           ))}
+          {currentDisplayModels.length === 0 ? (
+            <div className='mx-2 flex min-w-[176px] flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-slate-300 bg-white/45 px-4 py-6 text-center lg:mx-0 lg:min-w-0'>
+              <X size={22} className='mb-2 text-slate-400' />
+              <div className='text-sm font-bold text-slate-600'>暂无可用模型</div>
+            </div>
+          ) : null}
 
         </div>
         
@@ -8323,18 +8288,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   <div className='relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-blue-100/50 bg-white/70 px-6 py-9 text-center shadow-[0_0_50px_rgba(59,130,246,0.05)] backdrop-blur-3xl transition-all hover:bg-white/90 hover:shadow-[0_20px_80px_rgba(59,130,246,0.1)] sm:rounded-[3rem] sm:px-12 sm:py-16'>
                     <div className='absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none' />
                     <div className='relative mx-auto mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.5rem] bg-gradient-to-br from-blue-500 to-blue-400 text-white shadow-xl shadow-blue-500/20 ring-1 ring-blue-400 sm:mb-8 sm:h-24 sm:w-24 sm:rounded-[1.75rem]'>
-                      {selectedModel?.icon || <MessageSquare size={40} />}
+                      {selectedModel?.icon || <X size={40} />}
                     </div>
                     <div className='relative text-[11px] font-black uppercase tracking-[0.3em] text-blue-500 flex items-center justify-center gap-3'>
                       <div className="h-[2px] w-6 rounded-full bg-blue-500/30" />
-                      当前模型
+                      {selectedModel ? '当前模型' : '暂不可用'}
                       <div className="h-[2px] w-6 rounded-full bg-blue-500/30" />
                     </div>
                     <h3 className='relative mt-5 text-2xl font-black tracking-tight text-slate-900 drop-shadow-sm sm:mt-6 sm:text-4xl'>
-                      {selectedModel?.name || '对话模型'}
+                      {selectedModel?.name || '暂无可用模型'}
                     </h3>
                     <p className='relative mt-6 text-[15px] leading-relaxed text-slate-500 font-medium'>
-                      {selectedModel?.desc || '这里会显示当前对话模型的介绍，帮助你在开始前快速了解它适合做什么。'}
+                      {selectedModel?.desc || '请先配置并启用对话渠道，模型可用后将自动显示在这里。'}
                     </p>
                   </div>
                 </div>
@@ -9087,18 +9052,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               <div className='flex min-h-full items-center justify-center py-5'>
                 <div className='w-full max-w-xl rounded-[2rem] border border-blue-100/50 bg-white/70 px-6 py-9 text-center shadow-[0_20px_80px_rgba(59,130,246,0.08)] backdrop-blur-2xl transition-all hover:bg-white/90 hover:shadow-[0_20px_80px_rgba(59,130,246,0.12)] sm:rounded-[2.5rem] sm:px-10 sm:py-12'>
                   <div className='mx-auto mb-5 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.5rem] border border-blue-100 bg-gradient-to-br from-white to-blue-50 text-blue-600 shadow-xl shadow-blue-500/10 sm:mb-6 sm:h-24 sm:w-24 sm:rounded-[1.75rem]'>
-                    {selectedModel?.icon || (activeTab === 'image' ? <ImageIcon size={40} /> : <Video size={40} />)}
+                    {selectedModel?.icon || <X size={40} />}
                   </div>
                   <div className='flex items-center justify-center gap-3 text-[11px] font-black uppercase tracking-[0.25em] text-blue-500'>
                     <div className="h-[2px] w-6 rounded-full bg-blue-500/30"></div>
-                    当前模型
+                    {selectedModel ? '当前模型' : '暂不可用'}
                     <div className="h-[2px] w-6 rounded-full bg-blue-500/30"></div>
                   </div>
                   <h3 className='mt-5 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl'>
-                    {selectedModel?.name || (activeTab === 'image' ? '图片模型' : '视频模型')}
+                    {selectedModel?.name || '暂无可用模型'}
                   </h3>
                   <p className='mt-4 text-[15px] font-medium leading-relaxed text-slate-500'>
-                    {selectedModel?.desc || '这里会显示当前模型的介绍，帮助你在开始创作前快速了解它更擅长生成什么内容。'}
+                    {selectedModel?.desc || `请先配置并启用${activeTab === 'image' ? '图片' : '视频'}渠道，模型可用后将自动显示在这里。`}
                   </p>
                 </div>
               </div>
@@ -9158,14 +9123,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   value={prompt}
                   onChange={(e) => updatePrompt(e.target.value)}
                   maxLength={currentPromptMaxLength}
+                  disabled={!hasAvailableModel}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-                  placeholder={!isLoggedIn ? "登录后即可开始对话、图片或视频创作..." : activeTab === 'chat' ? "发送消息..." : "描述你想要的画面，越详细越好..."}
-                  className='max-h-32 min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] font-medium leading-relaxed text-slate-800 outline-none placeholder:text-slate-400 sm:max-h-60 sm:min-h-[70px] sm:px-0 sm:py-3 custom-scrollbar'
+                  placeholder={!isLoggedIn ? "登录后即可开始对话、图片或视频创作..." : !hasAvailableModel ? "当前分类暂无可用模型" : activeTab === 'chat' ? "发送消息..." : "描述你想要的画面，越详细越好..."}
+                  className='max-h-32 min-h-[48px] min-w-0 flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] font-medium leading-relaxed text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400 sm:max-h-60 sm:min-h-[70px] sm:px-0 sm:py-3 custom-scrollbar'
                 />
                 <button
                   onClick={handleSubmit}
                   disabled={
                     isSubmitPending ||
+                    !hasAvailableModel ||
                     (!prompt.trim() &&
                       !hasUploadedImageAssets &&
                       !hasReferenceVideoAssets)
@@ -9266,7 +9233,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，总大小不超过 <span className="text-blue-600 font-bold">200MB</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
                 </div>
               ) : null}
 

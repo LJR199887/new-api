@@ -135,6 +135,31 @@ Content-Type: application/json
 }
 ```
 
+直接传 `size`：
+
+```json
+{
+  "model": "video-2.0-mini-480p",
+  "prompt": "一个霓虹夜景街头的时尚模特向前走来，镜头轻微跟拍，人物动作自然，无文字，无logo",
+  "duration": 4,
+  "size": "496x864",
+  "async": true
+}
+```
+
+图生视频直接传 `size`：
+
+```json
+{
+  "model": "video-2.0-fast-480p",
+  "prompt": "让图片中的主体自然动起来，镜头平稳推进，光影真实，无文字，无logo",
+  "duration": 4,
+  "size": "864x496",
+  "image_url": "https://example.com/source.png",
+  "async": true
+}
+```
+
 说明：`video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式与 `video-2.0` 系列一致，但分辨率固定为 `480p`。
 
 ## 6. 首尾帧示例
