@@ -8237,9 +8237,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             <div className='mx-2 flex min-w-[176px] flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-slate-300 bg-white/45 px-4 py-6 text-center lg:mx-0 lg:min-w-0'>
               <X size={22} className='mb-2 text-slate-400' />
               <div className='text-sm font-bold text-slate-600'>暂无可用模型</div>
-              <div className='mt-1 text-[11px] leading-5 text-slate-400'>
-                请先配置并启用该分类的渠道
-              </div>
             </div>
           ) : null}
 
