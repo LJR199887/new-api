@@ -24,7 +24,18 @@ GET  /v1/video/generations/{task_id}
 | `prompt` | string | 是 | 视频提示词 |
 | `duration` | integer | 否 | 5–15 秒，默认 5 秒 |
 | `aspect_ratio` | string | 否 | `16:9`、`9:16`、`1:1`、`4:3`、`3:4`、`21:9` |
-| `size` | string | 否 | 显式输出尺寸，优先级高于 `aspect_ratio` |
+| `size` | string | 否 | 显式输出尺寸（宽×高），优先级高于 `aspect_ratio` |
+
+MiniMax H3 默认使用 2K，`aspect_ratio` 与上游尺寸的对应关系如下：
+
+| `aspect_ratio` | `size` | 上游参数 |
+| --- | --- | --- |
+| `16:9` | `2560x1440` | `width=2560, height=1440` |
+| `9:16` | `1440x2560` | `width=1440, height=2560` |
+| `1:1` | `1440x1440` | `width=1440, height=1440` |
+| `4:3` | `1920x1440` | `width=1920, height=1440` |
+| `3:4` | `1440x1920` | `width=1440, height=1920` |
+| `21:9` | `3360x1440` | `width=3360, height=1440` |
 
 ## 文生视频
 

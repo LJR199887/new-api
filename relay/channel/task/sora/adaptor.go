@@ -1173,17 +1173,17 @@ func normalizeMiniMaxH3Duration(value string) (int, error) {
 func miniMaxH3SizeFromAspectRatio(value string) string {
 	switch strings.TrimSpace(value) {
 	case "16:9":
-		return "1440x2560"
-	case "9:16":
 		return "2560x1440"
+	case "9:16":
+		return "1440x2560"
 	case "1:1":
 		return "1440x1440"
 	case "4:3":
-		return "1440x1920"
-	case "3:4":
 		return "1920x1440"
+	case "3:4":
+		return "1440x1920"
 	case "21:9":
-		return "1440x3360"
+		return "3360x1440"
 	default:
 		return ""
 	}
@@ -1192,10 +1192,10 @@ func miniMaxH3SizeFromAspectRatio(value string) string {
 func normalizeMiniMaxH3Size(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "1440x2560", nil
+		return "2560x1440", nil
 	}
 	switch value {
-	case "1440x2560", "2560x1440", "1440x1440", "1440x1920", "1920x1440", "1440x3360":
+	case "2560x1440", "1440x2560", "1440x1440", "1920x1440", "1440x1920", "3360x1440":
 		return value, nil
 	default:
 		return "", fmt.Errorf("unsupported size %s for minimax-h3", value)

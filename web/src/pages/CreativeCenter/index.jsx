@@ -277,6 +277,7 @@ const ADOBE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '1080p', value: '1080p' },
   { label: '720p', value: '720p' },
 ];
+const MINIMAX_H3_VIDEO_RESOLUTION_OPTIONS = [{ label: '2K', value: '2K' }];
 const SEEDANCE_VIDEO_RESOLUTION_OPTIONS = [
   { label: '720p', value: '720p' },
 ];
@@ -284,6 +285,9 @@ const SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS = [
   { label: '480p', value: '480p' },
 ];
 const getAdobeVideoResolutionOptions = (modelName) => {
+  if (modelName === MINIMAX_H3_MODEL) {
+    return MINIMAX_H3_VIDEO_RESOLUTION_OPTIONS;
+  }
   if (SEEDANCE_480P_VIDEO_MODELS.has(modelName)) {
     return SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS;
   }
@@ -293,7 +297,9 @@ const getAdobeVideoResolutionOptions = (modelName) => {
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;
 };
 const getAdobeVideoDefaultResolution = (modelName) =>
-  SEEDANCE_480P_VIDEO_MODELS.has(modelName)
+  modelName === MINIMAX_H3_MODEL
+    ? '2K'
+    : SEEDANCE_480P_VIDEO_MODELS.has(modelName)
     ? '480p'
     : SEEDANCE_VIDEO_MODELS.has(modelName) ? '720p' : '1080p';
 const ADOBE_REFERENCE_MODE_OPTIONS = [
@@ -3891,7 +3897,11 @@ export default function App() {
           sourceParams.videoDuration || getAdobeVideoDefaultDuration(modelName);
         snapshot.aspectRatio =
           sourceParams.aspectRatio || getAdobeVideoDefaultAspectRatio(modelName);
-        if (isCurrentAdobeVeoModel || isCurrentSeedanceVideoModel) {
+        if (
+          isCurrentMiniMaxH3Model ||
+          isCurrentAdobeVeoModel ||
+          isCurrentSeedanceVideoModel
+        ) {
           snapshot.videoResolution =
             sourceParams.videoResolution ||
             getAdobeVideoDefaultResolution(modelName);
@@ -4119,7 +4129,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           next.aspectRatio = getAdobeVideoDefaultAspectRatio(currentModelName);
         }
         if (
-          (isAdobeVeoModel || isSeedanceVideoModel) &&
+          (isMiniMaxH3Model || isAdobeVeoModel || isSeedanceVideoModel) &&
           !getAdobeVideoResolutionOptions(currentModelName).some(
             (option) => option.value === next.videoResolution,
           )
@@ -9502,7 +9512,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         widthClass='w-32'
                       />
 
-                      {(isAdobeVeoModel || isSeedanceVideoModel) && (
+                      {(isMiniMaxH3Model ||
+                        isAdobeVeoModel ||
+                        isSeedanceVideoModel) && (
                         <DropSelectButton
                           menuKey='adobeVideoResolution'
                           icon={<Video size={14} />}
