@@ -8023,7 +8023,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 ? submitPayload?.error?.message ||
                   submitPayload?.fail_reason ||
                   submitPayload?.message ||
-                  '浠诲姟鐢熸垚澶辫触'
+                  '任务生成失败'
                 : '',
               resultUrl: isImmediateCompleted ? immediateResultUrl : '',
               requestId,
@@ -8606,10 +8606,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                   </div>
                                 ) : null}
                               </div>
-                            ) : record.status === 'failed' ? (
-                              <div className='mt-4 rounded-[1.75rem] border border-red-100 bg-red-50 px-5 py-4 text-sm leading-7 text-red-600'>
-                                {record.error || '本次图片生成失败，请稍后重试。'}
-                              </div>
                             ) : (
                               <div className='mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
                                 {record.images.map((imageItem, imageIndex) => {
@@ -8952,10 +8948,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                                     ))}
                                   </div>
                                 ) : null}
-                              </div>
-                            ) : record.status === 'failed' ? (
-                              <div className='mt-4 rounded-[1.75rem] border border-red-100 bg-red-50 px-5 py-4 text-sm leading-7 text-red-600'>
-                                {record.error || '本次视频生成失败，请稍后重试。'}
                               </div>
                             ) : (
                               <div className='mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
