@@ -1,6 +1,6 @@
 # 异步媒体 API 下游调用文档示例
 
-本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`video-2.0`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
+本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`minimax-h3`、`video-2.0`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
 
 适用模型：
 
@@ -11,6 +11,7 @@
   - `veo31-ref`
   - `ko3`
   - `kling-v3`
+  - `minimax-h3`
   - `video-2.0`
   - `video-2.0-fast`
   - `video-2.0-mini`
@@ -63,6 +64,7 @@ Content-Type: application/json
 | `veo31` / `veo31-fast` / `veo31-ref` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `ko3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `kling-v3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
+| `minimax-h3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `video-2.0*` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `grok-imagine-video` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `nano-banana*` | 图片 | `POST /v1/images/async-generations` | `GET /v1/images/async-generations/{task_id}` |

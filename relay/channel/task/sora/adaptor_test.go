@@ -27,6 +27,7 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"veo31",
 		"veo31-fast",
 		"veo31-ref",
+		"minimax-h3",
 		"ko3",
 		"kling-v3",
 		"seedance-2.0",
@@ -42,6 +43,133 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 			t.Fatalf("expected ModelList to include %s", modelName)
 		}
 	}
+}
+
+func TestMiniMaxH3UsesVideoGenerationTaskEndpoint(t *testing.T) {
+	if !isVideoGenerationsTaskModel("minimax-h3") {
+		t.Fatal("expected minimax-h3 to use video generations task endpoint")
+	}
+	if !isMiniMaxH3VideoModel("minimax-h3") {
+		t.Fatal("expected minimax-h3 to be treated as a MiniMax H3 video model")
+	}
+}
+
+func TestNormalizeMiniMaxH3VideoRequestDefaults(t *testing.T) {
+	body := map[string]interface{}{
+		"model":  "minimax-h3",
+		"prompt": "cinematic motion",
+	}
+
+	if err := normalizeMiniMaxH3VideoRequest(body); err != nil {
+		t.Fatalf("normalizeMiniMaxH3VideoRequest returned error: %v", err)
+	}
+	if got := body["model"]; got != "minimax-h3" {
+		t.Fatalf("expected model=minimax-h3, got %#v", got)
+	}
+	if got := body["duration"]; got != 5 {
+		t.Fatalf("expected default duration=5, got %#v", got)
+	}
+	if got := body["size"]; got != "1440x2560" {
+		t.Fatalf("expected default size=1440x2560, got %#v", got)
+	}
+}
+
+func TestNormalizeMiniMaxH3VideoRequestMultiImage(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "minimax-h3",
+		"prompt":       "cinematic motion",
+		"duration":     10,
+		"aspect_ratio": "3:4",
+		"images": []interface{}{
+			"https://example.com/a.png",
+			"https://example.com/b.png",
+		},
+	}
+
+	if err := normalizeMiniMaxH3VideoRequest(body); err != nil {
+		t.Fatalf("normalizeMiniMaxH3VideoRequest returned error: %v", err)
+	}
+	if got := body["duration"]; got != 10 {
+		t.Fatalf("expected duration=10, got %#v", got)
+	}
+	if got := body["size"]; got != "1920x1440" {
+		t.Fatalf("expected 3:4 size=1920x1440, got %#v", got)
+	}
+	imageURLs, ok := body["image_urls"].([]interface{})
+	if !ok || len(imageURLs) != 2 {
+		t.Fatalf("expected two image_urls, got %#v", body["image_urls"])
+	}
+	if _, exists := body["images"]; exists {
+		t.Fatal("expected images alias to be removed")
+	}
+}
+
+func TestNormalizeMiniMaxH3VideoRequestReferenceRules(t *testing.T) {
+	t.Run("accept image with audio", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":     "minimax-h3",
+			"prompt":    "cinematic motion",
+			"image_url": "https://example.com/source.png",
+			"audio_url": "https://example.com/audio.mp3",
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err != nil {
+			t.Fatalf("expected minimax-h3 image plus audio to pass: %v", err)
+		}
+		if got := body["audio_url"]; got != "https://example.com/audio.mp3" {
+			t.Fatalf("expected audio_url to be preserved, got %#v", got)
+		}
+	})
+
+	t.Run("reject video reference", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":     "minimax-h3",
+			"prompt":    "cinematic motion",
+			"video_url": "https://example.com/source.mp4",
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err == nil {
+			t.Fatal("expected minimax-h3 video reference to fail")
+		}
+	})
+
+	t.Run("reject more than five images", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":  "minimax-h3",
+			"prompt": "cinematic motion",
+			"image_urls": []interface{}{
+				"https://example.com/1.png",
+				"https://example.com/2.png",
+				"https://example.com/3.png",
+				"https://example.com/4.png",
+				"https://example.com/5.png",
+				"https://example.com/6.png",
+			},
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err == nil {
+			t.Fatal("expected minimax-h3 image count above five to fail")
+		}
+	})
+
+	t.Run("audio requires image reference", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":     "minimax-h3",
+			"prompt":    "cinematic motion",
+			"audio_url": "https://example.com/audio.mp3",
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err == nil {
+			t.Fatal("expected minimax-h3 audio without image to fail")
+		}
+	})
+
+	t.Run("reject duration below five seconds", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":    "minimax-h3",
+			"prompt":   "cinematic motion",
+			"duration": 4,
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err == nil {
+			t.Fatal("expected minimax-h3 duration below five seconds to fail")
+		}
+	})
 }
 
 func TestKo3AliasesUseVideoGenerationTaskEndpoint(t *testing.T) {

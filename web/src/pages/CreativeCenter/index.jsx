@@ -68,12 +68,14 @@ const ADOBE_IMAGE_MODELS = new Set([
   'gpt-image2',
 ]);
 const GPT_IMAGE2_MODEL = 'gpt-image2';
+const MINIMAX_H3_MODEL = 'minimax-h3';
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
   'nano-banana-pro',
 ]);
 const ADOBE_VIDEO_MODELS = new Set([
+  MINIMAX_H3_MODEL,
   'sora2',
   'sora2-pro',
   'veo31',
@@ -120,6 +122,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'veo31-fast': 2,
   'veo31-ref': 3,
   'kling-v3': 2,
+  [MINIMAX_H3_MODEL]: 5,
   'seedance-2.0': 4,
   'seedance-2.0-fast': 4,
   'video-2.0': 4,
@@ -198,6 +201,10 @@ const GROK_VIDEO_PRESET_OPTIONS = [
   { label: 'Custom', value: 'custom' },
 ];
 const ADOBE_VIDEO_DURATION_OPTIONS = {
+  minimaxH3: Array.from({ length: 11 }, (_, index) => index + 5).map((value) => ({
+    label: `${value}s`,
+    value: String(value),
+  })),
   sora: [4, 8, 12].map((value) => ({ label: `${value}s`, value: String(value) })),
   veo: [4, 6, 8].map((value) => ({ label: `${value}s`, value: String(value) })),
   kling: Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
@@ -209,6 +216,14 @@ const ADOBE_VIDEO_DURATION_OPTIONS = {
     value: String(value),
   })),
 };
+const MINIMAX_H3_VIDEO_ASPECT_RATIO_OPTIONS = [
+  { label: '16:9', value: '16:9' },
+  { label: '9:16', value: '9:16' },
+  { label: '1:1', value: '1:1' },
+  { label: '4:3', value: '4:3' },
+  { label: '3:4', value: '3:4' },
+  { label: '21:9', value: '21:9' },
+];
 const ADOBE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '16:9', value: '16:9' },
   { label: '9:16', value: '9:16' },
@@ -219,6 +234,9 @@ const SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '9:16', value: '9:16' },
 ];
 const getAdobeVideoDurationOptions = (modelName) => {
+  if (modelName === MINIMAX_H3_MODEL) {
+    return ADOBE_VIDEO_DURATION_OPTIONS.minimaxH3;
+  }
   if (modelName === 'veo31-ref') {
     return ADOBE_VIDEO_DURATION_OPTIONS.veo.filter((option) => option.value === '8');
   }
@@ -234,6 +252,9 @@ const getAdobeVideoDurationOptions = (modelName) => {
   return ADOBE_VIDEO_DURATION_OPTIONS.veo;
 };
 const getAdobeVideoAspectRatioOptions = (modelName) => {
+  if (modelName === MINIMAX_H3_MODEL) {
+    return MINIMAX_H3_VIDEO_ASPECT_RATIO_OPTIONS;
+  }
   if (modelName === 'veo31-ref') {
     return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS.filter(
       (option) => option.value === '16:9',
@@ -245,7 +266,7 @@ const getAdobeVideoAspectRatioOptions = (modelName) => {
   return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS;
 };
 const getAdobeVideoDefaultDuration = (modelName) =>
-  modelName === 'kling-v3'
+  modelName === MINIMAX_H3_MODEL || modelName === 'kling-v3'
     ? '5'
     : SEEDANCE_VIDEO_MODELS.has(modelName)
       ? '5'
@@ -285,6 +306,14 @@ const SEEDANCE_REFERENCE_MODE_OPTIONS = [
   { label: '视频参考', value: 'video_reference' },
   { label: '多模态', value: 'multimodal' },
 ];
+const MINIMAX_H3_REFERENCE_MODE_OPTIONS = [
+  { label: '多图参考', value: 'multi_image' },
+  { label: '首尾帧', value: 'first_last' },
+];
+const MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS = {
+  multi_image: 5,
+  first_last: 2,
+};
 const SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS = {
   multi_image: 4,
   first_last: 2,
@@ -326,6 +355,7 @@ const CREATIVE_CENTER_VIDEO_TASK_ACTIONS = new Set([
   'remixGenerate',
 ]);
 const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
+  MINIMAX_H3_MODEL,
   'grok-imagine-video',
   'veo31',
   'veo31-fast',
@@ -1262,6 +1292,9 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
   const normalizedModelName = typeof modelName === 'string' ? modelName.trim() : '';
   if (!normalizedModelName) {
     return null;
+  }
+  if (normalizedModelName === MINIMAX_H3_MODEL) {
+    return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
   if (SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? null;
@@ -3644,6 +3677,7 @@ export default function App() {
     currentModelName === 'veo31-ref' ||
     currentModelName === 'veo31-fast';
   const isAdobeKlingV3Model = currentModelName === 'kling-v3';
+  const isMiniMaxH3Model = currentModelName === MINIMAX_H3_MODEL;
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
   const updatePrompt = useCallback((value) => {
@@ -3812,6 +3846,7 @@ export default function App() {
       modelName === 'veo31-ref' ||
       modelName === 'veo31-fast';
     const isCurrentAdobeKlingV3Model = modelName === 'kling-v3';
+    const isCurrentMiniMaxH3Model = modelName === MINIMAX_H3_MODEL;
     const isCurrentSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(modelName);
     const isCurrentVideoModel =
       typeof modelName === 'string' &&
@@ -3862,6 +3897,9 @@ export default function App() {
             getAdobeVideoDefaultResolution(modelName);
         }
         if (isCurrentSeedanceVideoModel) {
+          snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
+        }
+        if (isCurrentMiniMaxH3Model) {
           snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
         }
         if (isCurrentAdobeKlingV3Model) {
@@ -4104,6 +4142,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         ) {
           next.referenceMode = 'multi_image';
         }
+        if (
+          isMiniMaxH3Model &&
+          !MINIMAX_H3_REFERENCE_MODE_OPTIONS.some(
+            (option) => option.value === next.referenceMode,
+          )
+        ) {
+          next.referenceMode = 'multi_image';
+        }
       }
 
       return JSON.stringify(next) === JSON.stringify(prev) ? prev : next;
@@ -4115,6 +4161,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     isAdobeVeoModel,
     isAdobeVideoModel,
     isGrokImagineImageModel,
+    isMiniMaxH3Model,
     isSeedanceVideoModel,
     isVideoModel,
   ]);
@@ -7286,6 +7333,15 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         return;
       }
     }
+    if (
+      activeTab === 'video' &&
+      isMiniMaxH3Model &&
+      params.referenceMode === 'first_last' &&
+      uploadedImageUrls.length < 2
+    ) {
+      showWarning('首尾帧模式需要上传 2 张图片');
+      return;
+    }
     const currentPrompt = prompt;
     const currentUploadedImageUrls = uploadedImageUrls;
     const currentUploadedImageSources = currentUploadedImageItems;
@@ -7835,7 +7891,17 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload[key] = basePayload[key];
               }
             });
-            if (isAdobeKlingV3Model && currentUploadedImageUrls.length > 0) {
+            if (isMiniMaxH3Model && currentUploadedImageUrls.length > 0) {
+              const miniMaxImageUrls = currentUploadedImageUrls.slice(0, 5);
+              if (currentParamsSnapshot.referenceMode === 'first_last') {
+                payload.start_image_url = miniMaxImageUrls[0];
+                payload.end_image_url = miniMaxImageUrls[1];
+              } else if (miniMaxImageUrls.length > 1) {
+                payload.image_urls = miniMaxImageUrls;
+              } else {
+                payload.image_url = miniMaxImageUrls[0];
+              }
+            } else if (isAdobeKlingV3Model && currentUploadedImageUrls.length > 0) {
               payload.image_url = currentUploadedImageUrls[0];
               if (currentUploadedImageUrls.length > 1) {
                 payload.image_urls = currentUploadedImageUrls.slice(0, 2);
@@ -9465,6 +9531,25 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                           )}`}
                           value={params.referenceMode}
                           options={SEEDANCE_REFERENCE_MODE_OPTIONS}
+                          openMenu={openMenu}
+                          setOpenMenu={setOpenMenu}
+                          onSelect={(value) =>
+                            setParams((prev) => ({ ...prev, referenceMode: value }))
+                          }
+                          widthClass='w-36'
+                        />
+                      )}
+
+                      {isMiniMaxH3Model && (
+                        <DropSelectButton
+                          menuKey='referenceMode'
+                          icon={<Layers size={14} />}
+                          label={`参考 ${getOptionLabel(
+                            MINIMAX_H3_REFERENCE_MODE_OPTIONS,
+                            params.referenceMode,
+                          )}`}
+                          value={params.referenceMode}
+                          options={MINIMAX_H3_REFERENCE_MODE_OPTIONS}
                           openMenu={openMenu}
                           setOpenMenu={setOpenMenu}
                           onSelect={(value) =>

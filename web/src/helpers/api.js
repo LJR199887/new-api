@@ -296,6 +296,7 @@ export const buildApiPayload = (
     'gpt-image2',
   ]);
   const adobeVideoModels = new Set([
+    'minimax-h3',
     'sora2',
     'sora2-pro',
     'veo31',
@@ -382,6 +383,7 @@ export const buildApiPayload = (
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
   const isAdobeKlingV3Model = inputs.model === 'kling-v3';
+  const isMiniMaxH3Model = inputs.model === 'minimax-h3';
   const adobeAspectRatioRaw =
     inputs.aspectRatio || (isAdobeVideoModel ? '16:9' : '1:1');
   const adobeAspectRatio =
@@ -475,13 +477,15 @@ export const buildApiPayload = (
     }
   }
   if (isAdobeVideoModel) {
-    const forcedDuration = isSeedanceVideoModel
-      ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 15)
-      : inputs.model === 'veo31-ref'
-        ? 8
-        : isAdobeKlingV3Model
-          ? Math.min(Math.max(Number(inputs.videoDuration || 5), 3), 15)
-          : Number(inputs.videoDuration || 4);
+    const forcedDuration = isMiniMaxH3Model
+      ? Math.min(Math.max(Number(inputs.videoDuration || 5), 5), 15)
+      : isSeedanceVideoModel
+        ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 15)
+        : inputs.model === 'veo31-ref'
+          ? 8
+          : isAdobeKlingV3Model
+            ? Math.min(Math.max(Number(inputs.videoDuration || 5), 3), 15)
+            : Number(inputs.videoDuration || 4);
     const forcedAspectRatio = inputs.model === 'veo31-ref' ? '16:9' : adobeAspectRatio;
     payload.stream = false;
     if (isSeedanceVideoModel) {
