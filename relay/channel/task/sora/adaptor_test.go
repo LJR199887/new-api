@@ -69,8 +69,29 @@ func TestNormalizeMiniMaxH3VideoRequestDefaults(t *testing.T) {
 	if got := body["duration"]; got != 5 {
 		t.Fatalf("expected default duration=5, got %#v", got)
 	}
-	if got := body["size"]; got != "1440x2560" {
-		t.Fatalf("expected default size=1440x2560, got %#v", got)
+	if got := body["size"]; got != "2560x1440" {
+		t.Fatalf("expected default size=2560x1440, got %#v", got)
+	}
+}
+
+func TestMiniMaxH3SizeFromAspectRatio(t *testing.T) {
+	tests := map[string]string{
+		"16:9": "2560x1440",
+		"9:16": "1440x2560",
+		"1:1":  "1440x1440",
+		"4:3":  "1920x1440",
+		"3:4":  "1440x1920",
+		"21:9": "3360x1440",
+	}
+	for aspectRatio, expectedSize := range tests {
+		t.Run(aspectRatio, func(t *testing.T) {
+			if got := miniMaxH3SizeFromAspectRatio(aspectRatio); got != expectedSize {
+				t.Fatalf("expected %s to map to %s, got %s", aspectRatio, expectedSize, got)
+			}
+			if got, err := normalizeMiniMaxH3Size(expectedSize); err != nil || got != expectedSize {
+				t.Fatalf("expected size %s to be accepted, got %q, err=%v", expectedSize, got, err)
+			}
+		})
 	}
 }
 
@@ -92,8 +113,8 @@ func TestNormalizeMiniMaxH3VideoRequestMultiImage(t *testing.T) {
 	if got := body["duration"]; got != 10 {
 		t.Fatalf("expected duration=10, got %#v", got)
 	}
-	if got := body["size"]; got != "1920x1440" {
-		t.Fatalf("expected 3:4 size=1920x1440, got %#v", got)
+	if got := body["size"]; got != "1440x1920" {
+		t.Fatalf("expected 3:4 size=1440x1920, got %#v", got)
 	}
 	imageURLs, ok := body["image_urls"].([]interface{})
 	if !ok || len(imageURLs) != 2 {
