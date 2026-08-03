@@ -108,6 +108,7 @@ func isVideoGenerationsTaskModel(model string) bool {
 		strings.Contains(model, "/veo") ||
 		strings.HasPrefix(model, "sora-2") ||
 		strings.HasPrefix(model, "sora2") ||
+		isMiniMaxH3VideoModel(model) ||
 		isKo3VideoModel(model) ||
 		model == "kling-v3" ||
 		isSeedanceVideoModel(model)
@@ -501,6 +502,10 @@ func isKlingV3VideoModel(upstreamModel string) bool {
 	return strings.EqualFold(strings.TrimSpace(upstreamModel), "kling-v3")
 }
 
+func isMiniMaxH3VideoModel(upstreamModel string) bool {
+	return strings.EqualFold(strings.TrimSpace(upstreamModel), "minimax-h3")
+}
+
 func isKo3VideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return upstreamModel == "ko3" ||
@@ -527,7 +532,7 @@ func isSeedance480PVideoModel(upstreamModel string) bool {
 
 func usesImageURLVideoGenerationsModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel)
+	return isSoraVideoModel(upstreamModel) || strings.HasPrefix(upstreamModel, "veo") || isKlingV3VideoModel(upstreamModel) || isMiniMaxH3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel)
 }
 
 func seedanceAspectRatioFromSize(value string) string {
@@ -1150,6 +1155,164 @@ func collectKo3ImageURLs(bodyMap map[string]interface{}) []string {
 	return nil
 }
 
+func normalizeMiniMaxH3Duration(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 5, nil
+	}
+	duration, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("duration must be an integer between 5 and 15")
+	}
+	if duration < 5 || duration > 15 {
+		return 0, fmt.Errorf("duration must be between 5 and 15 for minimax-h3")
+	}
+	return duration, nil
+}
+
+func miniMaxH3SizeFromAspectRatio(value string) string {
+	switch strings.TrimSpace(value) {
+	case "16:9":
+		return "2560x1440"
+	case "9:16":
+		return "1440x2560"
+	case "1:1":
+		return "1440x1440"
+	case "4:3":
+		return "1920x1440"
+	case "3:4":
+		return "1440x1920"
+	case "21:9":
+		return "3360x1440"
+	default:
+		return ""
+	}
+}
+
+func normalizeMiniMaxH3Size(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "2560x1440", nil
+	}
+	switch value {
+	case "2560x1440", "1440x2560", "1440x1440", "1920x1440", "1440x1920", "3360x1440":
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported size %s for minimax-h3", value)
+	}
+}
+
+func collectMiniMaxH3ImageURLs(bodyMap map[string]interface{}) []string {
+	for _, key := range []string{"image_guidance", "image_urls", "images"} {
+		if images := appendKo3ImageURL(nil, bodyMap[key]); len(images) > 0 {
+			return images
+		}
+	}
+	for _, key := range []string{"image_url", "image", "input_reference", "image_reference"} {
+		if images := appendKo3ImageURL(nil, bodyMap[key]); len(images) > 0 {
+			return []string{images[0]}
+		}
+	}
+	return nil
+}
+
+func hasMiniMaxH3FrameReference(bodyMap map[string]interface{}) bool {
+	for _, key := range []string{"start_image_url", "start_frame", "end_image_url", "end_frame"} {
+		if len(appendKo3ImageURL(nil, bodyMap[key])) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMiniMaxH3AudioReference(bodyMap map[string]interface{}) bool {
+	for _, key := range []string{"audio_url", "audio_reference"} {
+		if len(appendKo3ImageURL(nil, bodyMap[key])) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeMiniMaxH3VideoRequest(bodyMap map[string]interface{}) error {
+	bodyMap["model"] = "minimax-h3"
+
+	if stringifyBodyValue(bodyMap["video_url"]) != "" || len(collectSeedanceVideoReferences(bodyMap)) > 0 {
+		return fmt.Errorf("video reference is not supported for minimax-h3")
+	}
+
+	images := collectMiniMaxH3ImageURLs(bodyMap)
+	if len(images) > 5 {
+		return fmt.Errorf("image references support at most 5 images for minimax-h3")
+	}
+	hasFrameReference := hasMiniMaxH3FrameReference(bodyMap)
+	if hasFrameReference && len(images) > 0 {
+		return fmt.Errorf("image reference mode and frame mode cannot be combined for minimax-h3")
+	}
+	if hasMiniMaxH3AudioReference(bodyMap) && (hasFrameReference || len(images) == 0) {
+		return fmt.Errorf("audio reference requires image reference mode for minimax-h3")
+	}
+
+	duration := stringifyBodyValue(bodyMap["duration"])
+	if duration == "" {
+		duration = stringifyBodyValue(bodyMap["seconds"])
+	}
+	normalizedDuration, err := normalizeMiniMaxH3Duration(duration)
+	if err != nil {
+		return err
+	}
+	bodyMap["duration"] = normalizedDuration
+
+	if stringifyBodyValue(bodyMap["width"]) != "" && stringifyBodyValue(bodyMap["height"]) != "" {
+		delete(bodyMap, "size")
+	} else {
+		size := stringifyBodyValue(bodyMap["size"])
+		if size == "" {
+			size = miniMaxH3SizeFromAspectRatio(stringifyBodyValue(bodyMap["aspect_ratio"]))
+		}
+		normalizedSize, sizeErr := normalizeMiniMaxH3Size(size)
+		if sizeErr != nil {
+			return sizeErr
+		}
+		bodyMap["size"] = normalizedSize
+	}
+
+	if len(images) > 0 && bodyMap["image_guidance"] == nil && bodyMap["image_urls"] == nil && bodyMap["image_url"] == nil {
+		if len(images) == 1 {
+			bodyMap["image_url"] = images[0]
+		} else {
+			imageURLs := make([]interface{}, 0, len(images))
+			for _, imageURL := range images {
+				imageURLs = append(imageURLs, imageURL)
+			}
+			bodyMap["image_urls"] = imageURLs
+		}
+	}
+
+	delete(bodyMap, "seconds")
+	delete(bodyMap, "aspect_ratio")
+	delete(bodyMap, "resolution")
+	delete(bodyMap, "resolution_name")
+	delete(bodyMap, "quality")
+	delete(bodyMap, "reference_mode")
+	delete(bodyMap, "async")
+	delete(bodyMap, "input_reference")
+	delete(bodyMap, "image")
+	delete(bodyMap, "images")
+	delete(bodyMap, "image_reference")
+	delete(bodyMap, "video_url")
+	delete(bodyMap, "video_reference")
+	delete(bodyMap, "video_urls")
+	delete(bodyMap, "metadata")
+	delete(bodyMap, "mode")
+	delete(bodyMap, "seed")
+	delete(bodyMap, "seeds")
+	delete(bodyMap, "prompt_enhance")
+	delete(bodyMap, "generate_audio")
+	delete(bodyMap, "generateAudio")
+	return nil
+}
+
 func normalizeKo3VideoRequest(bodyMap map[string]interface{}, upstreamModel string) error {
 	bodyMap["model"] = normalizeKo3ModelName(upstreamModel)
 
@@ -1262,7 +1425,7 @@ func normalizeSoraVideoRequest(bodyMap map[string]interface{}, upstreamModel str
 	if !usesImageURLVideoGenerationsModel(upstreamModel) {
 		return
 	}
-	if isKlingV3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel) {
+	if isKlingV3VideoModel(upstreamModel) || isMiniMaxH3VideoModel(upstreamModel) || isKo3VideoModel(upstreamModel) {
 		return
 	}
 
@@ -1555,7 +1718,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if err != nil {
 		return nil
 	}
-	if isKlingV3VideoModel(info.UpstreamModelName) || isKo3VideoModel(info.UpstreamModelName) {
+	if isKlingV3VideoModel(info.UpstreamModelName) || isMiniMaxH3VideoModel(info.UpstreamModelName) || isKo3VideoModel(info.UpstreamModelName) {
 		return nil
 	}
 
@@ -1627,6 +1790,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
 			if isKo3VideoModel(upstreamModelName) {
 				if err := normalizeKo3VideoRequest(bodyMap, upstreamModelName); err != nil {
+					return nil, err
+				}
+			}
+			if isMiniMaxH3VideoModel(upstreamModelName) {
+				if err := normalizeMiniMaxH3VideoRequest(bodyMap); err != nil {
 					return nil, err
 				}
 			}

@@ -6,6 +6,7 @@ var ModelList = []string{
 	"veo31",
 	"veo31-fast",
 	"veo31-ref",
+	"minimax-h3",
 	"ko3",
 	"kling-v3",
 	"seedance-2.0",

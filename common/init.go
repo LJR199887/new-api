@@ -167,6 +167,7 @@ func initConstantEnv() {
 		constant.TaskPricePatches = taskPricePatches
 	}
 	for _, modelName := range []string{
+		"minimax-h3",
 		"ko3",
 		"kling-o3",
 		"kling-video-o-3",
