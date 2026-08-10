@@ -242,6 +242,13 @@ const SettingsPanel = ({
     label: `${v}s`,
     value: String(v),
   }));
+  const video25DurationOptions = Array.from(
+    { length: 27 },
+    (_, index) => index + 4,
+  ).map((v) => ({
+    label: `${v}s`,
+    value: String(v),
+  }));
   const getAdobeVideoDurationOptions = (modelName) => {
     if (modelName === 'veo31-ref') {
       return adobeVeoDurationOptions.filter((option) => option.value === '8');
@@ -251,6 +258,9 @@ const SettingsPanel = ({
     }
     if (modelName === 'kling-v3') {
       return adobeKlingDurationOptions;
+    }
+    if (modelName === 'video-2.5' || modelName === 'video-2.5-480p') {
+      return video25DurationOptions;
     }
     if (
       modelName === 'seedance-2.0' ||
