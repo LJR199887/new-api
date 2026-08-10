@@ -18,7 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect } from 'react';
-import { Card, Select, Typography, Button, Switch } from '@douyinfe/semi-ui';
+import {
+  Card,
+  Select,
+  Slider,
+  Typography,
+  Button,
+  Switch,
+} from '@douyinfe/semi-ui';
 import { Sparkles, Users, ToggleLeft, X, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { renderGroupOption, selectFilter } from '../../helpers';
@@ -407,6 +414,8 @@ const SettingsPanel = ({
   )
     ? inputs.videoDuration
     : getAdobeVideoDefaultDuration(inputs.model);
+  const isVideo25Model =
+    inputs.model === 'video-2.5' || inputs.model === 'video-2.5-480p';
   const selectedAdobeVideoAspectRatio = currentAdobeVideoAspectRatioOptions.some(
     (option) => option.value === inputs.aspectRatio,
   )
@@ -717,14 +726,32 @@ const SettingsPanel = ({
               <div>
                 <Typography.Text strong className='text-sm'>
                   Duration
+                  {isVideo25Model ? ` (${selectedAdobeVideoDuration}s)` : ''}
                 </Typography.Text>
-                <Select
-                  className='!rounded-lg mt-2'
-                  optionList={currentAdobeVideoDurationOptions}
-                  value={selectedAdobeVideoDuration}
-                  onChange={(value) => onInputChange('videoDuration', value)}
-                  disabled={customRequestMode}
-                />
+                {isVideo25Model ? (
+                  <div className='px-2 pt-3 pb-1'>
+                    <Slider
+                      min={4}
+                      max={30}
+                      step={1}
+                      value={Number(selectedAdobeVideoDuration)}
+                      marks={{ 4: '4s', 30: '30s' }}
+                      tipFormatter={(value) => `${value}s`}
+                      onChange={(value) =>
+                        onInputChange('videoDuration', String(value))
+                      }
+                      disabled={customRequestMode}
+                    />
+                  </div>
+                ) : (
+                  <Select
+                    className='!rounded-lg mt-2'
+                    optionList={currentAdobeVideoDurationOptions}
+                    value={selectedAdobeVideoDuration}
+                    onChange={(value) => onInputChange('videoDuration', value)}
+                    disabled={customRequestMode}
+                  />
+                )}
               </div>
               <div>
                 <Typography.Text strong className='text-sm'>
