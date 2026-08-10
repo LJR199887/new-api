@@ -154,6 +154,17 @@ const PricingCardView = ({
         ? record.model_price_by_seconds
         : {};
 
+    const perSecondPrice = Number(durationPriceMap.per_second);
+    if (Number.isFinite(perSecondPrice)) {
+      return [
+        {
+          key: 'duration-per-second',
+          perSecond: true,
+          value: displayPrice(perSecondPrice * ratio),
+        },
+      ];
+    }
+
     return Object.entries(durationPriceMap)
       .map(([seconds, price]) => {
         const secondsValue = Number(seconds);
@@ -312,8 +323,11 @@ const PricingCardView = ({
               className='text-xs'
               style={{ color: 'var(--semi-color-text-1)' }}
             >
-              {item.seconds}
-              {t('秒')} {item.value} / {t('次')}
+              {item.perSecond ? (
+                <>{t('每秒价格')} {item.value} / {t('秒')}</>
+              ) : (
+                <>{item.seconds}{t('秒')} {item.value} / {t('次')}</>
+              )}
             </span>
           ))}
           {remainingCount > 0 && (
@@ -540,4 +554,3 @@ const PricingCardView = ({
 };
 
 export default PricingCardView;
-

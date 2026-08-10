@@ -69,6 +69,7 @@ const ADOBE_IMAGE_MODELS = new Set([
 ]);
 const GPT_IMAGE2_MODEL = 'gpt-image2';
 const MINIMAX_H3_MODEL = 'minimax-h3';
+const VIDEO_25_MODEL = 'video-2.5';
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -84,6 +85,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'kling-v3',
   'seedance-2.0',
   'seedance-2.0-fast',
+  VIDEO_25_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -93,6 +95,7 @@ const ADOBE_VIDEO_MODELS = new Set([
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',  'seedance-2.0-fast',
+  VIDEO_25_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -121,6 +124,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   [MINIMAX_H3_MODEL]: 5,
   'seedance-2.0': 4,
   'seedance-2.0-fast': 4,
+  [VIDEO_25_MODEL]: 30,
   'video-2.0': 4,
   'video-2.0-fast': 4,
   'video-2.0-mini': 4,
@@ -1295,6 +1299,13 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
   if (normalizedModelName === MINIMAX_H3_MODEL) {
     return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
+  if (normalizedModelName === VIDEO_25_MODEL) {
+    return referenceMode === 'first_last'
+      ? 2
+      : ['multi_image', 'multimodal'].includes(referenceMode)
+        ? 30
+        : null;
+  }
   if (SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? null;
   }
@@ -1305,6 +1316,9 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
   const normalizedModelName = typeof modelName === 'string' ? modelName.trim() : '';
   if (!normalizedModelName || !SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return null;
+  }
+  if (normalizedModelName === VIDEO_25_MODEL) {
+    return ['video_reference', 'multimodal'].includes(referenceMode) ? 10 : null;
   }
   return SEEDANCE_REFERENCE_MODE_VIDEO_LIMITS[referenceMode] ?? null;
 };
@@ -1432,6 +1446,7 @@ const buildCreativeCenterModelPriceLabel = (
       ? activeGroup
       : null;
   const prices = [];
+  let priceSuffix = '';
   const appendPrice = (value) => {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue) || numericValue < 0) {
@@ -1475,11 +1490,19 @@ const buildCreativeCenterModelPriceLabel = (
     const groupSecondsPriceMap = activePricingGroup
       ? pricingModel.group_model_price_by_seconds?.[activePricingGroup]
       : null;
-    Object.values(groupSecondsPriceMap || pricingModel.model_price_by_seconds || {}).forEach(
-      (value) => {
+    const secondsPriceMap =
+      groupSecondsPriceMap || pricingModel.model_price_by_seconds || {};
+    if (secondsPriceMap.per_second !== undefined) {
+      appendPrice(
+        Number(secondsPriceMap.per_second) *
+          (groupSecondsPriceMap ? 1 : groupRatio),
+      );
+      priceSuffix = '/秒';
+    } else {
+      Object.values(secondsPriceMap).forEach((value) => {
         appendPrice(Number(value) * (groupSecondsPriceMap ? 1 : groupRatio));
-      },
-    );
+      });
+    }
   } else if (pricingModel.quota_type === 3) {
     const groupResolutionPriceMap = activePricingGroup
       ? pricingModel.group_model_price_by_resolution?.[activePricingGroup]
@@ -1510,10 +1533,10 @@ const buildCreativeCenterModelPriceLabel = (
   }
 
   if (!Number.isFinite(maxPrice) || Math.abs(maxPrice - minPrice) < 0.000001) {
-    return `${symbol}${formatCreativeCenterPriceNumber(minPrice)}`;
+    return `${symbol}${formatCreativeCenterPriceNumber(minPrice)}${priceSuffix}`;
   }
 
-  return `${symbol}${formatCreativeCenterPriceNumber(minPrice)}~${symbol}${formatCreativeCenterPriceNumber(maxPrice)}`;
+  return `${symbol}${formatCreativeCenterPriceNumber(minPrice)}~${symbol}${formatCreativeCenterPriceNumber(maxPrice)}${priceSuffix}`;
 };
 
 const triggerDownload = (url, filename) => {
@@ -7910,8 +7933,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload.image_urls = currentUploadedImageUrls.slice(0, 2);
               }
             } else if (isSeedanceVideoModel) {
-              const seedanceImageUrls = currentUploadedImageUrls.slice(0, 4);
-              const seedanceVideoUrls = currentReferenceVideoUrls.slice(0, 3);
+              const seedanceImageUrls = currentUploadedImageUrls.slice(
+                0,
+                currentModelName === VIDEO_25_MODEL ? 30 : 4,
+              );
+              const seedanceVideoUrls = currentReferenceVideoUrls.slice(
+                0,
+                currentModelName === VIDEO_25_MODEL ? 10 : 3,
+              );
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
                   payload.start_image_url = seedanceImageUrls[0];
@@ -9294,7 +9323,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">3</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">15 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentModelName === VIDEO_25_MODEL ? 30 : 15} 秒</span>
                 </div>
               ) : null}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -523,7 +524,12 @@ func normalizeKo3ModelName(upstreamModel string) string {
 func isSeedanceVideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return strings.HasPrefix(upstreamModel, "seedance-2.0") ||
-		strings.HasPrefix(upstreamModel, "video-2.0")
+		strings.HasPrefix(upstreamModel, "video-2.0") ||
+		strings.HasPrefix(upstreamModel, "video-2.5")
+}
+
+func isVideo25VideoModel(upstreamModel string) bool {
+	return strings.EqualFold(strings.TrimSpace(upstreamModel), "video-2.5")
 }
 
 func isSeedance480PVideoModel(upstreamModel string) bool {
@@ -768,6 +774,80 @@ func removeSeedanceGuidanceAudioReference(bodyMap map[string]interface{}) {
 	}
 }
 
+func seedanceReferenceDuration(entry map[string]any) (float64, bool, error) {
+	raw, exists := entry["duration"]
+	if !exists || raw == nil || strings.TrimSpace(stringifyBodyValue(raw)) == "" {
+		return 0, false, nil
+	}
+	duration, err := strconv.ParseFloat(strings.TrimSpace(stringifyBodyValue(raw)), 64)
+	if err != nil || math.IsNaN(duration) || math.IsInf(duration, 0) {
+		return 0, true, fmt.Errorf("must be a finite number")
+	}
+	return duration, true, nil
+}
+
+func validateVideo25ReferenceDurations(kind string, refs []map[string]any, minDuration, maxDuration, maxTotal float64) error {
+	totalDuration := 0.0
+	for index, ref := range refs {
+		duration, exists, err := seedanceReferenceDuration(ref)
+		if err != nil {
+			return fmt.Errorf("%s_reference[%d].duration %w", kind, index, err)
+		}
+		if !exists {
+			continue
+		}
+		if duration < minDuration || duration > maxDuration {
+			return fmt.Errorf("%s_reference[%d].duration must be between %g and %g seconds for video-2.5", kind, index, minDuration, maxDuration)
+		}
+		totalDuration += duration
+	}
+	if totalDuration > maxTotal {
+		return fmt.Errorf("total %s reference duration must not exceed %g seconds for video-2.5", kind, maxTotal)
+	}
+	return nil
+}
+
+func validateVideo25MaterialLimits(bodyMap map[string]interface{}) error {
+	imageCount := len(collectSeedanceImageValues(bodyMap))
+	if startFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["start_frame"]); len(startFrame) > 0 {
+		imageCount += len(startFrame)
+	} else if stringifyBodyValue(bodyMap["start_image_url"]) != "" {
+		imageCount++
+	}
+	if endFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["end_frame"]); len(endFrame) > 0 {
+		imageCount += len(endFrame)
+	} else if stringifyBodyValue(bodyMap["end_image_url"]) != "" {
+		imageCount++
+	}
+	if imageCount > 30 {
+		return fmt.Errorf("video-2.5 supports at most 30 image references")
+	}
+
+	videoReferences := collectSeedanceVideoReferences(bodyMap)
+	if len(videoReferences) == 0 {
+		if videoURL := stringifyBodyValue(bodyMap["video_url"]); videoURL != "" {
+			videoReferences = []map[string]any{{"url": videoURL}}
+		}
+	}
+	if len(videoReferences) > 10 {
+		return fmt.Errorf("video-2.5 supports at most 10 video references")
+	}
+	if err := validateVideo25ReferenceDurations("video", videoReferences, 3, 10, 30); err != nil {
+		return err
+	}
+
+	audioReferences := collectSeedanceAudioReferences(bodyMap)
+	if len(audioReferences) == 0 {
+		if audioURL := stringifyBodyValue(bodyMap["audio_url"]); audioURL != "" {
+			audioReferences = []map[string]any{{"url": audioURL}}
+		}
+	}
+	if len(audioReferences) > 10 {
+		return fmt.Errorf("video-2.5 supports at most 10 audio references")
+	}
+	return validateVideo25ReferenceDurations("audio", audioReferences, 3, 30, 30)
+}
+
 func seedanceBaseDimensionFromResolution(value string) int {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
@@ -837,9 +917,14 @@ func seedanceSizeFromAspectRatioAndResolution(ratio string, resolution string) s
 	return fmt.Sprintf("%dx%d", width, height)
 }
 
-func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel string) {
+func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel string) error {
 	if !isSeedanceVideoModel(upstreamModel) {
-		return
+		return nil
+	}
+	if isVideo25VideoModel(upstreamModel) {
+		if err := validateVideo25MaterialLimits(bodyMap); err != nil {
+			return err
+		}
 	}
 
 	metadata, _ := bodyMap["metadata"].(map[string]interface{})
@@ -933,6 +1018,7 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	delete(bodyMap, "video_url")
 	delete(bodyMap, "audio_url")
 	removeSeedanceGuidanceAudioReference(bodyMap)
+	return nil
 }
 
 func defaultVideoGenerationsReferenceMode(upstreamModel string) string {
@@ -1785,7 +1871,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				return body, nil
 			}
 			if isSeedanceVideoModel(upstreamModelName) {
-				normalizeSeedanceVideoRequest(bodyMap, upstreamModelName)
+				if err := normalizeSeedanceVideoRequest(bodyMap, upstreamModelName); err != nil {
+					return nil, err
+				}
 			}
 			normalizeGrokVideoRequest(bodyMap, upstreamModelName)
 			if isKo3VideoModel(upstreamModelName) {

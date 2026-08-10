@@ -168,13 +168,11 @@ export default function ModelRatioSettings(props) {
         <Row gutter={16} style={{ display: 'none' }}>
           <Col xs={24} sm={16}>
             <Form.TextArea
-              label={t('按时长固定价格')}
+              label={t('每秒价格')}
               extraText={t(
-                '用于同一任务模型按 seconds 映射不同价格，例如可以分别设置 4/8/12/15/20/25/30 秒价格。',
+                '填写单秒价格，实际费用按单秒价格 × 请求秒数计算。',
               )}
-              placeholder={t(
-                '为一个 JSON 文本，键为模型名称，值为一个以秒数为键的价格表，例如：{\"grok-imagine-video\": {\"4\": 0.08, \"8\": 0.15, \"12\": 0.2}}',
-              )}
+              placeholder={'{"video-2.5": {"per_second": 0.3}}'}
               field={'ModelPriceBySeconds'}
               autosize={{ minRows: 6, maxRows: 12 }}
               trigger='blur'

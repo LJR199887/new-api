@@ -168,10 +168,10 @@ export default function GroupRatioSettings(props) {
         <Row gutter={16}>
           <Col xs={24} sm={16}>
             <Form.TextArea
-              label={t('分组按秒固定价格')}
-              placeholder={t('JSON 文本，格式为 {"vip": {"grok-imagine-video": {"6": 0.05, "8": 0.07}}}')}
+              label={`${t('分组')} · ${t('每秒价格')}`}
+              placeholder={'{"vip": {"video-2.5": {"per_second": 0.3}}}'}
               extraText={t(
-                '仅用于视频等按时长固定价格模型。优先按用户分组命中，其次按实际调用分组命中；命中后直接按该价格扣费，不再乘分组倍率。',
+                '填写单秒价格，实际费用按单秒价格 × 请求秒数计算。',
               )}
               field={'GroupModelPriceBySeconds'}
               autosize={{ minRows: 6, maxRows: 12 }}

@@ -43,6 +43,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   PAGE_SIZE,
+  PER_SECOND_PRICE_KEY,
   PRICE_SUFFIX,
   buildSummaryText,
   hasValue,
@@ -52,7 +53,6 @@ import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 
 const { Text } = Typography;
 const EMPTY_CANDIDATE_MODEL_NAMES = [];
-const DURATION_PRESET_SECONDS = ['4', '8', '12', '15', '20', '25', '30'];
 const RESOLUTION_PRESET_OPTIONS = ['1K', '2K', '4K'];
 
 const PriceInput = ({
@@ -89,14 +89,11 @@ const PriceInput = ({
 const DurationPricingEditor = ({
   durationPrices = {},
   onChange,
-  onAdd,
-  onRemove,
-  customSeconds,
-  setCustomSeconds,
   t,
 }) => {
-  const sortedEntries = Object.entries(durationPrices).sort(
-    ([secondsA], [secondsB]) => Number(secondsA) - Number(secondsB),
+  const perSecondPrice = durationPrices[PER_SECOND_PRICE_KEY] ?? '';
+  const hasLegacyDurationPrices = Object.keys(durationPrices).some(
+    (key) => key !== PER_SECOND_PRICE_KEY,
   );
 
   return (
@@ -108,71 +105,23 @@ const DurationPricingEditor = ({
       }}
     >
       <div className='mb-3'>
-        <div className='font-medium'>{t('按时长价格')}</div>
+        <div className='font-medium'>{t('每秒价格')}</div>
         <div className='text-xs text-gray-500 mt-1'>
-          {t('选择这个模式后，只会保存按时长价格表，不会和按次或按量计费重叠。')}
+          {t('填写单秒价格，实际费用按单秒价格 × 请求秒数计算。')}
         </div>
       </div>
 
-      <div className='flex flex-wrap gap-2 mb-4'>
-        {DURATION_PRESET_SECONDS.map((seconds) => (
-          <Button
-            key={seconds}
-            size='small'
-            theme='outline'
-            disabled={Object.prototype.hasOwnProperty.call(durationPrices, seconds)}
-            onClick={() => onAdd(seconds)}
-          >
-            {seconds}
-            {t('秒')}
-          </Button>
-        ))}
-      </div>
-
-      <div className='flex flex-wrap gap-2 mb-4'>
-        <Input
-          value={customSeconds}
-          placeholder={t('自定义秒数')}
-          suffix={t('秒')}
-          onChange={(value) => setCustomSeconds(value.replace(/[^\d]/g, ''))}
-          style={{ width: 160 }}
-        />
-        <Button
-          onClick={() => {
-            if (!customSeconds) return;
-            onAdd(customSeconds);
-            setCustomSeconds('');
-          }}
-        >
-          {t('添加时长')}
-        </Button>
-      </div>
-
-      {sortedEntries.length === 0 ? (
-        <div className='text-sm text-gray-500'>{t('暂未添加任何时长价格')}</div>
-      ) : (
-        <div className='space-y-3'>
-          {sortedEntries.map(([seconds, price]) => (
-            <div key={seconds} className='flex items-center gap-2'>
-              <div className='w-20 text-sm font-medium text-gray-700'>
-                {seconds}
-                {t('秒')}
-              </div>
-              <Input
-                value={price}
-                placeholder={t('输入 $/次')}
-                suffix={t('$/次')}
-                onChange={(value) => onChange(seconds, value)}
-              />
-              <Button
-                type='danger'
-                icon={<IconDelete />}
-                onClick={() => onRemove(seconds)}
-              />
-            </div>
-          ))}
+      <Input
+        value={perSecondPrice}
+        placeholder={t('输入每秒价格')}
+        suffix={`$/${t('秒')}`}
+        onChange={(value) => onChange(PER_SECOND_PRICE_KEY, value)}
+      />
+      {hasLegacyDurationPrices ? (
+        <div className='mt-2 text-xs text-orange-600'>
+          {t('当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。')}
         </div>
-      )}
+      ) : null}
     </Card>
   );
 };
@@ -265,7 +214,6 @@ export default function ModelPricingEditor({
   const [addVisible, setAddVisible] = useState(false);
   const [batchVisible, setBatchVisible] = useState(false);
   const [newModelName, setNewModelName] = useState('');
-  const [customDurationSeconds, setCustomDurationSeconds] = useState('');
 
   const {
     selectedModel,
@@ -288,8 +236,6 @@ export default function ModelPricingEditor({
     handleOptionalFieldToggle,
     handleNumericFieldChange,
     handleDurationPriceChange,
-    addDurationPrice,
-    removeDurationPrice,
     handleResolutionPriceChange,
     addResolutionPrice,
     removeResolutionPrice,
@@ -610,10 +556,6 @@ export default function ModelPricingEditor({
                   <DurationPricingEditor
                     durationPrices={selectedModel.durationPrices}
                     onChange={handleDurationPriceChange}
-                    onAdd={addDurationPrice}
-                    onRemove={removeDurationPrice}
-                    customSeconds={customDurationSeconds}
-                    setCustomSeconds={setCustomDurationSeconds}
                     t={t}
                   />
                 ) : selectedModel.billingMode === 'per-resolution' ? (

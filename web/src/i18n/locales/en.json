@@ -3358,6 +3358,11 @@
     "输出价格：{{symbol}}{{price}} / 1M tokens": "Output Price: {{symbol}}{{price}} / 1M tokens",
     "输出价格：{{symbol}}{{total}} / 1M tokens": "Output Price: {{symbol}}{{total}} / 1M tokens",
     "例如：gpt-4.1-nano,regex:^claude-.*$,regex:^sora-.*$": "Example: gpt-4.1-nano,regex:^claude-.*$,regex:^sora-.*$",
-    "支持精确匹配；使用 regex: 开头可按正则匹配。": "Supports exact matching. Use a regex: prefix for regex matching."
+    "支持精确匹配；使用 regex: 开头可按正则匹配。": "Supports exact matching. Use a regex: prefix for regex matching.",
+    "每秒价格": "Price per second",
+    "填写单秒价格，实际费用按单秒价格 × 请求秒数计算。": "Enter the unit price per second. The actual charge is the unit price multiplied by the requested seconds.",
+    "输入每秒价格": "Enter price per second",
+    "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "Legacy tiered duration prices exist. Entering a per-second price will replace them.",
+    "按时长计费下需要填写每秒价格。": "Per-duration billing requires a price per second."
   }
 }

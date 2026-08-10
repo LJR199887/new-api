@@ -85,6 +85,7 @@ const SettingsPanel = ({
     'kling-v3',
     'seedance-2.0',
     'seedance-2.0-fast',
+    'video-2.5',
     'video-2.0',
     'video-2.0-fast',
     'video-2.0-mini',
@@ -112,6 +113,7 @@ const SettingsPanel = ({
   const isSeedanceVideoModel =
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
+    inputs.model === 'video-2.5' ||
     inputs.model === 'video-2.0' ||
     inputs.model === 'video-2.0-fast' ||
     inputs.model === 'video-2.0-mini' ||
@@ -250,6 +252,7 @@ const SettingsPanel = ({
     if (
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.5' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -270,6 +273,7 @@ const SettingsPanel = ({
     if (
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.5' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -285,6 +289,7 @@ const SettingsPanel = ({
     modelName === 'kling-v3' ||
     modelName === 'seedance-2.0' ||
     modelName === 'seedance-2.0-fast' ||
+    modelName === 'video-2.5' ||
     modelName === 'video-2.0' ||
     modelName === 'video-2.0-fast' ||
     modelName === 'video-2.0-mini' ||
@@ -320,7 +325,11 @@ const SettingsPanel = ({
         (option) => option.value !== '1080p',
       );
     }
-    if (modelName === 'seedance-2.0' || modelName === 'video-2.0') {
+    if (
+      modelName === 'seedance-2.0' ||
+      modelName === 'video-2.5' ||
+      modelName === 'video-2.0'
+    ) {
       return seedanceVideoResolutionOptions;
     }
     return adobeVideoResolutionOptions;
@@ -329,6 +338,7 @@ const SettingsPanel = ({
     if (
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
+      modelName === 'video-2.5' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
