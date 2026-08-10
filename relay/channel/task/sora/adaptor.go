@@ -849,6 +849,18 @@ func validateVideo25MaterialLimits(bodyMap map[string]interface{}) error {
 	return validateVideo25ReferenceDurations("audio", audioReferences, 3, 30, 30)
 }
 
+func validateVideo25GenerationDuration(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	duration, err := strconv.Atoi(value)
+	if err != nil || duration < 4 || duration > 30 {
+		return fmt.Errorf("duration must be an integer between 4 and 30 for video-2.5 models")
+	}
+	return nil
+}
+
 func seedanceBaseDimensionFromResolution(value string) int {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
@@ -954,6 +966,11 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	duration := stringifyBodyValue(bodyMap["duration"])
 	if duration == "" {
 		duration = stringifyBodyValue(bodyMap["seconds"])
+	}
+	if isVideo25VideoModel(upstreamModel) {
+		if err := validateVideo25GenerationDuration(duration); err != nil {
+			return err
+		}
 	}
 
 	size := stringifyBodyValue(bodyMap["size"])

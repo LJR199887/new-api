@@ -221,6 +221,10 @@ const ADOBE_VIDEO_DURATION_OPTIONS = {
     label: `${value}s`,
     value: String(value),
   })),
+  video25: Array.from({ length: 27 }, (_, index) => index + 4).map((value) => ({
+    label: `${value}s`,
+    value: String(value),
+  })),
 };
 const MINIMAX_H3_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '16:9', value: '16:9' },
@@ -251,6 +255,9 @@ const getAdobeVideoDurationOptions = (modelName) => {
   }
   if (modelName === 'kling-v3') {
     return ADOBE_VIDEO_DURATION_OPTIONS.kling;
+  }
+  if (VIDEO_25_MODELS.has(modelName)) {
+    return ADOBE_VIDEO_DURATION_OPTIONS.video25;
   }
   if (SEEDANCE_VIDEO_MODELS.has(modelName)) {
     return ADOBE_VIDEO_DURATION_OPTIONS.seedance;

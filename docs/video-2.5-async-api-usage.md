@@ -39,7 +39,7 @@ Content-Type: application/json
 | 视频 | 最多 `10` 个 | `3-10` 秒 | 不超过 `30` 秒 |
 | 音频 | 最多 `10` 个 | `3-30` 秒 | 不超过 `30` 秒 |
 
-网关会校验请求中显式传入的 `video_reference[].duration` 和 `audio_reference[].duration`。如果只提供远程 URL 而没有时长字段，实际素材时长由上游校验。
+视频和音频素材都不需要传 `duration`，只需传素材 URL。单个素材时长和素材总时长由上游读取并校验。
 
 ## 3. 提交请求参数
 
@@ -47,7 +47,7 @@ Content-Type: application/json
 | --- | --- | --- | --- |
 | `model` | string | 是 | `video-2.5` 或 `video-2.5-480p` |
 | `prompt` | string | 是 | 视频提示词，不能为空，最多 `5000` 字符 |
-| `duration` | number | 否 | 生成视频时长，支持 `4-15` 秒，也用于按秒计费 |
+| `duration` | number | 否 | 生成视频时长，`video-2.5` 和 `video-2.5-480p` 均支持 `4-30` 秒，也用于按秒计费 |
 | `aspect_ratio` | string | 否 | 输出比例：`9:16`、`16:9` 或 `1:1` |
 | `resolution` | string | 否 | `video-2.5` 默认 `720p`；`video-2.5-480p` 固定 `480p` |
 | `size` | string | 否 | 直接指定输出尺寸，与 `aspect_ratio` + `resolution` 二选一即可 |
@@ -56,11 +56,10 @@ Content-Type: application/json
 | `images` | string[] | 否 | `image_urls` 的兼容别名 |
 | `start_image_url` | string | 否 | 首帧图片 URL |
 | `end_image_url` | string | 否 | 尾帧图片 URL |
-| `video_url` | string | 否 | 单个参考视频 URL |
-| `video_reference` | object[] | 否 | 多视频参考，最多 `10` 个 |
-| `audio_url` | string | 否 | 单个参考音频 URL |
-| `audio_reference` | object[] | 否 | 多音频参考，最多 `10` 个 |
-| `guidances.audio_reference` | object[] | 否 | 兼容 Leonardo Web 原始音频参考结构 |
+| `video_url` | string | 否 | 单个参考视频 URL，无需传视频时长 |
+| `video_reference` | object[] | 否 | 多视频参考，格式为 `[{ "url": "..." }]`，最多 `10` 个，无需传 `duration` |
+| `audio_url` | string | 否 | 单个参考音频 URL，无需传音频时长 |
+| `audio_reference` | object[] | 否 | 多音频参考，格式为 `[{ "url": "..." }]`，最多 `10` 个，无需传 `duration` |
 | `async` | boolean | 否 | 建议固定为 `true` |
 
 ### 3.1 480p 尺寸映射
@@ -145,40 +144,34 @@ Content-Type: application/json
   "resolution": "720p",
   "video_reference": [
     {
-      "url": "https://example.com/video-1.mp4",
-      "duration": 6
+      "url": "https://example.com/video-1.mp4"
     },
     {
-      "url": "https://example.com/video-2.mp4",
-      "duration": 8
+      "url": "https://example.com/video-2.mp4"
     }
   ],
   "audio_reference": [
     {
-      "url": "https://example.com/music.mp3",
-      "duration": 14
+      "url": "https://example.com/music.mp3"
     }
   ],
   "async": true
 }
 ```
 
-也可使用已上传的上游音频 ID：
+## 6.1 图片 + 音频请求示例
+
+音频使用 `audio_url` 即可，不需要传入音频的 `duration`：
 
 ```json
 {
-  "model": "video-2.5-480p",
-  "prompt": "让图片中的主体随音乐自然动起来",
-  "duration": 8,
-  "aspect_ratio": "1:1",
+  "model": "video-2.5",
+  "prompt": "让图片中的人物随着背景音乐自然起舞，镜头缓慢推进，动作流畅",
+  "duration": 10,
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
   "image_url": "https://example.com/source.png",
-  "audio_reference": [
-    {
-      "id": "9be72770-3a31-4791-84bb-5047fc0d1fa9",
-      "type": "UPLOADED",
-      "duration": 14.9
-    }
-  ],
+  "audio_url": "https://example.com/music.mp3",
   "async": true
 }
 ```
