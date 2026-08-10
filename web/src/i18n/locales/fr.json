@@ -3324,6 +3324,8 @@
     "填写单秒价格，实际费用按单秒价格 × 请求秒数计算。": "Saisissez le prix unitaire par seconde. Le coût réel est ce prix multiplié par le nombre de secondes demandé.",
     "输入每秒价格": "Saisir le prix par seconde",
     "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "Des anciens tarifs par durée existent. La saisie d’un prix par seconde les remplacera.",
-    "按时长计费下需要填写每秒价格。": "La facturation à la durée exige un prix par seconde."
+    "按时长计费下需要填写每秒价格。": "La facturation à la durée exige un prix par seconde.",
+    "按时长计费": "Facturation à la durée",
+    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "Prix par seconde {{unitPrice}} × {{seconds}} s = {{totalPrice}}"
   }
 }

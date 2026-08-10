@@ -24,6 +24,10 @@ type PriceData struct {
 	UsePrice                bool
 	GroupPriceOverride      bool
 	GroupPriceOverrideGroup string
+	BillingType             string
+	BillingSeconds          int
+	BillingUnitPrice        float64
+	BillingTotalPrice       float64
 	Quota                   int
 	BaseQuota               int
 	QuotaToPreConsume       int

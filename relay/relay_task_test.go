@@ -114,6 +114,10 @@ func TestCalcTaskQuotaWithRatiosUsesPerSecondPrice(t *testing.T) {
 	assert.Equal(t, int(3.0*common.QuotaPerUnit), quota)
 	assert.Equal(t, 1.0, ratios["seconds"])
 	assert.InDelta(t, 3.0, info.PriceData.ModelPrice, 1e-12)
+	assert.Equal(t, "duration", info.PriceData.BillingType)
+	assert.Equal(t, 10, info.PriceData.BillingSeconds)
+	assert.InDelta(t, 0.3, info.PriceData.BillingUnitPrice, 1e-12)
+	assert.InDelta(t, 3.0, info.PriceData.BillingTotalPrice, 1e-12)
 }
 
 func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *testing.T) {
@@ -128,7 +132,7 @@ func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *
 	require.NoError(t, ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(`{
 		"vip": {
 			"grok-imagine-video": {
-				"10": 0.07
+				"per_second": 0.007
 			}
 		}
 	}`))
@@ -158,6 +162,10 @@ func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *
 	assert.Equal(t, 0.07, info.PriceData.ModelPrice)
 	assert.True(t, info.PriceData.GroupPriceOverride)
 	assert.Equal(t, "vip", info.PriceData.GroupPriceOverrideGroup)
+	assert.Equal(t, "duration", info.PriceData.BillingType)
+	assert.Equal(t, 10, info.PriceData.BillingSeconds)
+	assert.InDelta(t, 0.007, info.PriceData.BillingUnitPrice, 1e-12)
+	assert.InDelta(t, 0.07, info.PriceData.BillingTotalPrice, 1e-12)
 }
 
 func TestCalcTaskQuotaWithRatiosFallsBackToLinearSeconds(t *testing.T) {

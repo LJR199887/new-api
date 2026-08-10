@@ -36,6 +36,7 @@ import {
   renderAudioModelPrice,
   renderClaudeModelPrice,
   renderModelPrice,
+  renderDurationBilling,
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -483,7 +484,16 @@ export const useLogsData = () => {
       if (logs[i].type === 2) {
         expandDataLocal.push({
           key: t('日志详情'),
-          value: other?.claude
+          value: other?.billing_type === 'duration'
+            ? renderDurationBilling(
+                other.billing_unit_price,
+                other.billing_seconds,
+                other.billing_total_price,
+                other.group_ratio,
+                other?.user_group_ratio,
+                'summary',
+              )
+            : other?.claude
             ? renderClaudeLogContent(
                 other?.model_ratio,
                 other.completion_ratio,
@@ -554,7 +564,15 @@ export const useLogsData = () => {
 
         let content = '';
         if (!isViolationFeeLog) {
-          if (other?.ws || other?.audio) {
+          if (other?.billing_type === 'duration') {
+            content = renderDurationBilling(
+              other.billing_unit_price,
+              other.billing_seconds,
+              other.billing_total_price,
+              other.group_ratio,
+              other?.user_group_ratio,
+            );
+          } else if (other?.ws || other?.audio) {
             content = renderAudioModelPrice(
               other?.text_input,
               other?.text_output,

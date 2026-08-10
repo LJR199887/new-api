@@ -3363,6 +3363,8 @@
     "填写单秒价格，实际费用按单秒价格 × 请求秒数计算。": "Enter the unit price per second. The actual charge is the unit price multiplied by the requested seconds.",
     "输入每秒价格": "Enter price per second",
     "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "Legacy tiered duration prices exist. Entering a per-second price will replace them.",
-    "按时长计费下需要填写每秒价格。": "Per-duration billing requires a price per second."
+    "按时长计费下需要填写每秒价格。": "Per-duration billing requires a price per second.",
+    "按时长计费": "Per-duration billing",
+    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "Price per second {{unitPrice}} × {{seconds}}s = {{totalPrice}}"
   }
 }
