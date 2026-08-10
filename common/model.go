@@ -32,6 +32,7 @@ var (
 		"exact:seedance-2.0",
 		"exact:seedance-2.0-fast",
 		"exact:video-2.5",
+		"exact:video-2.5-480p",
 		"exact:video-2.0",
 		"exact:video-2.0-fast",
 		"exact:video-2.0-mini",

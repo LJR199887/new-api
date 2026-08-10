@@ -34,6 +34,7 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"seedance-2.0",
 		"seedance-2.0-fast",
 		"video-2.5",
+		"video-2.5-480p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",
@@ -215,6 +216,7 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		"seedance-2.0",
 		"seedance-2.0-fast",
 		"video-2.5",
+		"video-2.5-480p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",
@@ -323,6 +325,40 @@ func TestNormalizeVideo25RequestAllowsReferencesWithoutDurationMetadata(t *testi
 
 	if err := normalizeSeedanceVideoRequest(body, "video-2.5"); err != nil {
 		t.Fatalf("expected URL references without duration metadata to pass through: %v", err)
+	}
+}
+
+func TestNormalizeVideo25480PRequestUsesVideo25LimitsAndFixedResolution(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.5-480p",
+		"aspect_ratio": "16:9",
+		"resolution":   "1080p",
+		"images": []interface{}{
+			"https://example.com/image-1.png",
+			"https://example.com/image-2.png",
+		},
+	}
+
+	if err := normalizeSeedanceVideoRequest(body, "video-2.5-480p"); err != nil {
+		t.Fatalf("expected video-2.5-480p request to pass: %v", err)
+	}
+	if got := body["model"]; got != "video-2.5-480p" {
+		t.Fatalf("expected model=video-2.5-480p, got %#v", got)
+	}
+	if got := body["size"]; got != "864x496" {
+		t.Fatalf("expected fixed 480p 16:9 size=864x496, got %#v", got)
+	}
+
+	tooManyImages := make([]interface{}, 31)
+	for index := range tooManyImages {
+		tooManyImages[index] = fmt.Sprintf("https://example.com/image-%d.png", index)
+	}
+	invalidBody := map[string]interface{}{
+		"model":  "video-2.5-480p",
+		"images": tooManyImages,
+	}
+	if err := normalizeSeedanceVideoRequest(invalidBody, "video-2.5-480p"); err == nil {
+		t.Fatal("expected video-2.5-480p to enforce the 30-image limit")
 	}
 }
 

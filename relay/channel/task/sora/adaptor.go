@@ -529,7 +529,8 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 }
 
 func isVideo25VideoModel(upstreamModel string) bool {
-	return strings.EqualFold(strings.TrimSpace(upstreamModel), "video-2.5")
+	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
+	return upstreamModel == "video-2.5" || upstreamModel == "video-2.5-480p"
 }
 
 func isSeedance480PVideoModel(upstreamModel string) bool {

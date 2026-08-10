@@ -20,6 +20,9 @@ func TestGetModelPriceBySeconds(t *testing.T) {
 		},
 		"video-2.5": {
 			"per_second": 0.3
+		},
+		"video-2.5-480p": {
+			"per_second": 0.2
 		}
 	}`))
 
@@ -41,4 +44,8 @@ func TestGetModelPriceBySeconds(t *testing.T) {
 	minPrice, ok := GetModelPriceBySecondsMin("video-2.5")
 	require.True(t, ok)
 	assert.InDelta(t, 0.3, minPrice, 1e-12)
+
+	price, ok = GetModelPriceBySeconds("video-2.5-480p", 10)
+	require.True(t, ok)
+	assert.InDelta(t, 2.0, price, 1e-12)
 }
