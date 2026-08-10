@@ -86,6 +86,7 @@ const SettingsPanel = ({
     'seedance-2.0',
     'seedance-2.0-fast',
     'video-2.5',
+    'video-2.5-480p',
     'video-2.0',
     'video-2.0-fast',
     'video-2.0-mini',
@@ -94,6 +95,7 @@ const SettingsPanel = ({
     'video-2.0-mini-480p',
   ]);
   const seedance480PVideoModels = new Set([
+    'video-2.5-480p',
     'video-2.0-480p',
     'video-2.0-fast-480p',
     'video-2.0-mini-480p',
@@ -114,6 +116,7 @@ const SettingsPanel = ({
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.5' ||
+    inputs.model === 'video-2.5-480p' ||
     inputs.model === 'video-2.0' ||
     inputs.model === 'video-2.0-fast' ||
     inputs.model === 'video-2.0-mini' ||
@@ -253,6 +256,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
+      modelName === 'video-2.5-480p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -274,6 +278,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
+      modelName === 'video-2.5-480p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -290,6 +295,7 @@ const SettingsPanel = ({
     modelName === 'seedance-2.0' ||
     modelName === 'seedance-2.0-fast' ||
     modelName === 'video-2.5' ||
+    modelName === 'video-2.5-480p' ||
     modelName === 'video-2.0' ||
     modelName === 'video-2.0-fast' ||
     modelName === 'video-2.0-mini' ||
@@ -328,6 +334,7 @@ const SettingsPanel = ({
     if (
       modelName === 'seedance-2.0' ||
       modelName === 'video-2.5' ||
+      modelName === 'video-2.5-480p' ||
       modelName === 'video-2.0'
     ) {
       return seedanceVideoResolutionOptions;
@@ -339,6 +346,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
+      modelName === 'video-2.5-480p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||

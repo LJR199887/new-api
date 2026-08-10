@@ -70,6 +70,8 @@ const ADOBE_IMAGE_MODELS = new Set([
 const GPT_IMAGE2_MODEL = 'gpt-image2';
 const MINIMAX_H3_MODEL = 'minimax-h3';
 const VIDEO_25_MODEL = 'video-2.5';
+const VIDEO_25_480P_MODEL = 'video-2.5-480p';
+const VIDEO_25_MODELS = new Set([VIDEO_25_MODEL, VIDEO_25_480P_MODEL]);
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -86,6 +88,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'seedance-2.0',
   'seedance-2.0-fast',
   VIDEO_25_MODEL,
+  VIDEO_25_480P_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -96,6 +99,7 @@ const ADOBE_VIDEO_MODELS = new Set([
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',  'seedance-2.0-fast',
   VIDEO_25_MODEL,
+  VIDEO_25_480P_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -104,6 +108,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_480P_VIDEO_MODELS = new Set([
+  VIDEO_25_480P_MODEL,
   'video-2.0-480p',
   'video-2.0-fast-480p',
   'video-2.0-mini-480p',
@@ -125,6 +130,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'seedance-2.0': 4,
   'seedance-2.0-fast': 4,
   [VIDEO_25_MODEL]: 30,
+  [VIDEO_25_480P_MODEL]: 30,
   'video-2.0': 4,
   'video-2.0-fast': 4,
   'video-2.0-mini': 4,
@@ -1299,7 +1305,7 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
   if (normalizedModelName === MINIMAX_H3_MODEL) {
     return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
-  if (normalizedModelName === VIDEO_25_MODEL) {
+  if (VIDEO_25_MODELS.has(normalizedModelName)) {
     return referenceMode === 'first_last'
       ? 2
       : ['multi_image', 'multimodal'].includes(referenceMode)
@@ -1317,7 +1323,7 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
   if (!normalizedModelName || !SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return null;
   }
-  if (normalizedModelName === VIDEO_25_MODEL) {
+  if (VIDEO_25_MODELS.has(normalizedModelName)) {
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 10 : null;
   }
   return SEEDANCE_REFERENCE_MODE_VIDEO_LIMITS[referenceMode] ?? null;
@@ -7935,11 +7941,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             } else if (isSeedanceVideoModel) {
               const seedanceImageUrls = currentUploadedImageUrls.slice(
                 0,
-                currentModelName === VIDEO_25_MODEL ? 30 : 4,
+                VIDEO_25_MODELS.has(currentModelName) ? 30 : 4,
               );
               const seedanceVideoUrls = currentReferenceVideoUrls.slice(
                 0,
-                currentModelName === VIDEO_25_MODEL ? 10 : 3,
+                VIDEO_25_MODELS.has(currentModelName) ? 10 : 3,
               );
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
@@ -9323,7 +9329,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentModelName === VIDEO_25_MODEL ? 30 : 15} 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{VIDEO_25_MODELS.has(currentModelName) ? 30 : 15} 秒</span>
                 </div>
               ) : null}
 
