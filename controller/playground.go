@@ -45,6 +45,8 @@ var (
 		"veo31-fast":          {},
 		"seedance-2.0":        {},
 		"seedance-2.0-fast":   {},
+		"video-2.5":           {},
+		"video-2.5-480p":      {},
 		"video-2.0":           {},
 		"video-2.0-fast":      {},
 		"video-2.0-mini":      {},

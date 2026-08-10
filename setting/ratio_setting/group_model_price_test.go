@@ -37,6 +37,9 @@ func TestGetGroupModelPriceBySeconds(t *testing.T) {
 			"grok-imagine-video": {
 				"6": 0.05,
 				"10": 0.07
+			},
+			"video-2.5": {
+				"per_second": 0.3
 			}
 		}
 	}`))
@@ -47,6 +50,10 @@ func TestGetGroupModelPriceBySeconds(t *testing.T) {
 
 	_, ok = GetGroupModelPriceBySeconds("default", "grok-imagine-video", 10)
 	require.False(t, ok)
+
+	price, ok = GetGroupModelPriceBySeconds("vip", "video-2.5", 10)
+	require.True(t, ok)
+	require.InDelta(t, 3.0, price, 1e-12)
 }
 
 func TestGetGroupModelPriceByResolution(t *testing.T) {

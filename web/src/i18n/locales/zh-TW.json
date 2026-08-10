@@ -2984,6 +2984,13 @@
     "输入价格：{{symbol}}{{price}} / 1M tokens": "輸入價格：{{symbol}}{{price}} / 1M tokens",
     "输出价格 {{symbol}}{{price}} / 1M tokens": "輸出價格 {{symbol}}{{price}} / 1M tokens",
     "输出价格：{{symbol}}{{price}} / 1M tokens": "輸出價格：{{symbol}}{{price}} / 1M tokens",
-    "输出价格：{{symbol}}{{total}} / 1M tokens": "輸出價格：{{symbol}}{{total}} / 1M tokens"
+    "输出价格：{{symbol}}{{total}} / 1M tokens": "輸出價格：{{symbol}}{{total}} / 1M tokens",
+    "每秒价格": "每秒價格",
+    "填写单秒价格，实际费用按单秒价格 × 请求秒数计算。": "填寫每秒單價，實際費用按每秒單價 × 請求秒數計算。",
+    "输入每秒价格": "輸入每秒價格",
+    "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "目前存在舊版分段價格；輸入每秒價格後會替換為按秒計費。",
+    "按时长计费下需要填写每秒价格。": "按時長計費需要填寫每秒價格。",
+    "按时长计费": "按時長計費",
+    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "每秒價格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}"
   }
 }

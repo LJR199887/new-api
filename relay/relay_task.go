@@ -405,12 +405,16 @@ func calcTaskQuotaWithRatios(c *gin.Context, info *relaycommon.RelayInfo, ratios
 
 	if seconds, ok := extractTaskSeconds(normalizedRatios); ok {
 		if secondsPrice, overrideGroup, found := helper.ResolveGroupModelPriceBySeconds(info, seconds); found {
+			info.PriceData.BillingType = "duration"
+			info.PriceData.BillingSeconds = seconds
 			info.PriceData.ModelPrice = secondsPrice
 			info.PriceData.GroupPriceOverride = true
 			info.PriceData.GroupPriceOverrideGroup = overrideGroup
 			baseQuota = int(secondsPrice * common.QuotaPerUnit)
 			normalizedRatios["seconds"] = 1
 		} else if secondsPrice, found := ratio_setting.GetModelPriceBySeconds(info.OriginModelName, seconds); found {
+			info.PriceData.BillingType = "duration"
+			info.PriceData.BillingSeconds = seconds
 			info.PriceData.ModelPrice = secondsPrice
 			info.PriceData.GroupPriceOverride = false
 			info.PriceData.GroupPriceOverrideGroup = ""
@@ -447,7 +451,12 @@ func calcTaskQuotaWithRatios(c *gin.Context, info *relaycommon.RelayInfo, ratios
 			}
 		}
 	}
-	return int(result), normalizedRatios
+	quota := int(result)
+	if info.PriceData.BillingType == "duration" && info.PriceData.BillingSeconds > 0 && common.QuotaPerUnit > 0 {
+		info.PriceData.BillingTotalPrice = float64(quota) / float64(common.QuotaPerUnit)
+		info.PriceData.BillingUnitPrice = info.PriceData.BillingTotalPrice / float64(info.PriceData.BillingSeconds)
+	}
+	return quota, normalizedRatios
 }
 
 func cloneTaskRatios(ratios map[string]float64) map[string]float64 {

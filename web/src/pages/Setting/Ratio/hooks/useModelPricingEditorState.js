@@ -3,6 +3,7 @@ import { API, showError, showSuccess } from '../../../../helpers';
 
 export const PAGE_SIZE = 10;
 export const PRICE_SUFFIX = '$/1M tokens';
+export const PER_SECOND_PRICE_KEY = 'per_second';
 const EMPTY_CANDIDATE_MODEL_NAMES = [];
 
 const EMPTY_MODEL = {
@@ -256,7 +257,7 @@ const buildModelState = (name, sourceMaps) => {
 export const isBasePricingUnset = (model) =>
   !hasValue(model.fixedPrice) &&
   !hasValue(model.inputPrice) &&
-  Object.keys(model.durationPrices || {}).length === 0 &&
+  !Object.values(model.durationPrices || {}).some(hasValue) &&
   Object.keys(model.resolutionPrices || {}).length === 0;
 
 export const getModelWarnings = (model, t) => {
@@ -282,9 +283,9 @@ export const getModelWarnings = (model, t) => {
 
   if (
     model.billingMode === 'per-duration' &&
-    Object.keys(model.durationPrices || {}).length === 0
+    !Object.values(model.durationPrices || {}).some(hasValue)
   ) {
-    warnings.push(t('按时长计费下至少需要填写一个秒数价格。'));
+    warnings.push(t('按时长计费下需要填写每秒价格。'));
   }
 
   if (
@@ -337,9 +338,15 @@ export const buildSummaryText = (model, t) => {
   }
 
   if (model.billingMode === 'per-duration') {
-    const durationCount = Object.keys(model.durationPrices || {}).length;
-    return durationCount > 0
-      ? `${t('按时长')} ${durationCount}${t('档价格')}`
+    const perSecondPrice = model.durationPrices?.[PER_SECOND_PRICE_KEY];
+    if (hasValue(perSecondPrice)) {
+      return `${t('按时长')} $${perSecondPrice} / ${t('秒')}`;
+    }
+    const legacyDurationCount = Object.entries(model.durationPrices || {}).filter(
+      ([key, value]) => key !== PER_SECOND_PRICE_KEY && hasValue(value),
+    ).length;
+    return legacyDurationCount > 0
+      ? `${t('按时长')} ${legacyDurationCount}${t('档价格')}`
       : t('按时长计费未设置');
   }
 
@@ -972,41 +979,14 @@ export function useModelPricingEditorState({
 
     upsertModel(selectedModel.name, (model) => ({
       ...model,
-      durationPrices: {
-        ...(model.durationPrices || {}),
-        [normalizedSeconds]: value,
-      },
+      durationPrices:
+        normalizedSeconds === PER_SECOND_PRICE_KEY
+          ? { [PER_SECOND_PRICE_KEY]: value }
+          : {
+              ...(model.durationPrices || {}),
+              [normalizedSeconds]: value,
+            },
     }));
-  };
-
-  const addDurationPrice = (seconds = '') => {
-    if (!selectedModel) return;
-    const normalizedSeconds = String(seconds).trim();
-    if (!normalizedSeconds) return;
-
-    upsertModel(selectedModel.name, (model) => ({
-      ...model,
-      durationPrices: {
-        ...(model.durationPrices || {}),
-        [normalizedSeconds]:
-          model.durationPrices?.[normalizedSeconds] ?? '',
-      },
-    }));
-  };
-
-  const removeDurationPrice = (seconds) => {
-    if (!selectedModel) return;
-    const normalizedSeconds = String(seconds).trim();
-    if (!normalizedSeconds) return;
-
-    upsertModel(selectedModel.name, (model) => {
-      const nextDurationPrices = { ...(model.durationPrices || {}) };
-      delete nextDurationPrices[normalizedSeconds];
-      return {
-        ...model,
-        durationPrices: nextDurationPrices,
-      };
-    });
   };
 
   const handleResolutionPriceChange = (resolution, value) => {
@@ -1258,8 +1238,6 @@ export function useModelPricingEditorState({
     handleOptionalFieldToggle,
     handleNumericFieldChange,
     handleDurationPriceChange,
-    addDurationPrice,
-    removeDurationPrice,
     handleResolutionPriceChange,
     addResolutionPrice,
     removeResolutionPrice,

@@ -51,6 +51,8 @@ const TASK_VIDEO_MODELS = new Set([
   'kling-v3',
   'seedance-2.0',
   'seedance-2.0-fast',
+  'video-2.5',
+  'video-2.5-480p',
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -61,6 +63,8 @@ const TASK_VIDEO_MODELS = new Set([
 const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',
   'seedance-2.0-fast',
+  'video-2.5',
+  'video-2.5-480p',
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',

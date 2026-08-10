@@ -2,6 +2,7 @@ package sora
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -32,6 +33,8 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",
+		"video-2.5",
+		"video-2.5-480p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",
@@ -212,6 +215,8 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 	for _, modelName := range []string{
 		"seedance-2.0",
 		"seedance-2.0-fast",
+		"video-2.5",
+		"video-2.5-480p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",
@@ -225,6 +230,135 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		if !isSeedanceVideoModel(modelName) {
 			t.Fatalf("expected %s to be treated as a Seedance video model", modelName)
 		}
+	}
+}
+
+func TestNormalizeVideo25RequestAcceptsMaterialLimits(t *testing.T) {
+	images := make([]interface{}, 30)
+	for index := range images {
+		images[index] = fmt.Sprintf("https://example.com/image-%d.png", index)
+	}
+	videos := make([]interface{}, 10)
+	audios := make([]interface{}, 10)
+	for index := 0; index < 10; index++ {
+		videos[index] = map[string]interface{}{
+			"url":      fmt.Sprintf("https://example.com/video-%d.mp4", index),
+			"duration": 3,
+		}
+		audios[index] = map[string]interface{}{
+			"url":      fmt.Sprintf("https://example.com/audio-%d.mp3", index),
+			"duration": 3,
+		}
+	}
+	body := map[string]interface{}{
+		"model":           "video-2.5",
+		"images":          images,
+		"video_reference": videos,
+		"audio_reference": audios,
+	}
+
+	if err := normalizeSeedanceVideoRequest(body, "video-2.5"); err != nil {
+		t.Fatalf("expected video-2.5 material limits to pass: %v", err)
+	}
+	if got := body["model"]; got != "video-2.5" {
+		t.Fatalf("expected model=video-2.5, got %#v", got)
+	}
+	if got, ok := body["image_urls"].([]string); !ok || len(got) != 30 {
+		t.Fatalf("expected 30 normalized image urls, got %#v", body["image_urls"])
+	}
+}
+
+func TestNormalizeVideo25RequestRejectsMaterialLimits(t *testing.T) {
+	makeReferences := func(count int, duration float64, extension string) []interface{} {
+		refs := make([]interface{}, count)
+		for index := range refs {
+			refs[index] = map[string]interface{}{
+				"url":      fmt.Sprintf("https://example.com/reference-%d.%s", index, extension),
+				"duration": duration,
+			}
+		}
+		return refs
+	}
+	makeImages := func(count int) []interface{} {
+		images := make([]interface{}, count)
+		for index := range images {
+			images[index] = fmt.Sprintf("https://example.com/image-%d.png", index)
+		}
+		return images
+	}
+
+	tests := []struct {
+		name string
+		body map[string]interface{}
+	}{
+		{name: "more than 30 images", body: map[string]interface{}{"images": makeImages(31)}},
+		{name: "more than 10 videos", body: map[string]interface{}{"video_reference": makeReferences(11, 3, "mp4")}},
+		{name: "video shorter than 3 seconds", body: map[string]interface{}{"video_reference": makeReferences(1, 2.9, "mp4")}},
+		{name: "video longer than 10 seconds", body: map[string]interface{}{"video_reference": makeReferences(1, 10.1, "mp4")}},
+		{name: "video total longer than 30 seconds", body: map[string]interface{}{"video_reference": makeReferences(4, 8, "mp4")}},
+		{name: "more than 10 audios", body: map[string]interface{}{"audio_reference": makeReferences(11, 3, "mp3")}},
+		{name: "audio shorter than 3 seconds", body: map[string]interface{}{"audio_reference": makeReferences(1, 2.9, "mp3")}},
+		{name: "audio longer than 30 seconds", body: map[string]interface{}{"audio_reference": makeReferences(1, 30.1, "mp3")}},
+		{name: "audio total longer than 30 seconds", body: map[string]interface{}{"audio_reference": makeReferences(2, 16, "mp3")}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.body["model"] = "video-2.5"
+			if err := normalizeSeedanceVideoRequest(tt.body, "video-2.5"); err == nil {
+				t.Fatalf("expected video-2.5 material validation to reject %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestNormalizeVideo25RequestAllowsReferencesWithoutDurationMetadata(t *testing.T) {
+	body := map[string]interface{}{
+		"model": "video-2.5",
+		"video_reference": []interface{}{
+			map[string]interface{}{"url": "https://example.com/video.mp4"},
+		},
+		"audio_reference": []interface{}{
+			map[string]interface{}{"url": "https://example.com/audio.mp3"},
+		},
+	}
+
+	if err := normalizeSeedanceVideoRequest(body, "video-2.5"); err != nil {
+		t.Fatalf("expected URL references without duration metadata to pass through: %v", err)
+	}
+}
+
+func TestNormalizeVideo25480PRequestUsesVideo25LimitsAndFixedResolution(t *testing.T) {
+	body := map[string]interface{}{
+		"model":        "video-2.5-480p",
+		"aspect_ratio": "16:9",
+		"resolution":   "1080p",
+		"images": []interface{}{
+			"https://example.com/image-1.png",
+			"https://example.com/image-2.png",
+		},
+	}
+
+	if err := normalizeSeedanceVideoRequest(body, "video-2.5-480p"); err != nil {
+		t.Fatalf("expected video-2.5-480p request to pass: %v", err)
+	}
+	if got := body["model"]; got != "video-2.5-480p" {
+		t.Fatalf("expected model=video-2.5-480p, got %#v", got)
+	}
+	if got := body["size"]; got != "864x496" {
+		t.Fatalf("expected fixed 480p 16:9 size=864x496, got %#v", got)
+	}
+
+	tooManyImages := make([]interface{}, 31)
+	for index := range tooManyImages {
+		tooManyImages[index] = fmt.Sprintf("https://example.com/image-%d.png", index)
+	}
+	invalidBody := map[string]interface{}{
+		"model":  "video-2.5-480p",
+		"images": tooManyImages,
+	}
+	if err := normalizeSeedanceVideoRequest(invalidBody, "video-2.5-480p"); err == nil {
+		t.Fatal("expected video-2.5-480p to enforce the 30-image limit")
 	}
 }
 

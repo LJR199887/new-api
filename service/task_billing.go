@@ -19,7 +19,7 @@ import (
 // 实际扣费已由 BillingSession（PreConsumeBilling + SettleBilling）完成。
 func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	tokenName := c.GetString("token_name")
-	logContent := fmt.Sprintf("操作 %s", info.Action)
+	logContent := buildTaskConsumptionLogContent(info)
 	useTimeSeconds := 0
 	if !info.StartTime.IsZero() {
 		elapsedSeconds := time.Now().Unix() - info.StartTime.Unix()
@@ -27,27 +27,17 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 			useTimeSeconds = int(elapsedSeconds)
 		}
 	}
-	// 支持任务仅按次计费
-	if common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
-		logContent = fmt.Sprintf("%s，按次计费", logContent)
-	} else {
-		if len(info.PriceData.OtherRatios) > 0 {
-			var contents []string
-			for key, ra := range info.PriceData.OtherRatios {
-				if 1.0 != ra {
-					contents = append(contents, fmt.Sprintf("%s: %.2f", key, ra))
-				}
-			}
-			if len(contents) > 0 {
-				logContent = fmt.Sprintf("%s, 计算参数：%s", logContent, strings.Join(contents, ", "))
-			}
-		}
-	}
 	other := make(map[string]interface{})
 	other["task_id"] = info.PublicTaskID
 	other["request_path"] = c.Request.URL.Path
 	other["model_price"] = info.PriceData.ModelPrice
 	other["group_ratio"] = info.PriceData.GroupRatioInfo.GroupRatio
+	if info.PriceData.BillingType == "duration" && info.PriceData.BillingSeconds > 0 {
+		other["billing_type"] = info.PriceData.BillingType
+		other["billing_seconds"] = info.PriceData.BillingSeconds
+		other["billing_unit_price"] = info.PriceData.BillingUnitPrice
+		other["billing_total_price"] = info.PriceData.BillingTotalPrice
+	}
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
 	}
@@ -69,6 +59,29 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
+}
+
+func buildTaskConsumptionLogContent(info *relaycommon.RelayInfo) string {
+	logContent := fmt.Sprintf("操作 %s", info.Action)
+	if info.PriceData.BillingType == "duration" && info.PriceData.BillingSeconds > 0 {
+		return fmt.Sprintf("%s，按时长计费（%d 秒）", logContent, info.PriceData.BillingSeconds)
+	}
+	if common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
+		return fmt.Sprintf("%s，按次计费", logContent)
+	}
+	if len(info.PriceData.OtherRatios) == 0 {
+		return logContent
+	}
+	var contents []string
+	for key, ratio := range info.PriceData.OtherRatios {
+		if ratio != 1.0 {
+			contents = append(contents, fmt.Sprintf("%s: %.2f", key, ratio))
+		}
+	}
+	if len(contents) > 0 {
+		logContent = fmt.Sprintf("%s, 计算参数：%s", logContent, strings.Join(contents, ", "))
+	}
+	return logContent
 }
 
 // ---------------------------------------------------------------------------

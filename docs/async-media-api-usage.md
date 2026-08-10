@@ -1,6 +1,6 @@
 # 异步媒体 API 下游调用文档示例
 
-本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`minimax-h3`、`video-2.0`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
+本文档将 `sora2`、`veo`、`ko3`、`kling-v3`、`minimax-h3`、`video-2.5`、`video-2.0`、`grok-imagine-video`、`banana`、`gpt-image2` 的异步调用方式整理成一份统一示例，便于下游系统快速接入。
 
 适用模型：
 
@@ -12,6 +12,7 @@
   - `ko3`
   - `kling-v3`
   - `minimax-h3`
+  - `video-2.5`
   - `video-2.0`
   - `video-2.0-fast`
   - `video-2.0-mini`
@@ -65,7 +66,7 @@ Content-Type: application/json
 | `ko3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `kling-v3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `minimax-h3` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
-| `video-2.0*` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
+| `video-2.5` / `video-2.0*` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `grok-imagine-video` | 视频 | `POST /v1/video/async-generations` | `GET /v1/video/async-generations/{task_id}` |
 | `nano-banana*` | 图片 | `POST /v1/images/async-generations` | `GET /v1/images/async-generations/{task_id}` |
 | `gpt-image2` | 图片 | `POST /v1/images/async-generations` | `GET /v1/images/async-generations/{task_id}` |
@@ -355,7 +356,7 @@ curl https://linksky.top/v1/video/async-generations \
 | `image_urls` | array | 否 | 首尾帧参考图 URL，最多前 `2` 张 |
 | `async` | boolean | 否 | 建议传 `true` |
 
-### 3.5 `video-2.0` / `video-2.0-fast` / `video-2.0-mini` / `*-480p`
+### 3.5 `video-2.5` / `video-2.0` / `video-2.0-fast` / `video-2.0-mini` / `*-480p`
 
 文生视频：
 
@@ -425,6 +426,7 @@ curl https://linksky.top/v1/video/async-generations \
 说明：
 
 - `video-2.0-mini` 的请求格式与 `video-2.0` / `video-2.0-fast` 一致。
+- `video-2.5` 的请求格式与 `video-2.0` 一致，最多支持 `30` 张图片、`10` 个视频和 `10` 个音频；视频单个 `3-10` 秒、总时长不超过 `30` 秒，音频单个 `3-30` 秒、总时长不超过 `30` 秒。
 - `duration` 推荐 `4-15` 秒，`aspect_ratio` 支持 `9:16` / `16:9` / `1:1`，`resolution` 当前使用 `720p`。
 - `video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式一致，但 `resolution` 固定为 `480p`。
 - 480p 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`。
@@ -434,7 +436,7 @@ curl https://linksky.top/v1/video/async-generations \
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
+| `model` | string | 是 | `video-2.5`、`video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` 秒 |
 | `size` | string | 否 | 可直接指定尺寸；480p 支持 `496x864` / `864x496` / `640x640` |

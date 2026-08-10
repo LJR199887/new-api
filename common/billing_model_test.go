@@ -19,6 +19,22 @@ func TestFilterOtherRatiosForDurationOnlyModel(t *testing.T) {
 	}, filtered)
 }
 
+func TestFilterOtherRatiosForVideo25DurationBilling(t *testing.T) {
+	for _, modelName := range []string{"video-2.5", "video-2.5-480p"} {
+		t.Run(modelName, func(t *testing.T) {
+			filtered := FilterOtherRatiosForBillingModel(modelName, map[string]float64{
+				"seconds":    10,
+				"size":       1.5,
+				"resolution": 2,
+			})
+
+			assert.Equal(t, map[string]float64{
+				"seconds": 10,
+			}, filtered)
+		})
+	}
+}
+
 func TestFilterOtherRatiosForResolutionOnlyModel(t *testing.T) {
 	filtered := FilterOtherRatiosForBillingModel("nano-banana-pro", map[string]float64{
 		"resolution":        2,
@@ -41,6 +57,8 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 	appendTaskPricePatchDefault("ko3")
 	appendTaskPricePatchDefault("kling-o3")
 	appendTaskPricePatchDefault("kling-video-o-3")
+	appendTaskPricePatchDefault("video-2.5")
+	appendTaskPricePatchDefault("video-2.5-480p")
 	appendTaskPricePatchDefault("video-2.0")
 	appendTaskPricePatchDefault("video-2.0-fast")
 	appendTaskPricePatchDefault("video-2.0-mini")
@@ -55,6 +73,8 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 		"kling-o3",
 		"kling-video-o-3",
 		"kling-v3",
+		"video-2.5",
+		"video-2.5-480p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",

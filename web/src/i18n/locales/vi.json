@@ -3869,6 +3869,13 @@
     "补全倍率 {{completionRatio}}": "Tỷ lệ hoàn thành {{completionRatio}}",
     "输出价格 {{symbol}}{{price}} / 1M tokens": "Giá đầu ra {{symbol}}{{price}} / 1M tokens",
     "输出价格：{{symbol}}{{price}} / 1M tokens": "Giá đầu ra: {{symbol}}{{price}} / 1M tokens",
-    "输出价格：{{symbol}}{{total}} / 1M tokens": "Giá đầu ra: {{symbol}}{{total}} / 1M tokens"
+    "输出价格：{{symbol}}{{total}} / 1M tokens": "Giá đầu ra: {{symbol}}{{total}} / 1M tokens",
+    "每秒价格": "Giá mỗi giây",
+    "填写单秒价格，实际费用按单秒价格 × 请求秒数计算。": "Nhập đơn giá mỗi giây. Chi phí thực tế bằng đơn giá nhân với số giây yêu cầu.",
+    "输入每秒价格": "Nhập giá mỗi giây",
+    "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "Đang có bảng giá theo thời lượng cũ. Nhập giá mỗi giây sẽ thay thế bảng giá này.",
+    "按时长计费下需要填写每秒价格。": "Tính phí theo thời lượng cần có giá mỗi giây.",
+    "按时长计费": "Tính phí theo thời lượng",
+    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "Giá mỗi giây {{unitPrice}} × {{seconds}} giây = {{totalPrice}}"
   }
 }

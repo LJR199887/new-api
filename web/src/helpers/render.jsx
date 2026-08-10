@@ -2252,6 +2252,46 @@ export function renderModelPriceSimple(
   });
 }
 
+export function renderDurationBilling(
+  unitPrice,
+  seconds,
+  totalPrice,
+  groupRatio,
+  userGroupRatio,
+  outputMode = 'text',
+) {
+  const normalizedSeconds = Number(seconds);
+  const formula = i18next.t(
+    '每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}',
+    {
+      unitPrice: formatCompactDisplayPrice(Number(unitPrice) || 0),
+      seconds: Number.isFinite(normalizedSeconds) ? normalizedSeconds : 0,
+      totalPrice: formatCompactDisplayPrice(Number(totalPrice) || 0),
+    },
+  );
+  const groupText = getGroupRatioText(groupRatio, userGroupRatio);
+
+  if (outputMode === 'segments') {
+    return [
+      { text: groupText, tone: 'primary' },
+      { text: i18next.t('按时长计费'), tone: 'secondary' },
+      { text: formula, tone: 'secondary' },
+    ];
+  }
+  if (outputMode === 'summary') {
+    return joinBillingSummary([
+      i18next.t('按时长计费'),
+      formula,
+      groupText,
+    ]);
+  }
+  return renderBillingArticle([
+    i18next.t('按时长计费'),
+    formula,
+    groupText,
+  ]);
+}
+
 export function renderAudioModelPrice(
   inputTokens,
   completionTokens,
