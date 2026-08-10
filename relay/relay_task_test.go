@@ -81,6 +81,41 @@ func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 	assert.Equal(t, 0.2, info.PriceData.ModelPrice)
 }
 
+func TestCalcTaskQuotaWithRatiosUsesPerSecondPrice(t *testing.T) {
+	original := ratio_setting.ModelPriceBySeconds2JSONString()
+	originalQuotaPerUnit := common.QuotaPerUnit
+	defer func() {
+		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original)
+		common.QuotaPerUnit = originalQuotaPerUnit
+	}()
+
+	common.QuotaPerUnit = 500
+	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{
+		"video-2.5": {
+			"per_second": 0.3
+		}
+	}`))
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "video-2.5",
+		PriceData: types.PriceData{
+			BaseQuota: 100,
+			Quota:     100,
+			GroupRatioInfo: types.GroupRatioInfo{
+				GroupRatio: 1,
+			},
+		},
+	}
+
+	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
+		"seconds": 10,
+	})
+
+	assert.Equal(t, int(3.0*common.QuotaPerUnit), quota)
+	assert.Equal(t, 1.0, ratios["seconds"])
+	assert.InDelta(t, 3.0, info.PriceData.ModelPrice, 1e-12)
+}
+
 func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *testing.T) {
 	original := ratio_setting.GroupModelPriceBySeconds2JSONString()
 	originalQuotaPerUnit := common.QuotaPerUnit

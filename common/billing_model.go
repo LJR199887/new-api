@@ -14,6 +14,9 @@ func IsDurationOnlyBillingModel(modelName string) bool {
 	if strings.HasPrefix(name, "veo") {
 		return true
 	}
+	if name == "video-2.5" {
+		return true
+	}
 	return strings.Contains(name, "grok-imagine") && strings.Contains(name, "video")
 }
 

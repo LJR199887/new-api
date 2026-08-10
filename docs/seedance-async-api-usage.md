@@ -3,6 +3,7 @@
 本文档面向下游系统调用 `Seedance` 视频模型，统一使用异步任务模式。
 
 适用模型：
+- `video-2.5`
 - `video-2.0`
 - `video-2.0-fast`
 - `video-2.0-mini`
@@ -33,6 +34,12 @@ Content-Type: application/json
 
 ## 2. 模型参数范围
 
+`video-2.5`：
+- 请求格式与 `video-2.0` 相同
+- 图片素材：最多 `30` 张
+- 视频素材：最多 `10` 个，单个 `3-10` 秒，总时长不超过 `30` 秒
+- 音频素材：最多 `10` 个，单个 `3-30` 秒，总时长不超过 `30` 秒
+
 `video-2.0`：
 - 时长：`4-15` 秒
 - 比例：`9:16`、`16:9`、`1:1`
@@ -58,18 +65,18 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `model` | string | 是 | `video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
+| `model` | string | 是 | `video-2.5`、`video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` |
 | `size` | string | 否 | 直接指定输出尺寸，如 `1280x720`、`720x1280`、`960x960` |
 | `aspect_ratio` | string | 否 | 视频比例，仅支持 `9:16`、`16:9`、`1:1` |
-| `resolution` | string | 否 | 输出分辨率，`video-2.0*` 默认 `720p`；`*-480p` 模型固定 `480p` |
+| `resolution` | string | 否 | 输出分辨率，`video-2.5` 与 `video-2.0*` 默认 `720p`；`*-480p` 模型固定 `480p` |
 | `image_url` | string | 否 | 单图参考模式使用的图片 URL；不传即为文生视频 |
-| `image_urls` | string[] | 否 | 多图参考模式使用的图片 URL 数组，最多 `4` 张 |
+| `image_urls` | string[] | 否 | 多图参考模式使用的图片 URL 数组；`video-2.5` 最多 `30` 张，其余模型最多 `4` 张 |
 | `video_url` | string | 否 | 单视频参考模式使用的视频素材 URL |
-| `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "..." }]`，最多 `3` 个 |
-| `audio_url` | string | 否 | 音频参考素材 URL，`video-2.0`、`video-2.0-fast`、`video-2.0-mini` 和 `*-480p` 模型支持 |
-| `audio_reference` | object[] | 否 | 音频参考数组，格式为 `[{ "url": "..." }]` 或 `[{ "id": "...", "type": "UPLOADED", "duration": 14.9 }]` |
+| `video_reference` | object[] | 否 | 多视频参考模式使用的视频数组，格式为 `[{ "url": "...", "duration": 3 }]`；`video-2.5` 最多 `10` 个，其余模型最多 `3` 个 |
+| `audio_url` | string | 否 | 音频参考素材 URL，`video-2.5`、`video-2.0`、`video-2.0-fast`、`video-2.0-mini` 和 `*-480p` 模型支持 |
+| `audio_reference` | object[] | 否 | 音频参考数组，格式为 `[{ "url": "...", "duration": 3 }]` 或 `[{ "id": "...", "type": "UPLOADED", "duration": 14.9 }]`；`video-2.5` 最多 `10` 个 |
 | `guidances.audio_reference` | object[] | 否 | 兼容 Leonardo Web 原始音频参考结构，会自动归一化为 `audio_reference` |
 | `start_image_url` | string | 否 | 首尾帧模式的起始图 URL |
 | `end_image_url` | string | 否 | 首尾帧模式的结束图 URL |
@@ -80,8 +87,10 @@ Content-Type: application/json
 - 下游调用时建议显式传 `duration`、`aspect_ratio`、`resolution`，不要依赖默认值。
 - 如果你已经能明确给出尺寸，也可以直接传 `size`。
 - 如果使用 `size`，建议只传与 `9:16`、`16:9`、`1:1` 对应的尺寸；`720p` 下 `1:1` 对应 `960x960`，`480p` 下 `9:16` 对应 `496x864`、`16:9` 对应 `864x496`、`1:1` 对应 `640x640`。
-- 多图参考最多上传 `4` 张图片。
-- 上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
+- `video-2.0` 系列多图参考最多上传 `4` 张图片。
+- `video-2.0` 系列上传视频素材时，最多 `3` 个视频，总大小不能超过 `200MB`，总时长不能超过 `15` 秒。
+- `video-2.5` 的素材限制为：最多 `30` 张图片；最多 `10` 个视频（单个 `3-10` 秒、总时长不超过 `30` 秒）；最多 `10` 个音频（单个 `3-30` 秒、总时长不超过 `30` 秒）。
+- 网关会校验请求中显式提供的 `video_reference[].duration` / `audio_reference[].duration`；仅提供远程 URL 时，素材实际时长由上游校验。
 - 视频参考模式下，单个参考视频的分辨率必须在 `720px` 到 `2160px` 之间，否则上游会返回“视频分辨率不支持”错误。
 - 音频参考支持 `mp3`、`wav`、`m4a`、`aac`、`ogg`、`webm` 等常见音频格式。
 - 使用 `audio_url` 时，服务会将远程音频交给上游处理并归一化为 `audio_reference`。

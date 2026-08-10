@@ -43,8 +43,20 @@ const sortResolutionEntries = (entries) =>
     });
   });
 
-const buildSecondsPriceItems = (priceMap, ratio, displayPrice, t) =>
-  Object.entries(priceMap || {})
+const buildSecondsPriceItems = (priceMap, ratio, displayPrice, t) => {
+  const perSecondPrice = Number(priceMap?.per_second);
+  if (Number.isFinite(perSecondPrice)) {
+    return [
+      {
+        key: 'seconds-per-second',
+        label: t('每秒价格'),
+        value: displayPrice(perSecondPrice * ratio),
+        suffix: `/ ${t('秒')}`,
+        order: 0,
+      },
+    ];
+  }
+  return Object.entries(priceMap || {})
     .map(([seconds, price]) => {
       const secondsValue = Number(seconds);
       const priceValue = Number(price);
@@ -61,6 +73,7 @@ const buildSecondsPriceItems = (priceMap, ratio, displayPrice, t) =>
     })
     .filter(Boolean)
     .sort((a, b) => a.order - b.order);
+};
 
 const buildResolutionPriceItems = (priceMap, ratio, displayPrice, t) =>
   sortResolutionEntries(Object.entries(priceMap || {}))

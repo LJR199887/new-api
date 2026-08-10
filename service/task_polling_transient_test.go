@@ -163,7 +163,7 @@ func TestIsTransientVideoMediaPreparationError(t *testing.T) {
 		Action:     constant.TaskActionGenerate,
 		SubmitTime: now - 60,
 		Properties: model.Properties{
-			OriginModelName: "video-2.0-fast",
+			OriginModelName: "video-2.5",
 		},
 	}
 

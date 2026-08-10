@@ -566,6 +566,19 @@ func GetGroupModelPrice(group string, name string) (float64, bool) {
 	return 0, false
 }
 
+const ModelPricePerSecondKey = "per_second"
+
+func resolveModelPriceBySeconds(secondsPriceMap map[string]float64, seconds int) (float64, bool) {
+	if seconds <= 0 {
+		return 0, false
+	}
+	if perSecondPrice, ok := secondsPriceMap[ModelPricePerSecondKey]; ok {
+		return perSecondPrice * float64(seconds), true
+	}
+	price, ok := secondsPriceMap[strconv.Itoa(seconds)]
+	return price, ok
+}
+
 func GetModelPriceBySeconds(name string, seconds int) (float64, bool) {
 	if seconds <= 0 {
 		return 0, false
@@ -575,8 +588,7 @@ func GetModelPriceBySeconds(name string, seconds int) (float64, bool) {
 		if !ok {
 			continue
 		}
-		price, ok := secondsPriceMap[strconv.Itoa(seconds)]
-		if ok {
+		if price, found := resolveModelPriceBySeconds(secondsPriceMap, seconds); found {
 			return price, true
 		}
 	}
@@ -597,8 +609,7 @@ func GetGroupModelPriceBySeconds(group string, name string, seconds int) (float6
 		if !ok {
 			continue
 		}
-		price, ok := secondsPriceMap[strconv.Itoa(seconds)]
-		if ok {
+		if price, found := resolveModelPriceBySeconds(secondsPriceMap, seconds); found {
 			return price, true
 		}
 	}
@@ -759,6 +770,9 @@ func GetModelPriceBySecondsMin(name string) (float64, bool) {
 	if !ok {
 		return 0, false
 	}
+	if perSecondPrice, found := secondsPriceMap[ModelPricePerSecondKey]; found {
+		return perSecondPrice, true
+	}
 	minPrice := 0.0
 	found := false
 	for _, price := range secondsPriceMap {
@@ -774,6 +788,9 @@ func GetGroupModelPriceBySecondsMin(group string, name string) (float64, bool) {
 	secondsPriceMap, ok := GetGroupModelPriceBySecondsMap(group, name)
 	if !ok {
 		return 0, false
+	}
+	if perSecondPrice, found := secondsPriceMap[ModelPricePerSecondKey]; found {
+		return perSecondPrice, true
 	}
 	minPrice := 0.0
 	found := false
