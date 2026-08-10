@@ -3136,21 +3136,29 @@ const DropSelectButton = ({
 const DurationSliderButton = ({
   menuKey,
   value,
+  options,
   openMenu,
   setOpenMenu,
   onChange,
-  min = 4,
-  max = 30,
 }) => {
-  const numericValue = Math.min(
-    max,
-    Math.max(min, Number.parseInt(value, 10) || min),
+  const normalizedOptions = Array.isArray(options) ? options : [];
+  if (normalizedOptions.length === 0) {
+    return null;
+  }
+  const selectedIndex = Math.max(
+    0,
+    normalizedOptions.findIndex(
+      (option) => String(option.value) === String(value),
+    ),
   );
+  const selectedOption = normalizedOptions[selectedIndex];
+  const firstOption = normalizedOptions[0];
+  const lastOption = normalizedOptions[normalizedOptions.length - 1];
 
   return (
     <DropButton
       icon={<Clock size={14} />}
-      label={`时长 ${numericValue}s`}
+      label={`时长 ${selectedOption.label}`}
       open={openMenu === menuKey}
       onClick={() => setOpenMenu(openMenu === menuKey ? null : menuKey)}
     >
@@ -3159,22 +3167,28 @@ const DurationSliderButton = ({
           <div className='mb-3 flex items-center justify-between text-[13px] font-bold'>
             <span className='text-slate-600'>生成时长</span>
             <span className='rounded-lg bg-blue-50 px-2 py-1 text-blue-600'>
-              {numericValue} 秒
+              {selectedOption.label}
             </span>
           </div>
           <input
             type='range'
-            min={min}
-            max={max}
+            min={0}
+            max={Math.max(1, normalizedOptions.length - 1)}
             step={1}
-            value={numericValue}
-            onChange={(event) => onChange(String(event.target.value))}
+            value={selectedIndex}
+            disabled={normalizedOptions.length === 1}
+            onChange={(event) => {
+              const nextOption = normalizedOptions[Number(event.target.value)];
+              if (nextOption) {
+                onChange(nextOption.value);
+              }
+            }}
             className='h-2 w-full cursor-pointer accent-blue-500'
             aria-label='视频生成时长'
           />
           <div className='mt-2 flex justify-between text-[11px] font-medium text-slate-400'>
-            <span>{min}s</span>
-            <span>{max}s</span>
+            <span>{firstOption.label}</span>
+            <span>{lastOption.label}</span>
           </div>
         </div>
       )}
@@ -9510,21 +9524,15 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         }
                       />
 
-                      <DropSelectButton
+                      <DurationSliderButton
                         menuKey='videoSeconds'
-                        icon={<Clock size={14} />}
-                        label={`时长 ${getOptionLabel(
-                          currentVideoSecondsOptions,
-                          params.videoSeconds,
-                        )}`}
                         value={params.videoSeconds}
                         options={currentVideoSecondsOptions}
                         openMenu={openMenu}
                         setOpenMenu={setOpenMenu}
-                        onSelect={(value) =>
+                        onChange={(value) =>
                           setParams((prev) => ({ ...prev, videoSeconds: value }))
                         }
-                        widthClass='w-32'
                       />
 
                       <DropSelectButton
@@ -9564,40 +9572,19 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
                   {activeTab === 'video' && isAdobeVideoModel && (
                     <>
-                      {VIDEO_25_MODELS.has(currentModelName) ? (
-                        <DurationSliderButton
-                          menuKey='videoDuration'
-                          value={params.videoDuration}
-                          openMenu={openMenu}
-                          setOpenMenu={setOpenMenu}
-                          onChange={(value) =>
-                            setParams((prev) => ({
-                              ...prev,
-                              videoDuration: value,
-                            }))
-                          }
-                        />
-                      ) : (
-                        <DropSelectButton
-                          menuKey='videoDuration'
-                          icon={<Clock size={14} />}
-                          label={`时长 ${getOptionLabel(
-                            getAdobeVideoDurationOptions(currentModelName),
-                            params.videoDuration,
-                          )}`}
-                          value={params.videoDuration}
-                          options={getAdobeVideoDurationOptions(currentModelName)}
-                          openMenu={openMenu}
-                          setOpenMenu={setOpenMenu}
-                          onSelect={(value) =>
-                            setParams((prev) => ({
-                              ...prev,
-                              videoDuration: value,
-                            }))
-                          }
-                          widthClass='w-32'
-                        />
-                      )}
+                      <DurationSliderButton
+                        menuKey='videoDuration'
+                        value={params.videoDuration}
+                        options={getAdobeVideoDurationOptions(currentModelName)}
+                        openMenu={openMenu}
+                        setOpenMenu={setOpenMenu}
+                        onChange={(value) =>
+                          setParams((prev) => ({
+                            ...prev,
+                            videoDuration: value,
+                          }))
+                        }
+                      />
 
                       <DropSelectButton
                         menuKey='videoAspectRatio'
