@@ -362,6 +362,37 @@ func TestNormalizeVideo25480PRequestUsesVideo25LimitsAndFixedResolution(t *testi
 	}
 }
 
+func TestNormalizeVideo25RequestSupportsFourToThirtySecondDuration(t *testing.T) {
+	for _, modelName := range []string{"video-2.5", "video-2.5-480p"} {
+		t.Run(modelName, func(t *testing.T) {
+			for _, duration := range []int{4, 30} {
+				body := map[string]interface{}{
+					"model":    modelName,
+					"duration": duration,
+				}
+				if err := normalizeSeedanceVideoRequest(body, modelName); err != nil {
+					t.Fatalf("expected duration %d to pass for %s: %v", duration, modelName, err)
+				}
+				if got := body["duration"]; got != duration {
+					t.Fatalf("expected duration %d to be preserved, got %#v", duration, got)
+				}
+			}
+		})
+	}
+}
+
+func TestNormalizeVideo25RequestRejectsDurationOutsideSupportedRange(t *testing.T) {
+	for _, duration := range []int{3, 31} {
+		body := map[string]interface{}{
+			"model":    "video-2.5",
+			"duration": duration,
+		}
+		if err := normalizeSeedanceVideoRequest(body, "video-2.5"); err == nil {
+			t.Fatalf("expected duration %d to be rejected", duration)
+		}
+	}
+}
+
 func TestNormalizeKo3VideoRequestTextToVideoDefaults(t *testing.T) {
 	body := map[string]interface{}{
 		"model":  "ko3",
