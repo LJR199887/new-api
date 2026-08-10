@@ -33,6 +33,7 @@ import {
   getLogOther,
   renderModelTag,
   renderModelPriceSimple,
+  renderDurationBilling,
 } from '../../../helpers';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { Route, Sparkles } from 'lucide-react';
@@ -411,6 +412,19 @@ function getUsageLogDetailSummary(record, text, billingDisplayMode, t) {
         },
         text ? { text: `${t('详情')}：${text}`, tone: 'secondary' } : null,
       ].filter(Boolean),
+    };
+  }
+
+  if (other?.billing_type === 'duration') {
+    return {
+      segments: renderDurationBilling(
+        other.billing_unit_price,
+        other.billing_seconds,
+        other.billing_total_price,
+        other.group_ratio,
+        other?.user_group_ratio,
+        'segments',
+      ),
     };
   }
 
