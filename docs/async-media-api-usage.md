@@ -427,9 +427,10 @@ curl https://linksky.top/v1/video/async-generations \
 
 - `video-2.0-mini` 的请求格式与 `video-2.0` / `video-2.0-fast` 一致。
 - `video-2.5` 的请求格式与 `video-2.0` 一致，最多支持 `30` 张图片、`10` 个视频和 `10` 个音频；视频单个 `3-10` 秒、总时长不超过 `30` 秒，音频单个 `3-30` 秒、总时长不超过 `30` 秒。
-- `duration` 推荐 `4-15` 秒，`aspect_ratio` 支持 `9:16` / `16:9` / `1:1`，`resolution` 当前使用 `720p`。
+- `duration` 推荐 `4-15` 秒，`aspect_ratio` 支持 `16:9` / `9:16` / `1:1` / `21:9` / `4:3` / `3:4`，`resolution` 当前使用 `720p`。
 - `video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式一致，但 `resolution` 固定为 `480p`。
-- 480p 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`。
+- 720p 新增尺寸映射：`21:9` = `1470x630`，`4:3` = `1112x834`，`3:4` = `834x1112`。
+- 480p 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`，`21:9` = `992x432`，`4:3` = `752x560`，`3:4` = `560x752`。
 - 多图、首尾帧、视频参考、音频参考等高级格式见：[`docs/seedance-async-api-usage.md`](./seedance-async-api-usage.md)
 
 提交参数：
@@ -439,8 +440,8 @@ curl https://linksky.top/v1/video/async-generations \
 | `model` | string | 是 | `video-2.5`、`video-2.0`、`video-2.0-fast`、`video-2.0-mini`、`video-2.0-480p`、`video-2.0-fast-480p` 或 `video-2.0-mini-480p` |
 | `prompt` | string | 是 | 视频生成提示词，不能为空，字符数不能超过 `5000` |
 | `duration` | number | 否 | 视频时长，推荐 `4-15` 秒 |
-| `size` | string | 否 | 可直接指定尺寸；480p 支持 `496x864` / `864x496` / `640x640` |
-| `aspect_ratio` | string | 否 | `9:16` / `16:9` / `1:1` |
+| `size` | string | 否 | 可直接指定尺寸；尺寸须与分辨率和比例映射一致 |
+| `aspect_ratio` | string | 否 | `16:9` / `9:16` / `1:1` / `21:9` / `4:3` / `3:4` |
 | `resolution` | string | 否 | 普通模型使用 `720p`；`*-480p` 模型固定 `480p` |
 | `image_url` | string | 否 | 图生视频参考图 URL，不传则为文生视频 |
 | `async` | boolean | 否 | 建议传 `true` |

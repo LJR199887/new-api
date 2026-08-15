@@ -1007,6 +1007,24 @@ func TestNormalizeSeedance480PVideoRequestBuildsFixedSizes(t *testing.T) {
 			aspectRatio: "1:1",
 			wantSize:    "640x640",
 		},
+		{
+			name:        "ultrawide",
+			model:       "video-2.5-480p",
+			aspectRatio: "21:9",
+			wantSize:    "992x432",
+		},
+		{
+			name:        "classic landscape",
+			model:       "video-2.0-480p",
+			aspectRatio: "4:3",
+			wantSize:    "752x560",
+		},
+		{
+			name:        "classic portrait",
+			model:       "video-2.0-mini-480p",
+			aspectRatio: "3:4",
+			wantSize:    "560x752",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1029,6 +1047,57 @@ func TestNormalizeSeedance480PVideoRequestBuildsFixedSizes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNormalizeSeedance720PVideoRequestBuildsExtendedSizes(t *testing.T) {
+	tests := []struct {
+		aspectRatio string
+		wantSize    string
+	}{
+		{aspectRatio: "21:9", wantSize: "1470x630"},
+		{aspectRatio: "4:3", wantSize: "1112x834"},
+		{aspectRatio: "3:4", wantSize: "834x1112"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.aspectRatio, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":        "video-2.5",
+				"duration":     float64(4),
+				"resolution":   "720p",
+				"aspect_ratio": tt.aspectRatio,
+			}
+
+			if err := normalizeSeedanceVideoRequest(body, "video-2.5"); err != nil {
+				t.Fatalf("normalizeSeedanceVideoRequest returned error: %v", err)
+			}
+			if got := body["size"]; got != tt.wantSize {
+				t.Fatalf("expected size=%s, got %#v", tt.wantSize, got)
+			}
+			for _, key := range []string{"aspect_ratio", "resolution"} {
+				if _, exists := body[key]; exists {
+					t.Fatalf("expected %s to be removed after normalization", key)
+				}
+			}
+		})
+	}
+}
+
+func TestSeedanceAspectRatioFromExtendedSize(t *testing.T) {
+	tests := map[string]string{
+		"1470x630": "21:9",
+		"1112x834": "4:3",
+		"834x1112": "3:4",
+		"992x432":  "21:9",
+		"752x560":  "4:3",
+		"560x752":  "3:4",
+	}
+
+	for size, want := range tests {
+		if got := seedanceAspectRatioFromSize(size); got != want {
+			t.Fatalf("seedanceAspectRatioFromSize(%q) = %q, want %q", size, got, want)
+		}
 	}
 }
 
