@@ -546,15 +546,15 @@ func seedanceAspectRatioFromSize(value string) string {
 	switch strings.TrimSpace(value) {
 	case "864x496", "1280x720", "1920x1080":
 		return "16:9"
-	case "1112x834", "1664x1248":
+	case "752x560", "1112x834", "1664x1248":
 		return "4:3"
 	case "640x640", "960x960", "1024x1024", "1440x1440":
 		return "1:1"
-	case "834x1112", "1248x1664":
+	case "560x752", "834x1112", "1248x1664":
 		return "3:4"
 	case "496x864", "720x1280", "1080x1920":
 		return "9:16"
-	case "1470x630", "2208x944":
+	case "992x432", "1470x630", "2208x944":
 		return "21:9"
 	default:
 		return ""
@@ -883,14 +883,30 @@ func seedanceBaseDimensionFromResolution(value string) int {
 func seedanceSizeFromAspectRatioAndResolution(ratio string, resolution string) string {
 	normalizedRatio := strings.TrimSpace(ratio)
 	normalizedResolution := strings.ToLower(strings.TrimSpace(resolution))
-	if normalizedResolution == "480p" {
-		switch normalizedRatio {
-		case "16:9":
-			return "864x496"
-		case "9:16":
-			return "496x864"
-		case "1:1":
-			return "640x640"
+	explicitSizes := map[string]map[string]string{
+		"720p": {
+			"16:9": "1280x720",
+			"9:16": "720x1280",
+			"1:1":  "960x960",
+			"21:9": "1470x630",
+			"4:3":  "1112x834",
+			"3:4":  "834x1112",
+		},
+		"480p": {
+			"16:9": "864x496",
+			"9:16": "496x864",
+			"1:1":  "640x640",
+			"21:9": "992x432",
+			"4:3":  "752x560",
+			"3:4":  "560x752",
+		},
+	}
+	if normalizedResolution == "" {
+		normalizedResolution = "720p"
+	}
+	if sizes, ok := explicitSizes[normalizedResolution]; ok {
+		if size := sizes[normalizedRatio]; size != "" {
+			return size
 		}
 	}
 

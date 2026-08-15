@@ -48,7 +48,7 @@ Content-Type: application/json
 | `model` | string | 是 | `video-2.5` 或 `video-2.5-480p` |
 | `prompt` | string | 是 | 视频提示词，不能为空，最多 `5000` 字符 |
 | `duration` | number | 否 | 生成视频时长，`video-2.5` 和 `video-2.5-480p` 均支持 `4-30` 秒，也用于按秒计费 |
-| `aspect_ratio` | string | 否 | 输出比例：`9:16`、`16:9` 或 `1:1` |
+| `aspect_ratio` | string | 否 | 输出比例：`16:9`、`9:16`、`1:1`、`21:9`、`4:3` 或 `3:4` |
 | `resolution` | string | 否 | `video-2.5` 默认 `720p`；`video-2.5-480p` 固定 `480p` |
 | `size` | string | 否 | 直接指定输出尺寸，与 `aspect_ratio` + `resolution` 二选一即可 |
 | `image_url` | string | 否 | 单张参考图 URL |
@@ -62,15 +62,18 @@ Content-Type: application/json
 | `audio_reference` | object[] | 否 | 多音频参考，格式为 `[{ "url": "..." }]`，最多 `10` 个，无需传 `duration` |
 | `async` | boolean | 否 | 建议固定为 `true` |
 
-### 3.1 480p 尺寸映射
+### 3.1 尺寸映射
 
-`video-2.5-480p` 可直接传 `aspect_ratio`，网关会生成对应的固定尺寸：
+`video-2.5` 使用 720p 尺寸，`video-2.5-480p` 使用 480p 尺寸。直接传 `aspect_ratio` 时，网关会生成对应的固定尺寸：
 
-| 比例 | 输出尺寸 |
-| --- | --- |
-| `9:16` | `496x864` |
-| `16:9` | `864x496` |
-| `1:1` | `640x640` |
+| 比例 | 720p 输出尺寸 | 480p 输出尺寸 |
+| --- | --- | --- |
+| `16:9` | `1280x720` | `864x496` |
+| `9:16` | `720x1280` | `496x864` |
+| `1:1` | `960x960` | `640x640` |
+| `21:9` | `1470x630` | `992x432` |
+| `4:3` | `1112x834` | `752x560` |
+| `3:4` | `834x1112` | `560x752` |
 
 ## 4. 文生视频
 
