@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,6 +35,63 @@ type TaskPollingAdaptor interface {
 // GetTaskAdaptorFunc 由 main 包注入，用于获取指定平台的任务适配器。
 // 打破 service -> relay -> relay/channel -> service 的循环依赖。
 var GetTaskAdaptorFunc func(platform constant.TaskPlatform) TaskPollingAdaptor
+
+const (
+	// Task polling is intentionally bounded independently from request relay
+	// concurrency. With ten active channels this allows each channel to use up
+	// to three slots while keeping the process-wide polling ceiling at thirty.
+	taskPollingGlobalConcurrency     = 30
+	taskPollingPerChannelConcurrency = 3
+)
+
+type taskPollingLimiter struct {
+	global                chan struct{}
+	perChannelConcurrency int
+
+	channelMu sync.Mutex
+	channels  map[int]chan struct{}
+}
+
+func newTaskPollingLimiter(globalConcurrency, perChannelConcurrency int) *taskPollingLimiter {
+	return &taskPollingLimiter{
+		global:                make(chan struct{}, globalConcurrency),
+		perChannelConcurrency: perChannelConcurrency,
+		channels:              make(map[int]chan struct{}),
+	}
+}
+
+func (l *taskPollingLimiter) getChannelLimiter(channelID int) chan struct{} {
+	l.channelMu.Lock()
+	defer l.channelMu.Unlock()
+	if limiter, ok := l.channels[channelID]; ok {
+		return limiter
+	}
+	limiter := make(chan struct{}, l.perChannelConcurrency)
+	l.channels[channelID] = limiter
+	return limiter
+}
+
+func (l *taskPollingLimiter) acquire(ctx context.Context, channelID int) (func(), error) {
+	channelLimiter := l.getChannelLimiter(channelID)
+	select {
+	case channelLimiter <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case l.global <- struct{}{}:
+		return func() {
+			<-l.global
+			<-channelLimiter
+		}, nil
+	case <-ctx.Done():
+		<-channelLimiter
+		return nil, ctx.Err()
+	}
+}
+
+var pollingLimiter = newTaskPollingLimiter(taskPollingGlobalConcurrency, taskPollingPerChannelConcurrency)
 
 func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	if task == nil {
@@ -254,40 +312,46 @@ func TaskPollingLoop() {
 		for _, t := range allTasks {
 			platformTask[t.Platform] = append(platformTask[t.Platform], t)
 		}
+		var platformWG sync.WaitGroup
 		for platform, tasks := range platformTask {
 			if len(tasks) == 0 {
 				continue
 			}
-			taskChannelM := make(map[int][]string)
-			taskM := make(map[string]*model.Task)
-			nullTaskIds := make([]int64, 0)
-			for _, task := range tasks {
-				upstreamID := task.GetUpstreamTaskID()
-				if upstreamID == "" {
-					// 统计失败的未完成任务
-					nullTaskIds = append(nullTaskIds, task.ID)
-					continue
+			platformWG.Add(1)
+			go func(platform constant.TaskPlatform, tasks []*model.Task) {
+				defer platformWG.Done()
+				taskChannelM := make(map[int][]string)
+				taskM := make(map[string]*model.Task)
+				nullTaskIds := make([]int64, 0)
+				for _, task := range tasks {
+					upstreamID := task.GetUpstreamTaskID()
+					if upstreamID == "" {
+						// 统计失败的未完成任务
+						nullTaskIds = append(nullTaskIds, task.ID)
+						continue
+					}
+					taskM[upstreamID] = task
+					taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
 				}
-				taskM[upstreamID] = task
-				taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
-			}
-			if len(nullTaskIds) > 0 {
-				err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
-					"status":   "FAILURE",
-					"progress": "100%",
-				})
-				if err != nil {
-					logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
-				} else {
-					logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
+				if len(nullTaskIds) > 0 {
+					err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
+						"status":   "FAILURE",
+						"progress": "100%",
+					})
+					if err != nil {
+						logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
+					} else {
+						logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
+					}
 				}
-			}
-			if len(taskChannelM) == 0 {
-				continue
-			}
+				if len(taskChannelM) == 0 {
+					return
+				}
 
-			DispatchPlatformUpdate(platform, taskChannelM, taskM)
+				DispatchPlatformUpdate(platform, taskChannelM, taskM)
+			}(platform, tasks)
 		}
+		platformWG.Wait()
 		common.SysLog("任务进度轮询完成")
 	}
 }
@@ -308,12 +372,18 @@ func DispatchPlatformUpdate(platform constant.TaskPlatform, taskChannelM map[int
 
 // UpdateSunoTasks 按渠道更新所有 Suno 任务
 func UpdateSunoTasks(ctx context.Context, taskChannelM map[int][]string, taskM map[string]*model.Task) error {
+	var wg sync.WaitGroup
 	for channelId, taskIds := range taskChannelM {
-		err := updateSunoTasks(ctx, channelId, taskIds, taskM)
-		if err != nil {
-			logger.LogError(ctx, fmt.Sprintf("渠道 #%d 更新异步任务失败: %s", channelId, err.Error()))
-		}
+		wg.Add(1)
+		go func(channelId int, taskIds []string) {
+			defer wg.Done()
+			err := updateSunoTasks(ctx, channelId, taskIds, taskM)
+			if err != nil {
+				logger.LogError(ctx, fmt.Sprintf("渠道 #%d 更新异步任务失败: %s", channelId, err.Error()))
+			}
+		}(channelId, taskIds)
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -322,6 +392,11 @@ func updateSunoTasks(ctx context.Context, channelId int, taskIds []string, taskM
 	if len(taskIds) == 0 {
 		return nil
 	}
+	release, err := pollingLimiter.acquire(ctx, channelId)
+	if err != nil {
+		return fmt.Errorf("acquire task polling slot: %w", err)
+	}
+	defer release()
 	ch, err := model.CacheGetChannel(channelId)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("CacheGetChannel: %v", err))
@@ -444,11 +519,17 @@ func taskNeedsUpdate(oldTask *model.Task, newTask dto.SunoDataResponse) bool {
 
 // UpdateVideoTasks 按渠道更新所有视频任务
 func UpdateVideoTasks(ctx context.Context, platform constant.TaskPlatform, taskChannelM map[int][]string, taskM map[string]*model.Task) error {
+	var wg sync.WaitGroup
 	for channelId, taskIds := range taskChannelM {
-		if err := updateVideoTasks(ctx, platform, channelId, taskIds, taskM); err != nil {
-			logger.LogError(ctx, fmt.Sprintf("Channel #%d failed to update video async tasks: %s", channelId, err.Error()))
-		}
+		wg.Add(1)
+		go func(channelId int, taskIds []string) {
+			defer wg.Done()
+			if err := updateVideoTasks(ctx, platform, channelId, taskIds, taskM); err != nil {
+				logger.LogError(ctx, fmt.Sprintf("Channel #%d failed to update video async tasks: %s", channelId, err.Error()))
+			}
+		}(channelId, taskIds)
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -476,8 +557,7 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		}
 		return fmt.Errorf("CacheGetChannel failed: %w", err)
 	}
-	adaptor := GetTaskAdaptorFunc(platform)
-	if adaptor == nil {
+	if GetTaskAdaptorFunc == nil || GetTaskAdaptorFunc(platform) == nil {
 		return fmt.Errorf("video adaptor not found")
 	}
 	info := &relaycommon.RelayInfo{}
@@ -485,14 +565,33 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		ChannelBaseUrl: cacheGetChannel.GetBaseURL(),
 	}
 	info.ApiKey = cacheGetChannel.Key
-	adaptor.Init(info)
+	workerCount := min(taskPollingPerChannelConcurrency, len(taskIds))
+	jobs := make(chan string, len(taskIds))
 	for _, taskId := range taskIds {
-		if err := updateVideoSingleTask(ctx, adaptor, cacheGetChannel, taskId, taskM); err != nil {
-			logger.LogError(ctx, fmt.Sprintf("Failed to update video task %s: %s", taskId, err.Error()))
-		}
-		// sleep 1 second between each task to avoid hitting rate limits of upstream platforms
-		time.Sleep(1 * time.Second)
+		jobs <- taskId
 	}
+	close(jobs)
+	var wg sync.WaitGroup
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			adaptor := GetTaskAdaptorFunc(platform)
+			if adaptor == nil {
+				logger.LogError(ctx, "video adaptor not found")
+				return
+			}
+			adaptor.Init(info)
+			for taskId := range jobs {
+				if err := updateVideoSingleTask(ctx, adaptor, cacheGetChannel, taskId, taskM); err != nil {
+					logger.LogError(ctx, fmt.Sprintf("Failed to update video task %s: %s", taskId, err.Error()))
+				}
+				// Keep the existing per-worker delay to avoid sudden upstream rate-limit spikes.
+				time.Sleep(1 * time.Second)
+			}
+		}()
+	}
+	wg.Wait()
 	return nil
 }
 
@@ -508,6 +607,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		logger.LogError(ctx, fmt.Sprintf("Task %s not found in taskM", taskId))
 		return fmt.Errorf("task %s not found", taskId)
 	}
+	release, err := pollingLimiter.acquire(ctx, ch.Id)
+	if err != nil {
+		return fmt.Errorf("acquire task polling slot for task %s: %w", taskId, err)
+	}
+	defer release()
 	key := ch.Key
 
 	privateData := task.PrivateData
