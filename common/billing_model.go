@@ -17,6 +17,9 @@ func IsDurationOnlyBillingModel(modelName string) bool {
 	if name == "video-2.5" || name == "video-2.5-480p" {
 		return true
 	}
+	if strings.HasPrefix(name, "minimax-h3-") || strings.HasPrefix(name, "wan3.0-") {
+		return true
+	}
 	return strings.Contains(name, "grok-imagine") && strings.Contains(name, "video")
 }
 

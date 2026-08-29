@@ -25,6 +25,13 @@ var (
 	}
 	OpenAIVideoModels = []string{
 		"exact:minimax-h3",
+		"exact:minimax-h3-480p",
+		"exact:minimax-h3-768p",
+		"exact:minimax-h3-2k",
+		"exact:minimax-h3-4k",
+		"exact:wan3.0-480p",
+		"exact:wan3.0-720p",
+		"exact:wan3.0-1080p",
 		"exact:ko3",
 		"exact:kling-o3",
 		"exact:kling-video-o-3",

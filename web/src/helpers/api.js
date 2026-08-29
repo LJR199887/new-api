@@ -297,6 +297,13 @@ export const buildApiPayload = (
   ]);
   const adobeVideoModels = new Set([
     'minimax-h3',
+    'minimax-h3-480p',
+    'minimax-h3-768p',
+    'minimax-h3-2k',
+    'minimax-h3-4k',
+    'wan3.0-480p',
+    'wan3.0-720p',
+    'wan3.0-1080p',
     'sora2',
     'sora2-pro',
     'veo31',
@@ -368,6 +375,8 @@ export const buildApiPayload = (
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
   const isSeedanceVideoModel =
+    inputs.model?.startsWith('minimax-h3-') ||
+    inputs.model?.startsWith('wan3.0-') ||
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.5' ||
@@ -387,7 +396,9 @@ export const buildApiPayload = (
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
   const isAdobeKlingV3Model = inputs.model === 'kling-v3';
-  const isMiniMaxH3Model = inputs.model === 'minimax-h3';
+  const isMiniMaxH3Model =
+    inputs.model === 'minimax-h3' || inputs.model?.startsWith('minimax-h3-');
+  const isWan30Model = inputs.model?.startsWith('wan3.0-');
   const adobeAspectRatioRaw =
     inputs.aspectRatio || (isAdobeVideoModel ? '16:9' : '1:1');
   const adobeAspectRatio =
@@ -483,6 +494,8 @@ export const buildApiPayload = (
   if (isAdobeVideoModel) {
     const forcedDuration = isMiniMaxH3Model
       ? Math.min(Math.max(Number(inputs.videoDuration || 5), 5), 15)
+      : isWan30Model
+        ? Math.min(Math.max(Number(inputs.videoDuration || 5), 2), 30)
       : isSeedanceVideoModel
         ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 15)
         : inputs.model === 'veo31-ref'

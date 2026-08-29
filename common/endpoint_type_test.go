@@ -50,6 +50,18 @@ func TestGetEndpointTypesByChannelTypeRecognizesGrokImagineImageModels(t *testin
 			expected: constant.EndpointTypeOpenAIVideo,
 		},
 		{
+			name:     "minimax h3 resolution variant",
+			channel:  constant.ChannelTypeSora,
+			model:    "minimax-h3-2k",
+			expected: constant.EndpointTypeOpenAIVideo,
+		},
+		{
+			name:     "wan 3 video generation",
+			channel:  constant.ChannelTypeSora,
+			model:    "wan3.0-720p",
+			expected: constant.EndpointTypeOpenAIVideo,
+		},
+		{
 			name:     "ko3 video generation",
 			channel:  constant.ChannelTypeSora,
 			model:    "ko3",
