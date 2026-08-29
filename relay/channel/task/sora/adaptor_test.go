@@ -29,6 +29,13 @@ func TestModelListIncludesVideoGenerationVariants(t *testing.T) {
 		"veo31-fast",
 		"veo31-ref",
 		"minimax-h3",
+		"minimax-h3-480p",
+		"minimax-h3-768p",
+		"minimax-h3-2k",
+		"minimax-h3-4k",
+		"wan3.0-480p",
+		"wan3.0-720p",
+		"wan3.0-1080p",
 		"ko3",
 		"kling-v3",
 		"seedance-2.0",
@@ -223,6 +230,13 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		"video-2.0-480p",
 		"video-2.0-fast-480p",
 		"video-2.0-mini-480p",
+		"minimax-h3-480p",
+		"minimax-h3-768p",
+		"minimax-h3-2k",
+		"minimax-h3-4k",
+		"wan3.0-480p",
+		"wan3.0-720p",
+		"wan3.0-1080p",
 	} {
 		if !isVideoGenerationsTaskModel(modelName) {
 			t.Fatalf("expected %s to use video generations task endpoint", modelName)
@@ -230,6 +244,153 @@ func TestSeedanceVideoAliasesUseVideoGenerationTaskEndpoint(t *testing.T) {
 		if !isSeedanceVideoModel(modelName) {
 			t.Fatalf("expected %s to be treated as a Seedance video model", modelName)
 		}
+	}
+}
+
+func makeVideoReferences(count int, duration float64, extension string) []interface{} {
+	refs := make([]interface{}, count)
+	for index := range refs {
+		refs[index] = map[string]interface{}{
+			"url":      fmt.Sprintf("https://example.com/reference-%d.%s", index, extension),
+			"duration": duration,
+		}
+	}
+	return refs
+}
+
+func makeImageReferences(count int) []interface{} {
+	images := make([]interface{}, count)
+	for index := range images {
+		images[index] = fmt.Sprintf("https://example.com/image-%d.png", index)
+	}
+	return images
+}
+
+func TestNormalizeMiniMaxH3Variants(t *testing.T) {
+	tests := []struct {
+		model string
+		size  string
+	}{
+		{model: "minimax-h3-480p", size: "856x480"},
+		{model: "minimax-h3-768p", size: "1376x768"},
+		{model: "minimax-h3-2k", size: "2560x1440"},
+		{model: "minimax-h3-4k", size: "3840x2160"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":           tt.model,
+				"duration":        15,
+				"aspect_ratio":    "16:9",
+				"images":          makeImageReferences(9),
+				"video_reference": makeVideoReferences(3, 5, "mp4"),
+			}
+			if err := normalizeSeedanceVideoRequest(body, tt.model); err != nil {
+				t.Fatalf("expected valid request: %v", err)
+			}
+			if got := body["model"]; got != tt.model {
+				t.Fatalf("expected model %s, got %#v", tt.model, got)
+			}
+			if got := body["size"]; got != tt.size {
+				t.Fatalf("expected size %s, got %#v", tt.size, got)
+			}
+		})
+	}
+}
+
+func TestMiniMaxH3VariantReferenceLimits(t *testing.T) {
+	tests := []struct {
+		name string
+		body map[string]interface{}
+	}{
+		{name: "more than nine images", body: map[string]interface{}{"images": makeImageReferences(10)}},
+		{name: "more than three videos", body: map[string]interface{}{"video_reference": makeVideoReferences(4, 3, "mp4")}},
+		{name: "video shorter than one second", body: map[string]interface{}{"video_reference": makeVideoReferences(1, 0.9, "mp4")}},
+		{name: "video longer than fifteen seconds", body: map[string]interface{}{"video_reference": makeVideoReferences(1, 15.1, "mp4")}},
+		{name: "video total longer than fifteen seconds", body: map[string]interface{}{"video_reference": makeVideoReferences(2, 8, "mp4")}},
+		{name: "frame mixed with images", body: map[string]interface{}{"start_image_url": "https://example.com/start.png", "image_url": "https://example.com/ref.png"}},
+		{name: "generation shorter than five seconds", body: map[string]interface{}{"duration": 4}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := normalizeSeedanceVideoRequest(tt.body, "minimax-h3-2k"); err == nil {
+				t.Fatalf("expected request to be rejected")
+			}
+		})
+	}
+}
+
+func TestNormalizeWan30Variants(t *testing.T) {
+	tests := []struct {
+		model string
+		size  string
+	}{
+		{model: "wan3.0-480p", size: "480x854"},
+		{model: "wan3.0-720p", size: "720x1280"},
+		{model: "wan3.0-1080p", size: "1080x1920"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":           tt.model,
+				"duration":        30,
+				"aspect_ratio":    "9:16",
+				"images":          makeImageReferences(10),
+				"video_reference": makeVideoReferences(5, 3, "mp4"),
+			}
+			if err := normalizeSeedanceVideoRequest(body, tt.model); err != nil {
+				t.Fatalf("expected valid request: %v", err)
+			}
+			if got := body["size"]; got != tt.size {
+				t.Fatalf("expected size %s, got %#v", tt.size, got)
+			}
+		})
+	}
+}
+
+func TestWan30ReferenceLimits(t *testing.T) {
+	tests := []map[string]interface{}{
+		{"images": makeImageReferences(11)},
+		{"video_reference": makeVideoReferences(6, 2, "mp4")},
+		{"video_reference": makeVideoReferences(2, 8, "mp4")},
+		{"duration": 1},
+		{"duration": 31},
+	}
+	for index, body := range tests {
+		if err := normalizeSeedanceVideoRequest(body, "wan3.0-720p"); err == nil {
+			t.Fatalf("expected invalid wan3.0 request %d to be rejected", index)
+		}
+	}
+}
+
+func TestEstimateBillingUsesDurationForNewVideoModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adaptor := &TaskAdaptor{}
+	for _, tt := range []struct {
+		model    string
+		duration int
+	}{
+		{model: "minimax-h3-480p", duration: 5},
+		{model: "minimax-h3-768p", duration: 8},
+		{model: "minimax-h3-2k", duration: 10},
+		{model: "minimax-h3-4k", duration: 15},
+		{model: "wan3.0-480p", duration: 2},
+		{model: "wan3.0-720p", duration: 12},
+		{model: "wan3.0-1080p", duration: 30},
+	} {
+		t.Run(tt.model, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Set("task_request", relaycommon.TaskSubmitReq{Duration: tt.duration})
+			info := &relaycommon.RelayInfo{
+				ChannelMeta:   &relaycommon.ChannelMeta{UpstreamModelName: tt.model},
+				TaskRelayInfo: &relaycommon.TaskRelayInfo{},
+			}
+			ratios := adaptor.EstimateBilling(c, info)
+			if got := ratios["seconds"]; got != float64(tt.duration) {
+				t.Fatalf("expected %d seconds for billing, got %v", tt.duration, got)
+			}
+		})
 	}
 }
 

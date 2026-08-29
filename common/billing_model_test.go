@@ -20,7 +20,17 @@ func TestFilterOtherRatiosForDurationOnlyModel(t *testing.T) {
 }
 
 func TestFilterOtherRatiosForVideo25DurationBilling(t *testing.T) {
-	for _, modelName := range []string{"video-2.5", "video-2.5-480p"} {
+	for _, modelName := range []string{
+		"video-2.5",
+		"video-2.5-480p",
+		"minimax-h3-480p",
+		"minimax-h3-768p",
+		"minimax-h3-2k",
+		"minimax-h3-4k",
+		"wan3.0-480p",
+		"wan3.0-720p",
+		"wan3.0-1080p",
+	} {
 		t.Run(modelName, func(t *testing.T) {
 			filtered := FilterOtherRatiosForBillingModel(modelName, map[string]float64{
 				"seconds":    10,
@@ -54,6 +64,13 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 
 	constant.TaskPricePatches = []string{"kling-v3"}
 	appendTaskPricePatchDefault("minimax-h3")
+	appendTaskPricePatchDefault("minimax-h3-480p")
+	appendTaskPricePatchDefault("minimax-h3-768p")
+	appendTaskPricePatchDefault("minimax-h3-2k")
+	appendTaskPricePatchDefault("minimax-h3-4k")
+	appendTaskPricePatchDefault("wan3.0-480p")
+	appendTaskPricePatchDefault("wan3.0-720p")
+	appendTaskPricePatchDefault("wan3.0-1080p")
 	appendTaskPricePatchDefault("ko3")
 	appendTaskPricePatchDefault("kling-o3")
 	appendTaskPricePatchDefault("kling-video-o-3")
@@ -69,6 +86,13 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 
 	assert.ElementsMatch(t, []string{
 		"minimax-h3",
+		"minimax-h3-480p",
+		"minimax-h3-768p",
+		"minimax-h3-2k",
+		"minimax-h3-4k",
+		"wan3.0-480p",
+		"wan3.0-720p",
+		"wan3.0-1080p",
 		"ko3",
 		"kling-o3",
 		"kling-video-o-3",

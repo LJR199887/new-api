@@ -507,6 +507,24 @@ func isMiniMaxH3VideoModel(upstreamModel string) bool {
 	return strings.EqualFold(strings.TrimSpace(upstreamModel), "minimax-h3")
 }
 
+func isMiniMaxH3VariantVideoModel(upstreamModel string) bool {
+	switch strings.ToLower(strings.TrimSpace(upstreamModel)) {
+	case "minimax-h3-480p", "minimax-h3-768p", "minimax-h3-2k", "minimax-h3-4k":
+		return true
+	default:
+		return false
+	}
+}
+
+func isWan30VideoModel(upstreamModel string) bool {
+	switch strings.ToLower(strings.TrimSpace(upstreamModel)) {
+	case "wan3.0-480p", "wan3.0-720p", "wan3.0-1080p":
+		return true
+	default:
+		return false
+	}
+}
+
 func isKo3VideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return upstreamModel == "ko3" ||
@@ -525,7 +543,9 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
 	return strings.HasPrefix(upstreamModel, "seedance-2.0") ||
 		strings.HasPrefix(upstreamModel, "video-2.0") ||
-		strings.HasPrefix(upstreamModel, "video-2.5")
+		strings.HasPrefix(upstreamModel, "video-2.5") ||
+		isMiniMaxH3VariantVideoModel(upstreamModel) ||
+		isWan30VideoModel(upstreamModel)
 }
 
 func isVideo25VideoModel(upstreamModel string) bool {
@@ -861,6 +881,208 @@ func validateVideo25GenerationDuration(value string) error {
 	return nil
 }
 
+type videoReferencePolicy struct {
+	modelName          string
+	maxImages          int
+	maxVideos          int
+	maxAudios          int
+	minReferenceLength float64
+	maxReferenceLength float64
+	maxReferenceTotal  float64
+	disallowFrameMix   bool
+}
+
+func seedanceReferenceEntryCount(value any) int {
+	switch values := value.(type) {
+	case []any:
+		return len(values)
+	case []string:
+		return len(values)
+	case []map[string]any:
+		return len(values)
+	default:
+		if value != nil && strings.TrimSpace(stringifyBodyValue(value)) != "" {
+			return 1
+		}
+	}
+	return 0
+}
+
+func countSeedanceImageReferences(bodyMap map[string]interface{}) int {
+	if count := seedanceReferenceEntryCount(bodyMap["image_guidance"]); count > 0 {
+		return count
+	}
+	return len(collectSeedanceImageValues(bodyMap))
+}
+
+func hasSeedanceFrameReference(bodyMap map[string]interface{}) bool {
+	return len(normalizeSeedanceReferenceFrameEntries(bodyMap["start_frame"])) > 0 ||
+		len(normalizeSeedanceReferenceFrameEntries(bodyMap["end_frame"])) > 0 ||
+		stringifyBodyValue(bodyMap["start_image_url"]) != "" ||
+		stringifyBodyValue(bodyMap["end_image_url"]) != ""
+}
+
+func collectSeedanceVideoReferencesWithSingle(bodyMap map[string]interface{}) []map[string]any {
+	refs := collectSeedanceVideoReferences(bodyMap)
+	if len(refs) == 0 {
+		if videoURL := stringifyBodyValue(bodyMap["video_url"]); videoURL != "" {
+			refs = []map[string]any{{"url": videoURL}}
+		}
+	}
+	return refs
+}
+
+func collectSeedanceAudioReferencesWithSingle(bodyMap map[string]interface{}) []map[string]any {
+	refs := collectSeedanceAudioReferences(bodyMap)
+	if len(refs) == 0 {
+		if audioURL := stringifyBodyValue(bodyMap["audio_url"]); audioURL != "" {
+			refs = []map[string]any{{"url": audioURL}}
+		}
+	}
+	return refs
+}
+
+func validateReferenceDurations(modelName, kind string, refs []map[string]any, minDuration, maxDuration, maxTotal float64) error {
+	totalDuration := 0.0
+	for index, ref := range refs {
+		duration, exists, err := seedanceReferenceDuration(ref)
+		if err != nil {
+			return fmt.Errorf("%s_reference[%d].duration %w", kind, index, err)
+		}
+		if !exists {
+			continue
+		}
+		if duration < minDuration || duration > maxDuration {
+			return fmt.Errorf("%s_reference[%d].duration must be between %g and %g seconds for %s", kind, index, minDuration, maxDuration, modelName)
+		}
+		totalDuration += duration
+	}
+	if totalDuration > maxTotal {
+		return fmt.Errorf("total %s reference duration must not exceed %g seconds for %s", kind, maxTotal, modelName)
+	}
+	return nil
+}
+
+func validateVideoReferencePolicy(bodyMap map[string]interface{}, policy videoReferencePolicy) error {
+	imageCount := countSeedanceImageReferences(bodyMap)
+	if imageCount > policy.maxImages {
+		return fmt.Errorf("%s supports at most %d image references", policy.modelName, policy.maxImages)
+	}
+
+	videos := collectSeedanceVideoReferencesWithSingle(bodyMap)
+	if len(videos) > policy.maxVideos {
+		return fmt.Errorf("%s supports at most %d video references", policy.modelName, policy.maxVideos)
+	}
+	if err := validateReferenceDurations(policy.modelName, "video", videos, policy.minReferenceLength, policy.maxReferenceLength, policy.maxReferenceTotal); err != nil {
+		return err
+	}
+
+	audios := collectSeedanceAudioReferencesWithSingle(bodyMap)
+	if len(audios) > policy.maxAudios {
+		return fmt.Errorf("%s supports at most %d audio references", policy.modelName, policy.maxAudios)
+	}
+	if err := validateReferenceDurations(policy.modelName, "audio", audios, policy.minReferenceLength, policy.maxReferenceLength, policy.maxReferenceTotal); err != nil {
+		return err
+	}
+
+	if policy.disallowFrameMix && hasSeedanceFrameReference(bodyMap) && (imageCount > 0 || len(videos) > 0 || len(audios) > 0) {
+		return fmt.Errorf("multimodal references and frame mode cannot be combined for %s", policy.modelName)
+	}
+	return nil
+}
+
+func validateNewVideoModelRequest(bodyMap map[string]interface{}, upstreamModel string) error {
+	modelName := strings.ToLower(strings.TrimSpace(upstreamModel))
+	switch {
+	case isMiniMaxH3VariantVideoModel(modelName):
+		if err := validateVideoReferencePolicy(bodyMap, videoReferencePolicy{
+			modelName:          modelName,
+			maxImages:          9,
+			maxVideos:          3,
+			maxAudios:          3,
+			minReferenceLength: 1,
+			maxReferenceLength: 15,
+			maxReferenceTotal:  15,
+			disallowFrameMix:   true,
+		}); err != nil {
+			return err
+		}
+		return validateGenerationDuration(modelName, stringifyBodyValue(bodyMap["duration"]), stringifyBodyValue(bodyMap["seconds"]), 5, 15)
+	case isWan30VideoModel(modelName):
+		if err := validateVideoReferencePolicy(bodyMap, videoReferencePolicy{
+			modelName:          modelName,
+			maxImages:          10,
+			maxVideos:          5,
+			maxAudios:          5,
+			minReferenceLength: 1,
+			maxReferenceLength: 15,
+			maxReferenceTotal:  15,
+		}); err != nil {
+			return err
+		}
+		return validateGenerationDuration(modelName, stringifyBodyValue(bodyMap["duration"]), stringifyBodyValue(bodyMap["seconds"]), 2, 30)
+	default:
+		return nil
+	}
+}
+
+func validateGenerationDuration(modelName, duration, seconds string, minDuration, maxDuration int) error {
+	value := strings.TrimSpace(duration)
+	if value == "" {
+		value = strings.TrimSpace(seconds)
+	}
+	if value == "" {
+		return nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < minDuration || parsed > maxDuration {
+		return fmt.Errorf("duration must be an integer between %d and %d for %s", minDuration, maxDuration, modelName)
+	}
+	return nil
+}
+
+var fixedVideoModelSizes = map[string]map[string]string{
+	"wan3.0-480p": {
+		"16:9": "854x480", "4:3": "736x552", "1:1": "640x640", "3:4": "552x736", "9:16": "480x854",
+	},
+	"wan3.0-720p": {
+		"16:9": "1280x720", "4:3": "1104x828", "1:1": "960x960", "3:4": "828x1104", "9:16": "720x1280",
+	},
+	"wan3.0-1080p": {
+		"16:9": "1920x1080", "4:3": "1656x1242", "1:1": "1440x1440", "3:4": "1242x1656", "9:16": "1080x1920",
+	},
+	"minimax-h3-480p": {
+		"16:9": "856x480", "9:16": "480x856", "1:1": "480x480", "4:3": "640x480", "3:4": "480x640", "21:9": "1120x480",
+	},
+	"minimax-h3-768p": {
+		"16:9": "1376x768", "9:16": "768x1376", "1:1": "768x768", "4:3": "1024x768", "3:4": "768x1024", "21:9": "1792x768",
+	},
+	"minimax-h3-2k": {
+		"16:9": "2560x1440", "9:16": "1440x2560", "1:1": "1440x1440", "4:3": "1920x1440", "3:4": "1440x1920", "21:9": "3360x1440",
+	},
+	"minimax-h3-4k": {
+		"16:9": "3840x2160", "9:16": "2160x3840", "1:1": "2160x2160", "4:3": "2880x2160", "3:4": "2160x2880", "21:9": "5040x2160",
+	},
+}
+
+func fixedVideoModelSize(upstreamModel, aspectRatio string) string {
+	return fixedVideoModelSizes[strings.ToLower(strings.TrimSpace(upstreamModel))][strings.TrimSpace(aspectRatio)]
+}
+
+func validateFixedVideoModelSize(upstreamModel, size string) error {
+	modelName := strings.ToLower(strings.TrimSpace(upstreamModel))
+	size = strings.TrimSpace(size)
+	if size == "" {
+		return nil
+	}
+	for _, allowed := range fixedVideoModelSizes[modelName] {
+		if size == allowed {
+			return nil
+		}
+	}
+	return fmt.Errorf("unsupported size %s for %s", size, modelName)
+}
+
 func seedanceBaseDimensionFromResolution(value string) int {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
@@ -955,6 +1177,9 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 			return err
 		}
 	}
+	if err := validateNewVideoModelRequest(bodyMap, upstreamModel); err != nil {
+		return err
+	}
 
 	metadata, _ := bodyMap["metadata"].(map[string]interface{})
 	ratio := stringifyBodyValue(metadata["ratio"])
@@ -975,7 +1200,7 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	if resolution == "" {
 		resolution = resolutionNameFromQuality(stringifyBodyValue(bodyMap["quality"]))
 	}
-	if isSeedance480PVideoModel(upstreamModel) {
+	if isSeedance480PVideoModel(upstreamModel) && !isMiniMaxH3VariantVideoModel(upstreamModel) && !isWan30VideoModel(upstreamModel) {
 		resolution = "480p"
 	}
 
@@ -990,7 +1215,24 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	}
 
 	size := stringifyBodyValue(bodyMap["size"])
-	if size == "" {
+	hasExplicitDimensions := stringifyBodyValue(bodyMap["width"]) != "" && stringifyBodyValue(bodyMap["height"]) != ""
+	if isMiniMaxH3VariantVideoModel(upstreamModel) || isWan30VideoModel(upstreamModel) {
+		if hasExplicitDimensions {
+			explicitSize := fmt.Sprintf("%sx%s", stringifyBodyValue(bodyMap["width"]), stringifyBodyValue(bodyMap["height"]))
+			if err := validateFixedVideoModelSize(upstreamModel, explicitSize); err != nil {
+				return err
+			}
+			size = ""
+			delete(bodyMap, "size")
+		} else {
+			if size == "" {
+				size = fixedVideoModelSize(upstreamModel, ratio)
+			}
+			if err := validateFixedVideoModelSize(upstreamModel, size); err != nil {
+				return err
+			}
+		}
+	} else if size == "" {
 		size = seedanceSizeFromAspectRatioAndResolution(ratio, resolution)
 	}
 

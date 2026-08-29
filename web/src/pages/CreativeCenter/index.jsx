@@ -69,6 +69,17 @@ const ADOBE_IMAGE_MODELS = new Set([
 ]);
 const GPT_IMAGE2_MODEL = 'gpt-image2';
 const MINIMAX_H3_MODEL = 'minimax-h3';
+const MINIMAX_H3_VARIANT_MODELS = new Set([
+  'minimax-h3-480p',
+  'minimax-h3-768p',
+  'minimax-h3-2k',
+  'minimax-h3-4k',
+]);
+const WAN30_MODELS = new Set([
+  'wan3.0-480p',
+  'wan3.0-720p',
+  'wan3.0-1080p',
+]);
 const VIDEO_25_MODEL = 'video-2.5';
 const VIDEO_25_480P_MODEL = 'video-2.5-480p';
 const VIDEO_25_MODELS = new Set([VIDEO_25_MODEL, VIDEO_25_480P_MODEL]);
@@ -79,6 +90,8 @@ const ADOBE_CHAT_IMAGE_MODELS = new Set([
 ]);
 const ADOBE_VIDEO_MODELS = new Set([
   MINIMAX_H3_MODEL,
+  ...MINIMAX_H3_VARIANT_MODELS,
+  ...WAN30_MODELS,
   'sora2',
   'sora2-pro',
   'veo31',
@@ -97,6 +110,8 @@ const ADOBE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
+  ...MINIMAX_H3_VARIANT_MODELS,
+  ...WAN30_MODELS,
   'seedance-2.0',  'seedance-2.0-fast',
   VIDEO_25_MODEL,
   VIDEO_25_480P_MODEL,
@@ -108,6 +123,8 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_480P_VIDEO_MODELS = new Set([
+  'minimax-h3-480p',
+  'wan3.0-480p',
   VIDEO_25_480P_MODEL,
   'video-2.0-480p',
   'video-2.0-fast-480p',
@@ -131,6 +148,13 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'veo31-ref': 3,
   'kling-v3': 2,
   [MINIMAX_H3_MODEL]: 5,
+  'minimax-h3-480p': 9,
+  'minimax-h3-768p': 9,
+  'minimax-h3-2k': 9,
+  'minimax-h3-4k': 9,
+  'wan3.0-480p': 10,
+  'wan3.0-720p': 10,
+  'wan3.0-1080p': 10,
   'seedance-2.0': 4,
   'seedance-2.0-fast': 4,
   [VIDEO_25_MODEL]: 30,
@@ -215,6 +239,10 @@ const ADOBE_VIDEO_DURATION_OPTIONS = {
     label: `${value}s`,
     value: String(value),
   })),
+  wan30: Array.from({ length: 29 }, (_, index) => index + 2).map((value) => ({
+    label: `${value}s`,
+    value: String(value),
+  })),
   sora: [4, 8, 12].map((value) => ({ label: `${value}s`, value: String(value) })),
   veo: [4, 6, 8].map((value) => ({ label: `${value}s`, value: String(value) })),
   kling: Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
@@ -251,8 +279,11 @@ const SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '9:16', value: '9:16' },
 ];
 const getAdobeVideoDurationOptions = (modelName) => {
-  if (modelName === MINIMAX_H3_MODEL) {
+  if (modelName === MINIMAX_H3_MODEL || MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     return ADOBE_VIDEO_DURATION_OPTIONS.minimaxH3;
+  }
+  if (WAN30_MODELS.has(modelName)) {
+    return ADOBE_VIDEO_DURATION_OPTIONS.wan30;
   }
   if (modelName === 'veo31-ref') {
     return ADOBE_VIDEO_DURATION_OPTIONS.veo.filter((option) => option.value === '8');
@@ -272,8 +303,13 @@ const getAdobeVideoDurationOptions = (modelName) => {
   return ADOBE_VIDEO_DURATION_OPTIONS.veo;
 };
 const getAdobeVideoAspectRatioOptions = (modelName) => {
-  if (modelName === MINIMAX_H3_MODEL) {
+  if (modelName === MINIMAX_H3_MODEL || MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     return MINIMAX_H3_VIDEO_ASPECT_RATIO_OPTIONS;
+  }
+  if (WAN30_MODELS.has(modelName)) {
+    return SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS.filter(
+      (option) => option.value !== '21:9',
+    );
   }
   if (modelName === 'veo31-ref') {
     return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS.filter(
@@ -286,7 +322,10 @@ const getAdobeVideoAspectRatioOptions = (modelName) => {
   return ADOBE_VIDEO_ASPECT_RATIO_OPTIONS;
 };
 const getAdobeVideoDefaultDuration = (modelName) =>
-  modelName === MINIMAX_H3_MODEL || modelName === 'kling-v3'
+  modelName === MINIMAX_H3_MODEL ||
+  MINIMAX_H3_VARIANT_MODELS.has(modelName) ||
+  WAN30_MODELS.has(modelName) ||
+  modelName === 'kling-v3'
     ? '5'
     : SEEDANCE_VIDEO_MODELS.has(modelName)
       ? '5'
@@ -305,6 +344,14 @@ const SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS = [
   { label: '480p', value: '480p' },
 ];
 const getAdobeVideoResolutionOptions = (modelName) => {
+  if (MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
+    const resolution = modelName.slice('minimax-h3-'.length);
+    return [{ label: resolution.toUpperCase(), value: resolution }];
+  }
+  if (WAN30_MODELS.has(modelName)) {
+    const resolution = modelName.slice('wan3.0-'.length);
+    return [{ label: resolution, value: resolution }];
+  }
   if (modelName === MINIMAX_H3_MODEL) {
     return MINIMAX_H3_VIDEO_RESOLUTION_OPTIONS;
   }
@@ -317,7 +364,11 @@ const getAdobeVideoResolutionOptions = (modelName) => {
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;
 };
 const getAdobeVideoDefaultResolution = (modelName) =>
-  modelName === MINIMAX_H3_MODEL
+  MINIMAX_H3_VARIANT_MODELS.has(modelName)
+    ? modelName.slice('minimax-h3-'.length)
+    : WAN30_MODELS.has(modelName)
+      ? modelName.slice('wan3.0-'.length)
+      : modelName === MINIMAX_H3_MODEL
     ? '2K'
     : SEEDANCE_480P_VIDEO_MODELS.has(modelName)
     ? '480p'
@@ -1322,6 +1373,20 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
   if (normalizedModelName === MINIMAX_H3_MODEL) {
     return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
+  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName)) {
+    return referenceMode === 'first_last'
+      ? 2
+      : ['multi_image', 'multimodal'].includes(referenceMode)
+        ? 9
+        : null;
+  }
+  if (WAN30_MODELS.has(normalizedModelName)) {
+    return referenceMode === 'first_last'
+      ? 2
+      : ['multi_image', 'multimodal'].includes(referenceMode)
+        ? 10
+        : null;
+  }
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
     return referenceMode === 'first_last'
       ? 2
@@ -1342,6 +1407,12 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
   }
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 10 : null;
+  }
+  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName)) {
+    return ['video_reference', 'multimodal'].includes(referenceMode) ? 3 : null;
+  }
+  if (WAN30_MODELS.has(normalizedModelName)) {
+    return ['video_reference', 'multimodal'].includes(referenceMode) ? 5 : null;
   }
   return SEEDANCE_REFERENCE_MODE_VIDEO_LIMITS[referenceMode] ?? null;
 };
@@ -8019,13 +8090,25 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload.image_urls = currentUploadedImageUrls.slice(0, 2);
               }
             } else if (isSeedanceVideoModel) {
+              const seedanceImageLimit = MINIMAX_H3_VARIANT_MODELS.has(currentModelName)
+                ? 9
+                : WAN30_MODELS.has(currentModelName)
+                  ? 10
+                  : VIDEO_25_MODELS.has(currentModelName)
+                    ? 30
+                    : 4;
+              const seedanceVideoLimit = WAN30_MODELS.has(currentModelName)
+                ? 5
+                : VIDEO_25_MODELS.has(currentModelName)
+                  ? 10
+                  : 3;
               const seedanceImageUrls = currentUploadedImageUrls.slice(
                 0,
-                VIDEO_25_MODELS.has(currentModelName) ? 30 : 4,
+                seedanceImageLimit,
               );
               const seedanceVideoUrls = currentReferenceVideoUrls.slice(
                 0,
-                VIDEO_25_MODELS.has(currentModelName) ? 10 : 3,
+                seedanceVideoLimit,
               );
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
@@ -9409,7 +9492,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">3-10 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{VIDEO_25_MODELS.has(currentModelName) ? 30 : 15} 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">{MINIMAX_H3_VARIANT_MODELS.has(currentModelName) || WAN30_MODELS.has(currentModelName) ? '1-15' : '3-10'} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{VIDEO_25_MODELS.has(currentModelName) ? 30 : 15} 秒</span>
                 </div>
               ) : null}
 
