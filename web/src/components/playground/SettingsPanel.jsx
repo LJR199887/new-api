@@ -84,6 +84,13 @@ const SettingsPanel = ({
   ]);
   const chatAdobeImageModels = new Set(['nano-banana2', 'nano-banana-pro']);
   const adobeVideoModels = new Set([
+    'minimax-h3-480p',
+    'minimax-h3-768p',
+    'minimax-h3-2k',
+    'minimax-h3-4k',
+    'wan3.0-480p',
+    'wan3.0-720p',
+    'wan3.0-1080p',
     'sora2',
     'sora2-pro',
     'veo31',
@@ -120,6 +127,8 @@ const SettingsPanel = ({
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
   const isSeedanceVideoModel =
+    inputs.model?.startsWith('minimax-h3-') ||
+    inputs.model?.startsWith('wan3.0-') ||
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.5' ||
@@ -256,7 +265,21 @@ const SettingsPanel = ({
     label: `${v}s`,
     value: String(v),
   }));
+  const miniMaxH3DurationOptions = Array.from(
+    { length: 11 },
+    (_, index) => index + 5,
+  ).map((v) => ({ label: `${v}s`, value: String(v) }));
+  const wan30DurationOptions = Array.from(
+    { length: 29 },
+    (_, index) => index + 2,
+  ).map((v) => ({ label: `${v}s`, value: String(v) }));
   const getAdobeVideoDurationOptions = (modelName) => {
+    if (modelName?.startsWith('minimax-h3-')) {
+      return miniMaxH3DurationOptions;
+    }
+    if (modelName?.startsWith('wan3.0-')) {
+      return wan30DurationOptions;
+    }
     if (modelName === 'veo31-ref') {
       return adobeVeoDurationOptions.filter((option) => option.value === '8');
     }
@@ -286,6 +309,14 @@ const SettingsPanel = ({
     return adobeVeoDurationOptions;
   };
   const getAdobeVideoAspectRatioOptions = (modelName) => {
+    if (modelName?.startsWith('minimax-h3-')) {
+      return seedanceVideoAspectRatioOptions;
+    }
+    if (modelName?.startsWith('wan3.0-')) {
+      return seedanceVideoAspectRatioOptions.filter(
+        (option) => option.value !== '21:9',
+      );
+    }
     if (modelName === 'veo31-ref') {
       return adobeVideoAspectRatioOptions.filter(
         (option) => option.value === '16:9',
@@ -308,6 +339,8 @@ const SettingsPanel = ({
     return adobeVideoAspectRatioOptions;
   };
   const getAdobeVideoDefaultDuration = (modelName) =>
+    modelName?.startsWith('minimax-h3-') ||
+    modelName?.startsWith('wan3.0-') ||
     modelName === 'kling-v3' ||
     modelName === 'seedance-2.0' ||
     modelName === 'seedance-2.0-fast' ||
@@ -336,6 +369,14 @@ const SettingsPanel = ({
     { label: '480p', value: '480p' },
   ];
   const getAdobeVideoResolutionOptions = (modelName) => {
+    if (modelName?.startsWith('minimax-h3-')) {
+      const resolution = modelName.slice('minimax-h3-'.length);
+      return [{ label: resolution.toUpperCase(), value: resolution }];
+    }
+    if (modelName?.startsWith('wan3.0-')) {
+      const resolution = modelName.slice('wan3.0-'.length);
+      return [{ label: resolution, value: resolution }];
+    }
     if (seedance480PVideoModels.has(modelName)) {
       return seedance480PVideoResolutionOptions;
     }
@@ -359,6 +400,12 @@ const SettingsPanel = ({
     return adobeVideoResolutionOptions;
   };
   const getAdobeVideoDefaultResolution = (modelName) => {
+    if (modelName?.startsWith('minimax-h3-')) {
+      return modelName.slice('minimax-h3-'.length);
+    }
+    if (modelName?.startsWith('wan3.0-')) {
+      return modelName.slice('wan3.0-'.length);
+    }
     if (
       modelName === 'seedance-2.0' ||
       modelName === 'seedance-2.0-fast' ||

@@ -168,6 +168,13 @@ func initConstantEnv() {
 	}
 	for _, modelName := range []string{
 		"minimax-h3",
+		"minimax-h3-480p",
+		"minimax-h3-768p",
+		"minimax-h3-2k",
+		"minimax-h3-4k",
+		"wan3.0-480p",
+		"wan3.0-720p",
+		"wan3.0-1080p",
 		"ko3",
 		"kling-o3",
 		"kling-video-o-3",
