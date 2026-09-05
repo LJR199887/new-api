@@ -231,7 +231,7 @@ func normalize933VideoRequest(body map[string]any, modelName string) error {
 	if duration == "" {
 		duration = "5"
 	}
-	if err := validateGenerationDuration(modelName, duration, "", 4, 5); err != nil {
+	if err := validateGenerationDuration(modelName, duration, "", 4, 15); err != nil {
 		return err
 	}
 	metadata, _ := body["metadata"].(map[string]any)

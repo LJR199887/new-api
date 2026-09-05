@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func Test933ModelRoutingAndBilling(t *testing.T) {
 			if u != a.baseURL+videoGenerationsTaskPath+"/abc" {
 				t.Fatal(u)
 			}
-			for _, duration := range []int{0, 4, 5} {
+			for _, duration := range []int{0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} {
 				c, _ := gin.CreateTestContext(httptest.NewRecorder())
 				c.Set("task_request", relaycommon.TaskSubmitReq{Duration: duration})
 				want := duration
@@ -103,7 +104,7 @@ func Test933RejectsInvalidReferencesAndParameters(t *testing.T) {
 		return refs
 	}
 	cases := []map[string]any{
-		{"duration": 0}, {"duration": 3}, {"duration": 6}, {"duration": 4.5}, {"duration": 4, "seconds": "5"},
+		{"duration": 0}, {"duration": 3}, {"duration": 16}, {"duration": 4.5}, {"duration": 4, "seconds": "5"},
 		{"resolution": "480p"}, {"metadata": map[string]any{"resolution": "1080p"}}, {"aspect_ratio": "2:1"},
 		{"image_urls": many(10)}, {"video_urls": many(4)}, {"audio_urls": many(4)},
 		{"image_url": "https://example.com/a", "image_urls": many(1)}, {"image_urls": []any{false}},
@@ -227,5 +228,40 @@ func Test933BuildAndValidateRequest(t *testing.T) {
 	}
 	if body["resolution"] != "720p" || body["aspect_ratio"] != "21:9" || body["duration"] != float64(4) || body["seed"] != float64(0) || body["watermark"] != false {
 		t.Fatalf("payload: %#v", body)
+	}
+}
+
+func Test933GenerationDurationRange(t *testing.T) {
+	for _, name := range video933Models {
+		for duration := 4; duration <= 15; duration++ {
+			for _, field := range []string{"duration", "seconds"} {
+				body := map[string]any{}
+				if field == "seconds" {
+					body[field] = strconv.Itoa(duration)
+				} else {
+					body[field] = duration
+				}
+				if err := normalize933VideoRequest(body, name); err != nil {
+					t.Fatalf("%s %s=%d: %v", name, field, duration, err)
+				}
+				if body["duration"] != duration {
+					t.Fatalf("%s %s=%d normalized to %v", name, field, duration, body["duration"])
+				}
+			}
+		}
+		for _, value := range []any{0, 3, 16, 4.5, "NaN", "Infinity"} {
+			for _, field := range []string{"duration", "seconds"} {
+				if err := normalize933VideoRequest(map[string]any{field: value}, name); err == nil {
+					t.Fatalf("%s accepted invalid %s=%v", name, field, value)
+				}
+			}
+		}
+		body := map[string]any{}
+		if err := normalize933VideoRequest(body, name); err != nil {
+			t.Fatal(err)
+		}
+		if body["duration"] != 5 {
+			t.Fatal("default duration changed")
+		}
 	}
 }

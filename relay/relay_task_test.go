@@ -289,7 +289,7 @@ func Test933AllModelsGroupPricingIgnoresResolutionAndReferenceCounts(t *testing.
 		data, err = common.Marshal(map[string]any{name: map[string]float64{"720p": 99}})
 		require.NoError(t, err)
 		require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(string(data)))
-		for _, seconds := range []int{4, 5} {
+		for seconds := 4; seconds <= 15; seconds++ {
 			for _, group := range []string{"default", "vip"} {
 				c, _ := gin.CreateTestContext(httptest.NewRecorder())
 				c.Set("task_request", relaycommon.TaskSubmitReq{ResolutionName: "720p"})
