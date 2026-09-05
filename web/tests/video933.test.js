@@ -76,7 +76,6 @@ describe('933 video capabilities', () => {
     const transpiler = new Bun.Transpiler({ loader: 'jsx' });
     for (const file of [
       'src/pages/CreativeCenter/index.jsx',
-      'src/pages/CreativeCenter/Video933References.jsx',
       'src/components/playground/SettingsPanel.jsx',
       'src/helpers/api.js',
       'src/hooks/playground/useApiRequest.jsx',
@@ -88,5 +87,18 @@ describe('933 video capabilities', () => {
         ),
       ).not.toThrow();
     }
+  });
+  test('creative center keeps audio inside multimodal shared upload', () => {
+    const source = readFileSync(
+      new URL('../src/pages/CreativeCenter/index.jsx', import.meta.url),
+      'utf8',
+    );
+    expect(source).not.toContain("value: 'audio_reference'");
+    expect(source).toContain("params.referenceMode === 'multimodal'");
+    expect(source).toContain("? 'audio/*' : ''");
+    expect(source).toContain('CREATIVE_CENTER_AUDIO_UPLOAD_MAX_BYTES = 15 * 1024 * 1024');
+    expect(source).toContain("return { maxCount: 5, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 }");
+    expect(source).toContain("return { maxCount: 3, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 }");
+    expect(source).toContain("return { maxCount: 3, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 }");
   });
 });

@@ -151,6 +151,18 @@ func TestNormalizeMiniMaxH3VideoRequestReferenceRules(t *testing.T) {
 		}
 	})
 
+	t.Run("accept three audios totaling fifteen seconds", func(t *testing.T) {
+		body := map[string]interface{}{
+			"model":           "minimax-h3",
+			"prompt":          "cinematic motion",
+			"image_url":       "https://example.com/source.png",
+			"audio_reference": makeVideoReferences(3, 5, "mp3"),
+		}
+		if err := normalizeMiniMaxH3VideoRequest(body); err != nil {
+			t.Fatalf("expected three minimax-h3 audios to pass: %v", err)
+		}
+	})
+
 	t.Run("reject video reference", func(t *testing.T) {
 		body := map[string]interface{}{
 			"model":     "minimax-h3",
@@ -190,6 +202,28 @@ func TestNormalizeMiniMaxH3VideoRequestReferenceRules(t *testing.T) {
 			t.Fatal("expected minimax-h3 audio without image to fail")
 		}
 	})
+
+	for _, tt := range []struct {
+		name   string
+		audios []interface{}
+	}{
+		{name: "reject more than three audios", audios: makeVideoReferences(4, 2, "mp3")},
+		{name: "reject audio shorter than one second", audios: makeVideoReferences(1, 0.9, "mp3")},
+		{name: "reject audio longer than fifteen seconds", audios: makeVideoReferences(1, 15.1, "mp3")},
+		{name: "reject audio total longer than fifteen seconds", audios: makeVideoReferences(2, 8, "mp3")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := map[string]interface{}{
+				"model":           "minimax-h3",
+				"prompt":          "cinematic motion",
+				"image_url":       "https://example.com/source.png",
+				"audio_reference": tt.audios,
+			}
+			if err := normalizeMiniMaxH3VideoRequest(body); err == nil {
+				t.Fatal("expected invalid minimax-h3 audio references to fail")
+			}
+		})
+	}
 
 	t.Run("reject duration below five seconds", func(t *testing.T) {
 		body := map[string]interface{}{
@@ -284,6 +318,7 @@ func TestNormalizeMiniMaxH3Variants(t *testing.T) {
 				"aspect_ratio":    "16:9",
 				"images":          makeImageReferences(9),
 				"video_reference": makeVideoReferences(3, 5, "mp4"),
+				"audio_reference": makeVideoReferences(3, 5, "mp3"),
 			}
 			if err := normalizeSeedanceVideoRequest(body, tt.model); err != nil {
 				t.Fatalf("expected valid request: %v", err)
@@ -308,6 +343,9 @@ func TestMiniMaxH3VariantReferenceLimits(t *testing.T) {
 		{name: "video shorter than one second", body: map[string]interface{}{"video_reference": makeVideoReferences(1, 0.9, "mp4")}},
 		{name: "video longer than fifteen seconds", body: map[string]interface{}{"video_reference": makeVideoReferences(1, 15.1, "mp4")}},
 		{name: "video total longer than fifteen seconds", body: map[string]interface{}{"video_reference": makeVideoReferences(2, 8, "mp4")}},
+		{name: "more than three audios", body: map[string]interface{}{"audio_reference": makeVideoReferences(4, 2, "mp3")}},
+		{name: "audio shorter than one second", body: map[string]interface{}{"audio_reference": makeVideoReferences(1, 0.9, "mp3")}},
+		{name: "audio total longer than fifteen seconds", body: map[string]interface{}{"audio_reference": makeVideoReferences(2, 8, "mp3")}},
 		{name: "frame mixed with images", body: map[string]interface{}{"start_image_url": "https://example.com/start.png", "image_url": "https://example.com/ref.png"}},
 		{name: "generation shorter than five seconds", body: map[string]interface{}{"duration": 4}},
 	}
@@ -337,6 +375,7 @@ func TestNormalizeWan30Variants(t *testing.T) {
 				"aspect_ratio":    "9:16",
 				"images":          makeImageReferences(10),
 				"video_reference": makeVideoReferences(5, 3, "mp4"),
+				"audio_reference": makeVideoReferences(5, 3, "mp3"),
 			}
 			if err := normalizeSeedanceVideoRequest(body, tt.model); err != nil {
 				t.Fatalf("expected valid request: %v", err)
@@ -353,6 +392,9 @@ func TestWan30ReferenceLimits(t *testing.T) {
 		{"images": makeImageReferences(11)},
 		{"video_reference": makeVideoReferences(6, 2, "mp4")},
 		{"video_reference": makeVideoReferences(2, 8, "mp4")},
+		{"audio_reference": makeVideoReferences(6, 2, "mp3")},
+		{"audio_reference": makeVideoReferences(1, 0.9, "mp3")},
+		{"audio_reference": makeVideoReferences(2, 8, "mp3")},
 		{"duration": 1},
 		{"duration": 31},
 	}
