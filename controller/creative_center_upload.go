@@ -24,6 +24,13 @@ import (
 
 const creativeCenterImageUploadMaxBytes int64 = 10 << 20
 
+func creativeCenterUploadLimit(c *gin.Context) int64 {
+	if common.Is933VideoModel(c.Query("model")) {
+		return 20 << 20
+	}
+	return creativeCenterImageUploadMaxBytes
+}
+
 var creativeCenterImageExtByMime = map[string]string{
 	"image/gif":  ".gif",
 	"image/jpeg": ".jpg",
@@ -76,8 +83,8 @@ func UploadCreativeCenterImage(c *gin.Context) {
 		common.ApiErrorMsg(c, "图片文件不能为空")
 		return
 	}
-	if fileHeader.Size > creativeCenterImageUploadMaxBytes {
-		common.ApiErrorMsg(c, "图片大小不能超过 10MB")
+	if fileHeader.Size > creativeCenterUploadLimit(c) {
+		common.ApiErrorMsg(c, fmt.Sprintf("图片大小不能超过 %dMB", creativeCenterUploadLimit(c)>>20))
 		return
 	}
 
@@ -365,8 +372,8 @@ func uploadCreativeCenterImageToExternalBed(c *gin.Context) (gin.H, error) {
 	if fileHeader.Size <= 0 {
 		return nil, fmt.Errorf("图片文件不能为空")
 	}
-	if fileHeader.Size > creativeCenterImageUploadMaxBytes {
-		return nil, fmt.Errorf("图片大小不能超过 10MB")
+	if fileHeader.Size > creativeCenterUploadLimit(c) {
+		return nil, fmt.Errorf("图片大小不能超过 %dMB", creativeCenterUploadLimit(c)>>20)
 	}
 
 	src, err := fileHeader.Open()

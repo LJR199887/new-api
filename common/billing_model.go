@@ -14,6 +14,9 @@ func IsDurationOnlyBillingModel(modelName string) bool {
 	if strings.HasPrefix(name, "veo") {
 		return true
 	}
+	if Is933VideoModel(name) {
+		return true
+	}
 	if name == "video-2.5" || name == "video-2.5-480p" {
 		return true
 	}

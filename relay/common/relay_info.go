@@ -681,6 +681,10 @@ type TaskSubmitReq struct {
 	EndImageURL    string                 `json:"end_image_url,omitempty"`
 	VideoURL       string                 `json:"video_url,omitempty"`
 	VideoReference json.RawMessage        `json:"video_reference,omitempty"`
+	VideoURLs      []string               `json:"video_urls,omitempty"`
+	AudioURL       string                 `json:"audio_url,omitempty"`
+	AudioURLs      []string               `json:"audio_urls,omitempty"`
+	AudioReference json.RawMessage        `json:"audio_reference,omitempty"`
 	Size           string                 `json:"size,omitempty"`
 	AspectRatio    string                 `json:"aspect_ratio,omitempty"`
 	Duration       int                    `json:"duration,omitempty"`
@@ -698,7 +702,7 @@ func (t *TaskSubmitReq) GetPrompt() string {
 }
 
 func (t *TaskSubmitReq) HasImage() bool {
-	if len(t.Images) > 0 || len(t.ImageURLs) > 0 {
+	if len(t.Images) > 0 || len(t.ImageURLs) > 0 || len(t.VideoURLs) > 0 || len(t.AudioURLs) > 0 {
 		return true
 	}
 	if strings.TrimSpace(t.Image) != "" ||
@@ -706,7 +710,7 @@ func (t *TaskSubmitReq) HasImage() bool {
 		strings.TrimSpace(t.InputReference) != "" ||
 		strings.TrimSpace(t.StartImageURL) != "" ||
 		strings.TrimSpace(t.EndImageURL) != "" ||
-		strings.TrimSpace(t.VideoURL) != "" {
+		strings.TrimSpace(t.VideoURL) != "" || strings.TrimSpace(t.AudioURL) != "" {
 		return true
 	}
 	for _, raw := range []json.RawMessage{
@@ -715,6 +719,7 @@ func (t *TaskSubmitReq) HasImage() bool {
 		t.StartFrame,
 		t.EndFrame,
 		t.VideoReference,
+		t.AudioReference,
 	} {
 		if hasTaskReferenceArray(raw) {
 			return true

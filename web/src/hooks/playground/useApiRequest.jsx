@@ -43,6 +43,11 @@ const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
 ]);
 const TASK_VIDEO_MODELS = new Set([
+  '933-video2.0',
+  '933-video2.0-480p',
+  '933-video2.0-mini',
+  '933-video2.0-mini-480p',
+
   'sora2',
   'sora2-pro',
   'veo31',

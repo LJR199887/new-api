@@ -3307,6 +3307,18 @@
     "当前存在旧版分档价格；输入每秒价格后会替换为按秒计费。": "旧形式の時間別価格があります。1秒あたりの価格を入力すると置き換えられます。",
     "按时长计费下需要填写每秒价格。": "時間課金には1秒あたりの価格が必要です。",
     "按时长计费": "時間課金",
-    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "1秒あたり {{unitPrice}} × {{seconds}}秒 = {{totalPrice}}"
+    "每秒价格 {{unitPrice}} × {{seconds}} 秒 = {{totalPrice}}": "1秒あたり {{unitPrice}} × {{seconds}}秒 = {{totalPrice}}",
+    "音频参考": "Audio references",
+    "最多 3 个，单个 2–15 秒，同类总时长不超过 15 秒": "Up to 3 references, 2–15 seconds each, at most 15 seconds per media type",
+    "请填写 HTTP(S) 素材链接": "Enter an HTTP(S) media URL",
+    "素材大小不能超过 200MB": "Media must not exceed 200MB",
+    "正在读取或上传素材": "Reading or uploading media",
+    "最多 3 个参考素材": "At most 3 references are allowed",
+    "单个参考素材时长必须为 2–15 秒": "Each reference must be 2–15 seconds long",
+    "同类参考素材总时长不能超过 15 秒": "Total reference duration per media type must not exceed 15 seconds",
+    "读取素材时长超时": "Timed out reading media duration",
+    "无法读取素材时长，请检查链接或文件格式": "Cannot read media duration; check the URL or file format",
+    "音频参考模式至少需要 1 个音频": "Audio reference mode requires at least one audio reference",
+    "单图不大于20MB": "At most 20MB per image"
   }
 }

@@ -24,6 +24,11 @@ var (
 		"exact:grok-imagine-image-edit",
 	}
 	OpenAIVideoModels = []string{
+		"exact:933-video2.0",
+		"exact:933-video2.0-480p",
+		"exact:933-video2.0-mini",
+		"exact:933-video2.0-mini-480p",
+
 		"exact:minimax-h3",
 		"exact:minimax-h3-480p",
 		"exact:minimax-h3-768p",

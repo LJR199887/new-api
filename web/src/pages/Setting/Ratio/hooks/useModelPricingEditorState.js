@@ -1,3 +1,4 @@
+import { is933VideoModel } from '../../../../constants/video933';
 import { useEffect, useMemo, useState } from 'react';
 import { API, showError, showSuccess } from '../../../../helpers';
 
@@ -161,7 +162,7 @@ const buildModelState = (name, sourceMaps) => {
     ...EMPTY_MODEL,
     name,
     billingMode:
-      Object.keys(durationPrices).length > 0
+      is933VideoModel(name) || Object.keys(durationPrices).length > 0
         ? 'per-duration'
         : Object.keys(resolutionPrices).length > 0
           ? 'per-resolution'
