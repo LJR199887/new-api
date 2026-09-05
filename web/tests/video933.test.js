@@ -10,10 +10,12 @@ import {
 } from '../src/constants/video933';
 
 describe('933 video capabilities', () => {
-  test('exactly four models, fixed resolution, 4/5 seconds', () => {
+  test('exactly four models, fixed resolution, 4–15 seconds', () => {
     expect(VIDEO_933_MODELS.size).toBe(4);
     expect(is933VideoModel('933-video2.0-fast')).toBe(false);
-    expect(VIDEO_933_DURATIONS.map((v) => v.value)).toEqual(['4', '5']);
+    expect(VIDEO_933_DURATIONS.map((v) => v.value)).toEqual(
+      Array.from({ length: 12 }, (_, index) => String(index + 4)),
+    );
     for (const name of VIDEO_933_MODELS) {
       expect(video933Resolution(name)).toBe(
         name.endsWith('-480p') ? '480p' : '720p',
@@ -44,17 +46,29 @@ describe('933 video capabilities', () => {
   });
   test('payload uses fa2api parameters for every model', () => {
     for (const model of VIDEO_933_MODELS) {
-      for (const videoDuration of ['4', '5', undefined]) {
+      for (const videoDuration of [
+        ...Array.from({ length: 12 }, (_, index) => String(index + 4)),
+        undefined,
+      ]) {
         const params = build933VideoParameters({
           model,
           videoDuration,
           aspectRatio: '21:9',
         });
         expect(params).toEqual({
-          duration: videoDuration === '4' ? 4 : 5,
+          duration: videoDuration === undefined ? 5 : Number(videoDuration),
           aspect_ratio: '21:9',
           resolution: video933Resolution(model),
         });
+      }
+    }
+  });
+  test('invalid generation durations fall back to the 5-second default', () => {
+    for (const model of VIDEO_933_MODELS) {
+      for (const videoDuration of [0, 3, 16, 4.5, NaN, Infinity, '', null]) {
+        expect(build933VideoParameters({ model, videoDuration }).duration).toBe(
+          5,
+        );
       }
     }
   });

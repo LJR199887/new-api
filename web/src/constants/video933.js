@@ -8,16 +8,21 @@ export const VIDEO_933_MODELS = new Set([
 export const is933VideoModel = (name) => VIDEO_933_MODELS.has(name);
 export const video933Resolution = (name) =>
   name.endsWith('-480p') ? '480p' : '720p';
-export const VIDEO_933_DURATIONS = [4, 5].map((n) => ({
+export const VIDEO_933_DURATIONS = Array.from(
+  { length: 12 },
+  (_, index) => index + 4,
+).map((n) => ({
   label: `${n}s`,
   value: String(n),
 }));
 
 export function build933VideoParameters(inputs) {
+  const duration = Number(inputs.videoDuration);
   return {
-    duration: [4, 5].includes(Number(inputs.videoDuration))
-      ? Number(inputs.videoDuration)
-      : 5,
+    duration:
+      Number.isInteger(duration) && duration >= 4 && duration <= 15
+        ? duration
+        : 5,
     aspect_ratio: inputs.aspectRatio || '16:9',
     resolution: video933Resolution(inputs.model),
   };
