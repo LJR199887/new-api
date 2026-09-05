@@ -176,3 +176,17 @@ func TestModelPriceHelperFallsBackToSecondsMinPrice(t *testing.T) {
 	assert.Equal(t, 0.4, priceData.ModelPrice)
 	assert.Equal(t, int(0.4*common.QuotaPerUnit), priceData.QuotaToPreConsume)
 }
+
+func Test933RequiresExplicitPerSecondPricing(t *testing.T) {
+	original := ratio_setting.ModelPriceBySeconds2JSONString()
+	t.Cleanup(func() { _ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original) })
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	info := &relaycommon.RelayInfo{OriginModelName: "933-video2.0", UsingGroup: "default"}
+	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{"933-video2.0":{"5":0.5}}`))
+	_, err := ModelPriceHelperPerCall(c, info)
+	require.Error(t, err)
+	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{"933-video2.0":{"per_second":0.2}}`))
+	price, err := ModelPriceHelperPerCall(c, info)
+	require.NoError(t, err)
+	assert.Equal(t, 0.2, price.ModelPrice)
+}

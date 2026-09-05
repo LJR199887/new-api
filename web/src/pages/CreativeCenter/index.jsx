@@ -1,5 +1,6 @@
 import React, { useCallback, useContext, useMemo, useRef, useState, useEffect } from 'react';
 import { SSE } from 'sse.js';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowUp,
   Check,
@@ -39,6 +40,9 @@ import {
 import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+
+import Video933References from './Video933References';
+import { VIDEO_933_MODELS, VIDEO_933_DURATIONS, is933VideoModel, validate933References } from '../../constants/video933';
 
 const tabs = [
   { id: 'chat', label: '对话', icon: MessageSquare },
@@ -89,6 +93,7 @@ const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana-pro',
 ]);
 const ADOBE_VIDEO_MODELS = new Set([
+  ...VIDEO_933_MODELS,
   MINIMAX_H3_MODEL,
   ...MINIMAX_H3_VARIANT_MODELS,
   ...WAN30_MODELS,
@@ -110,6 +115,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_VIDEO_MODELS = new Set([
+  ...VIDEO_933_MODELS,
   ...MINIMAX_H3_VARIANT_MODELS,
   ...WAN30_MODELS,
   'seedance-2.0',  'seedance-2.0-fast',
@@ -123,6 +129,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_480P_VIDEO_MODELS = new Set([
+  '933-video2.0-480p', '933-video2.0-mini-480p',
   'minimax-h3-480p',
   'wan3.0-480p',
   VIDEO_25_480P_MODEL,
@@ -279,6 +286,7 @@ const SEEDANCE_VIDEO_ASPECT_RATIO_OPTIONS = [
   { label: '9:16', value: '9:16' },
 ];
 const getAdobeVideoDurationOptions = (modelName) => {
+  if (is933VideoModel(modelName)) return VIDEO_933_DURATIONS;
   if (modelName === MINIMAX_H3_MODEL || MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     return ADOBE_VIDEO_DURATION_OPTIONS.minimaxH3;
   }
@@ -1373,7 +1381,7 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
   if (normalizedModelName === MINIMAX_H3_MODEL) {
     return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
-  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName)) {
+  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName) || is933VideoModel(normalizedModelName)) {
     return referenceMode === 'first_last'
       ? 2
       : ['multi_image', 'multimodal'].includes(referenceMode)
@@ -1401,6 +1409,7 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
 };
 
 const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => {
+  if (is933VideoModel(modelName)) return null;
   const normalizedModelName = typeof modelName === 'string' ? modelName.trim() : '';
   if (!normalizedModelName || !SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return null;
@@ -1408,7 +1417,7 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 10 : null;
   }
-  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName)) {
+  if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName) || is933VideoModel(normalizedModelName)) {
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 3 : null;
   }
   if (WAN30_MODELS.has(normalizedModelName)) {
@@ -3271,6 +3280,7 @@ const DurationSliderButton = ({
 };
 
 export default function App() {
+  const { t } = useTranslation();
   const [userState] = useContext(UserContext);
   const [statusState] = useContext(StatusContext);
   const [activeTab, setActiveTab] = useState('chat');
@@ -3329,6 +3339,8 @@ export default function App() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadImageNotice, setUploadImageNotice] = useState('');
   const [referenceVideos, setReferenceVideos] = useState([]);
+  const [fishReferences, setFishReferences] = useState({ video: [], audio: [] });
+  const [fishMediaBusy, setFishMediaBusy] = useState({ video: false, audio: false });
   const [uploadVideoNotice, setUploadVideoNotice] = useState('');
   const [isUploadDragActive, setIsUploadDragActive] = useState(false);
   const isUploadingImage = uploadedImages.some((item) => item?.status === 'uploading');
@@ -3858,6 +3870,13 @@ export default function App() {
   const isAdobeKlingV3Model = currentModelName === 'kling-v3';
   const isMiniMaxH3Model = currentModelName === MINIMAX_H3_MODEL;
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
+  const isFishVideo = is933VideoModel(currentModelName);
+  const currentImageMaxMB = isFishVideo ? 20 : 10;
+  const currentReferenceModeOptions = isFishVideo ? [...SEEDANCE_REFERENCE_MODE_OPTIONS, { label: t('音频参考'), value: 'audio_reference' }] : SEEDANCE_REFERENCE_MODE_OPTIONS;
+  useEffect(() => {
+    setFishReferences({ video: [], audio: [] });
+    setFishMediaBusy({ video: false, audio: false });
+  }, [currentModelName, params.referenceMode]);
   const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
   const updatePrompt = useCallback((value) => {
     setPrompt(String(value || '').slice(0, currentPromptMaxLength));
@@ -3865,7 +3884,7 @@ export default function App() {
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending =
-    (isChatTab && isGenerating) || isUploadingImage || isUploadingReferenceVideo;
+    (isChatTab && isGenerating) || isUploadingImage || isUploadingReferenceVideo || fishMediaBusy.video || fishMediaBusy.audio;
   const isVideoModel =
     typeof currentModelName === 'string' &&
     (currentModelName.includes('video') || isAdobeVideoModel);
@@ -4319,7 +4338,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         }
         if (
           isSeedanceVideoModel &&
-          !SEEDANCE_REFERENCE_MODE_OPTIONS.some(
+          !currentReferenceModeOptions.some(
             (option) => option.value === next.referenceMode,
           )
         ) {
@@ -5618,7 +5637,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     formData.append('file', file);
 
     const response = await API.post(
-      API_ENDPOINTS.CREATIVE_CENTER_IMAGE_UPLOAD,
+      `${API_ENDPOINTS.CREATIVE_CENTER_IMAGE_UPLOAD}?model=${encodeURIComponent(currentModelName)}`,
       formData,
       {
         skipErrorHandler: true,
@@ -5743,13 +5762,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     }
 
     const imageFiles = rawImageFiles.filter(
-      (file) => file.size <= CREATIVE_CENTER_IMAGE_UPLOAD_MAX_BYTES,
+      (file) => file.size <= currentImageMaxMB * 1024 * 1024,
     );
     if (imageFiles.length !== rawImageFiles.length) {
-      showWarning('图片大小不能超过 10MB');
+      showWarning(`图片大小不能超过 ${currentImageMaxMB}MB`);
     }
     if (imageFiles.length === 0) {
-      setUploadImageNotice('上传失败，请重新上传不大于 10MB 的图片');
+      setUploadImageNotice(`上传失败，请重新上传不大于 ${currentImageMaxMB}MB 的图片`);
       return;
     }
 
@@ -7465,6 +7484,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   }, [activeHistorySnapshot, activeTab, historySnapshots.video, isLoggedIn, videoRecords]);
 
   const handleSubmit = async () => {
+    if (isSubmitPending) return;
+    const currentFishReferences = fishReferences;
+    if (isFishVideo) {
+      try { validate933References(currentFishReferences.video); validate933References(currentFishReferences.audio); }
+      catch (e) { showWarning(e.message); return; }
+    }
     const currentUploadedImageItems = uploadedImages
       .filter((item) => item?.status === 'uploaded' && item?.url)
       .map((item, index) => normalizeCreativeSourceImageItem(item, index))
@@ -7475,7 +7500,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         status: 'uploaded',
       }));
     const uploadedImageUrls = currentUploadedImageItems.map((item) => item.url);
-    const currentReferenceVideoUrls = referenceVideos
+    const currentReferenceVideoUrls = isFishVideo ? currentFishReferences.video.map((item) => item.url) : referenceVideos
       .filter((item) => item?.status === 'uploaded' && item?.url)
       .map((item) => String(item?.url || '').trim())
       .filter(Boolean);
@@ -7504,12 +7529,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         showWarning('首尾帧模式需要上传 2 张图片');
         return;
       }
-      if (activeReferenceMode === 'video_reference' && currentReferenceVideoUrls.length < 1) {
+      if (activeReferenceMode === 'video_reference' && (isFishVideo ? currentFishReferences.video.length : currentReferenceVideoUrls.length) < 1) {
         showWarning('视频参考模式至少需要 1 个视频链接');
         return;
       }
       if (
-        activeReferenceMode === 'multimodal' &&
+        !isFishVideo && activeReferenceMode === 'multimodal' &&
         (uploadedImageUrls.length < 1 || currentReferenceVideoUrls.length < 1)
       ) {
         showWarning('多模态模式至少需要 1 张图片和 1 个视频链接');
@@ -7525,12 +7550,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       showWarning('首尾帧模式需要上传 2 张图片');
       return;
     }
+    if (isFishVideo && params.referenceMode === 'audio_reference' && !currentFishReferences.audio.length) {
+      showWarning(t('音频参考模式至少需要 1 个音频')); return;
+    }
     const currentPrompt = prompt;
     const currentUploadedImageUrls = uploadedImageUrls;
     const currentUploadedImageSources = currentUploadedImageItems;
     updatePrompt('');
     clearUploadedImages();
     clearReferenceVideos();
+    setFishReferences({ video: [], audio: [] });
     if (isChatTab) {
       setIsGenerating(true);
     }
@@ -8074,7 +8103,15 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload[key] = basePayload[key];
               }
             });
-            if (isMiniMaxH3Model && currentUploadedImageUrls.length > 0) {
+            if (isFishVideo) {
+              if (currentParamsSnapshot.referenceMode === 'first_last') {
+                [payload.start_image_url, payload.end_image_url] = currentUploadedImageUrls;
+              } else {
+                if (currentUploadedImageUrls.length) payload.image_urls = currentUploadedImageUrls;
+                if (currentFishReferences.video.length) payload.video_reference = currentFishReferences.video;
+                if (currentFishReferences.audio.length) payload.audio_reference = currentFishReferences.audio;
+              }
+            } else if (isMiniMaxH3Model && currentUploadedImageUrls.length > 0) {
               const miniMaxImageUrls = currentUploadedImageUrls.slice(0, 5);
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 payload.start_image_url = miniMaxImageUrls[0];
@@ -9469,6 +9506,13 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 </div>
               ) : null}
 
+              {isFishVideo && ['video_reference', 'multimodal', 'audio_reference'].includes(params.referenceMode) &&
+                (params.referenceMode === 'multimodal' ? ['video', 'audio'] : [params.referenceMode === 'audio_reference' ? 'audio' : 'video']).map((kind) => (
+                  <Video933References key={`${currentModelName}-${params.referenceMode}-${kind}`} kind={kind}
+                    items={fishReferences[kind]} onChange={(items) => setFishReferences((prev) => ({ ...prev, [kind]: items }))}
+                    onBusy={(busy) => setFishMediaBusy((prev) => ({ ...prev, [kind]: busy }))}
+                    upload={uploadCreativeCenterReferenceVideo} />
+                ))}
               {uploadImageNotice ? (
                 <div className='mt-4 px-3 text-xs font-bold text-red-500 flex items-center gap-2'>
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
@@ -9483,7 +9527,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {currentImageUploadLimit ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模型最多可上传 <span className="text-blue-600 font-bold">{currentImageUploadLimit}</span> 张图片（建议不大于5M/张）
+                  当前模型最多可上传 <span className="text-blue-600 font-bold">{currentImageUploadLimit}</span> 张图片（{isFishVideo ? t('单图不大于20MB') : '建议不大于5M/张'}）
                 </div>
               ) : !isCurrentModelImageUploadEnabled && !isSeedanceVideoModel ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-400 flex items-center gap-1.5'>
@@ -9712,11 +9756,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                           menuKey='referenceMode'
                           icon={<Layers size={14} />}
                           label={`参考 ${getOptionLabel(
-                            SEEDANCE_REFERENCE_MODE_OPTIONS,
+                            currentReferenceModeOptions,
                             params.referenceMode,
                           )}`}
                           value={params.referenceMode}
-                          options={SEEDANCE_REFERENCE_MODE_OPTIONS}
+                          options={currentReferenceModeOptions}
                           openMenu={openMenu}
                           setOpenMenu={setOpenMenu}
                           onSelect={(value) =>

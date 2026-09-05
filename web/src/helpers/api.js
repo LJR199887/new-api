@@ -24,6 +24,7 @@ import {
   isValidMessage,
 } from './utils';
 import axios from 'axios';
+import { is933VideoModel, build933VideoParameters } from '../constants/video933';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
 
 export let API = axios.create({
@@ -296,6 +297,11 @@ export const buildApiPayload = (
     'gpt-image2',
   ]);
   const adobeVideoModels = new Set([
+    '933-video2.0',
+    '933-video2.0-480p',
+    '933-video2.0-mini',
+    '933-video2.0-mini-480p',
+
     'minimax-h3',
     'minimax-h3-480p',
     'minimax-h3-768p',
@@ -533,6 +539,12 @@ export const buildApiPayload = (
     }
   }
 
+  if (is933VideoModel(inputs.model)) {
+    Object.assign(payload, build933VideoParameters(inputs));
+    delete payload.seconds;
+    delete payload.metadata;
+    delete payload.size;
+  }
   return payload;
 };
 

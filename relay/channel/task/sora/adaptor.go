@@ -112,7 +112,7 @@ func isVideoGenerationsTaskModel(model string) bool {
 		isMiniMaxH3VideoModel(model) ||
 		isKo3VideoModel(model) ||
 		model == "kling-v3" ||
-		isSeedanceVideoModel(model)
+		isSeedanceVideoModel(model) || common.Is933VideoModel(model)
 }
 
 func usesVideoGenerationsTaskEndpoint(path string, modelNames ...string) bool {
@@ -159,7 +159,7 @@ func buildTaskFetchURL(baseURL string, body map[string]any) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid task_id")
 	}
-	if usesVideoGenerationsTaskEndpoint(
+	if common.Is933VideoModel(taskFetchModel(body, "model")) || common.Is933VideoModel(taskFetchModel(body, "origin_model")) || usesVideoGenerationsTaskEndpoint(
 		taskFetchRequestPath(body),
 		taskFetchModel(body, "model"),
 		taskFetchModel(body, "origin_model"),
@@ -2066,6 +2066,19 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	if strings.Contains(c.GetHeader("Content-Type"), "application/json") {
+		var body map[string]any
+		if err := common.UnmarshalBodyReusable(c, &body); err != nil {
+			return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+		}
+		if common.Is933VideoModel(stringifyBodyValue(body["model"])) {
+			if err := normalize933VideoRequest(body, stringifyBodyValue(body["model"])); err != nil {
+				return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+			}
+		}
+	} else if common.Is933VideoModel(info.OriginModelName) {
+		return service.TaskErrorWrapperLocal(fmt.Errorf("933 video requires application/json"), "invalid_request", http.StatusBadRequest)
+	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
 
@@ -2092,7 +2105,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		if seconds != 6 && seconds != 10 {
 			seconds = 10
 		}
-	} else if isSeedanceVideoModel(info.UpstreamModelName) {
+	} else if isSeedanceVideoModel(info.UpstreamModelName) || common.Is933VideoModel(info.UpstreamModelName) {
 		if seconds <= 0 {
 			seconds = 5
 		}
@@ -2109,7 +2122,7 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info != nil && info.TaskRelayInfo != nil && info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
-	if info != nil && usesVideoGenerationsTaskEndpoint(info.RequestURLPath, relayInfoUpstreamModelName(info), info.OriginModelName) {
+	if info != nil && (common.Is933VideoModel(relayInfoUpstreamModelName(info)) || common.Is933VideoModel(info.OriginModelName) || usesVideoGenerationsTaskEndpoint(info.RequestURLPath, relayInfoUpstreamModelName(info), info.OriginModelName)) {
 		return fmt.Sprintf("%s%s", a.baseURL, videoGenerationsTaskPath), nil
 	}
 	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
@@ -2145,6 +2158,17 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				}
 				c.Request.Header.Set("Content-Type", formContentType)
 				return body, nil
+			}
+			if common.Is933VideoModel(upstreamModelName) {
+				if err := normalize933VideoRequest(bodyMap, upstreamModelName); err != nil {
+					return nil, err
+				}
+				if err := check933RemoteImages(c.Request.Context(), bodyMap); err != nil {
+					return nil, err
+				}
+				if err := check933MediaDurations(c.Request.Context(), bodyMap); err != nil {
+					return nil, err
+				}
 			}
 			if isSeedanceVideoModel(upstreamModelName) {
 				if err := normalizeSeedanceVideoRequest(bodyMap, upstreamModelName); err != nil {

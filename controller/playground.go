@@ -36,6 +36,11 @@ var (
 		"nano-banana-pro": {},
 	}
 	playgroundChatVideoModels = map[string]struct{}{
+		"933-video2.0":           {},
+		"933-video2.0-480p":      {},
+		"933-video2.0-mini":      {},
+		"933-video2.0-mini-480p": {},
+
 		"minimax-h3":          {},
 		"minimax-h3-480p":     {},
 		"minimax-h3-768p":     {},

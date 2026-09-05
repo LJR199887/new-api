@@ -474,6 +474,27 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 // ModelPriceHelperPerCall 按次计费的 PriceHelper (MJ、Task)
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
+	if common.Is933VideoModel(info.OriginModelName) {
+		prices, _ := ratio_setting.GetModelPriceBySecondsMap(info.OriginModelName)
+		overrideGroup := ""
+		for _, group := range GroupPriceCandidateGroups(info) {
+			if groupPrices, ok := ratio_setting.GetGroupModelPriceBySecondsMap(group, info.OriginModelName); ok {
+				prices, overrideGroup = groupPrices, group
+				break
+			}
+		}
+		unitPrice, ok := prices[ratio_setting.ModelPricePerSecondKey]
+		if !ok || unitPrice < 0 {
+			return types.PriceData{}, fmt.Errorf("%s requires ModelPriceBySeconds per_second pricing", info.OriginModelName)
+		}
+		quota := fixedPriceQuota(unitPrice, groupRatioInfo.GroupRatio, overrideGroup != "")
+		return types.PriceData{
+			ModelPrice: unitPrice, Quota: quota, BaseQuota: quota,
+			GroupRatioInfo: groupRatioInfo, GroupPriceOverride: overrideGroup != "",
+			GroupPriceOverrideGroup: overrideGroup,
+			FreeModel:               !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume && (unitPrice == 0 || (overrideGroup == "" && groupRatioInfo.GroupRatio == 0)),
+		}, nil
+	}
 
 	groupPriceOverride := false
 	groupPriceOverrideGroup := ""
