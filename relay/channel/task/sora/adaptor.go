@@ -1587,15 +1587,6 @@ func hasMiniMaxH3FrameReference(bodyMap map[string]interface{}) bool {
 	return false
 }
 
-func hasMiniMaxH3AudioReference(bodyMap map[string]interface{}) bool {
-	for _, key := range []string{"audio_url", "audio_reference"} {
-		if len(appendKo3ImageURL(nil, bodyMap[key])) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func normalizeMiniMaxH3VideoRequest(bodyMap map[string]interface{}) error {
 	bodyMap["model"] = "minimax-h3"
 
@@ -1611,8 +1602,15 @@ func normalizeMiniMaxH3VideoRequest(bodyMap map[string]interface{}) error {
 	if hasFrameReference && len(images) > 0 {
 		return fmt.Errorf("image reference mode and frame mode cannot be combined for minimax-h3")
 	}
-	if hasMiniMaxH3AudioReference(bodyMap) && (hasFrameReference || len(images) == 0) {
+	audios := collectSeedanceAudioReferencesWithSingle(bodyMap)
+	if len(audios) > 0 && (hasFrameReference || len(images) == 0) {
 		return fmt.Errorf("audio reference requires image reference mode for minimax-h3")
+	}
+	if len(audios) > 3 {
+		return fmt.Errorf("minimax-h3 supports at most 3 audio references")
+	}
+	if err := validateReferenceDurations("minimax-h3", "audio", audios, 1, 15, 15); err != nil {
+		return err
 	}
 
 	duration := stringifyBodyValue(bodyMap["duration"])

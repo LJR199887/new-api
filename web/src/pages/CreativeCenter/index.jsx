@@ -41,8 +41,13 @@ import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 
-import Video933References from './Video933References';
-import { VIDEO_933_MODELS, VIDEO_933_DURATIONS, is933VideoModel, validate933References } from '../../constants/video933';
+import {
+  VIDEO_933_MODELS,
+  VIDEO_933_DURATIONS,
+  is933VideoModel,
+  read933MediaDuration,
+  validate933References,
+} from '../../constants/video933';
 
 const tabs = [
   { id: 'chat', label: '对话', icon: MessageSquare },
@@ -394,10 +399,12 @@ const SEEDANCE_REFERENCE_MODE_OPTIONS = [
 const MINIMAX_H3_REFERENCE_MODE_OPTIONS = [
   { label: '多图参考', value: 'multi_image' },
   { label: '首尾帧', value: 'first_last' },
+  { label: '多模态', value: 'multimodal' },
 ];
 const MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS = {
   multi_image: 5,
   first_last: 2,
+  multimodal: 5,
 };
 const SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS = {
   multi_image: 4,
@@ -449,6 +456,7 @@ const UNIFORM_CREATIVE_VIDEO_CARD_MODELS = new Set([
 ]);
 const CREATIVE_CENTER_IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const CREATIVE_CENTER_VIDEO_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
+const CREATIVE_CENTER_AUDIO_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
 const CREATIVE_CENTER_IMAGE_UPLOAD_CONCURRENCY = 2;
 const CREATIVE_CENTER_STARTUP_VIDEO_RECOVERY_MAX_TASKS = 20;
 const CREATIVE_CENTER_STARTUP_VIDEO_RECOVERY_CONCURRENCY = 4;
@@ -820,6 +828,15 @@ const createPersistedVideoTaskItem = (item, index = 0) => {
   };
 };
 
+const normalizeCreativeSourceMediaItems = (items) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const url = typeof item === 'string' ? item.trim() : String(item?.url || '').trim();
+      const duration = Number(item?.duration);
+      return url ? { url, ...(Number.isFinite(duration) ? { duration } : {}) } : null;
+    })
+    .filter(Boolean);
+
 const createPersistedImageRecord = (record, index = 0) => ({
   id: record?.id || createCreativeRecordId(`image-history-${index}`),
   prompt: record?.prompt || '',
@@ -860,11 +877,8 @@ const createPersistedVideoRecord = (record, index = 0) => ({
         )
         .filter(Boolean)
     : [],
-  sourceVideos: Array.isArray(record?.sourceVideos)
-    ? record.sourceVideos
-        .map((item) => String(item || '').trim())
-        .filter(Boolean)
-    : [],
+  sourceVideos: normalizeCreativeSourceMediaItems(record?.sourceVideos),
+  sourceAudios: normalizeCreativeSourceMediaItems(record?.sourceAudios),
   group: record?.group || '',
   createdAt: parseTimestampValue(
     record?.createdAt || record?.created_at,
@@ -1409,7 +1423,6 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
 };
 
 const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => {
-  if (is933VideoModel(modelName)) return null;
   const normalizedModelName = typeof modelName === 'string' ? modelName.trim() : '';
   if (!normalizedModelName || !SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return null;
@@ -1424,6 +1437,51 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 5 : null;
   }
   return SEEDANCE_REFERENCE_MODE_VIDEO_LIMITS[referenceMode] ?? null;
+};
+
+const getCreativeCenterAudioReferencePolicy = (modelName, referenceMode = '') => {
+  if (referenceMode !== 'multimodal') {
+    return null;
+  }
+  if (is933VideoModel(modelName)) {
+    return { maxCount: 3, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 };
+  }
+  if (WAN30_MODELS.has(modelName)) {
+    return { maxCount: 5, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 };
+  }
+  if (modelName === MINIMAX_H3_MODEL || MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
+    return { maxCount: 3, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 };
+  }
+  return null;
+};
+
+const getCreativeCenterVideoReferencePolicy = (modelName, referenceMode = '') => {
+  const maxCount = getCreativeCenterVideoReferenceLimit(modelName, referenceMode);
+  if (typeof maxCount !== 'number') return null;
+  if (is933VideoModel(modelName)) {
+    return { maxCount, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 };
+  }
+  if (WAN30_MODELS.has(modelName) || MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
+    return { maxCount, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 };
+  }
+  return null;
+};
+
+const validateCreativeCenterMediaReferences = (items, policy, kind) => {
+  if (!policy) return;
+  if (items.length > policy.maxCount) {
+    throw new Error(`最多 ${policy.maxCount} 个${kind === 'audio' ? '音频' : '视频'}参考素材`);
+  }
+  const totalDuration = items.reduce((total, item) => {
+    const duration = Number(item?.duration);
+    if (!Number.isFinite(duration) || duration < policy.minDuration || duration > policy.maxDuration) {
+      throw new Error(`单个${kind === 'audio' ? '音频' : '视频'}时长必须为 ${policy.minDuration}–${policy.maxDuration} 秒`);
+    }
+    return total + duration;
+  }, 0);
+  if (totalDuration > policy.maxTotalDuration) {
+    throw new Error(`${kind === 'audio' ? '音频' : '视频'}总时长不能超过 ${policy.maxTotalDuration} 秒`);
+  }
 };
 
 const isCreativeCenterImageUploadEnabled = (tabKey, modelName, referenceMode = '') => {
@@ -1889,11 +1947,8 @@ const buildCreativePersistSignature = (records, taskType) =>
             )
             .filter(Boolean)
         : [],
-      sourceVideos: Array.isArray(record?.sourceVideos)
-        ? record.sourceVideos
-            .map((item) => String(item || '').trim())
-            .filter(Boolean)
-        : [],
+      sourceVideos: normalizeCreativeSourceMediaItems(record?.sourceVideos),
+      sourceAudios: normalizeCreativeSourceMediaItems(record?.sourceAudios),
       items:
         taskType === 'video'
           ? (record?.tasks || []).map((item) => ({
@@ -2571,17 +2626,12 @@ const normalizeVideoHistoryRecords = (snapshot) => {
             )
             .filter(Boolean)
         : [],
-      sourceVideos: Array.isArray(entry?.sourceVideos || entry?.source_videos)
-        ? (entry?.sourceVideos || entry?.source_videos)
-            .map((item) =>
-              typeof item === 'string'
-                ? item.trim()
-                : typeof item?.url === 'string'
-                  ? item.url.trim()
-                  : '',
-            )
-            .filter(Boolean)
-        : [],
+      sourceVideos: normalizeCreativeSourceMediaItems(
+        entry?.sourceVideos || entry?.source_videos,
+      ),
+      sourceAudios: normalizeCreativeSourceMediaItems(
+        entry?.sourceAudios || entry?.source_audios,
+      ),
       group: entry?.group || snapshot?.group || '',
       status: summary.status,
       tasks,
@@ -2613,11 +2663,12 @@ const normalizeVideoHistoryRecords = (snapshot) => {
               )
               .filter(Boolean)
           : [],
-        sourceVideos: Array.isArray(payload?.sourceVideos || payload?.source_videos)
-          ? (payload?.sourceVideos || payload?.source_videos)
-              .map((item) => String(item || '').trim())
-              .filter(Boolean)
-          : [],
+        sourceVideos: normalizeCreativeSourceMediaItems(
+          payload?.sourceVideos || payload?.source_videos,
+        ),
+        sourceAudios: normalizeCreativeSourceMediaItems(
+          payload?.sourceAudios || payload?.source_audios,
+        ),
         status: summary.status,
         tasks,
         error:
@@ -3339,8 +3390,6 @@ export default function App() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadImageNotice, setUploadImageNotice] = useState('');
   const [referenceVideos, setReferenceVideos] = useState([]);
-  const [fishReferences, setFishReferences] = useState({ video: [], audio: [] });
-  const [fishMediaBusy, setFishMediaBusy] = useState({ video: false, audio: false });
   const [uploadVideoNotice, setUploadVideoNotice] = useState('');
   const [isUploadDragActive, setIsUploadDragActive] = useState(false);
   const isUploadingImage = uploadedImages.some((item) => item?.status === 'uploading');
@@ -3872,11 +3921,7 @@ export default function App() {
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const isFishVideo = is933VideoModel(currentModelName);
   const currentImageMaxMB = isFishVideo ? 20 : 10;
-  const currentReferenceModeOptions = isFishVideo ? [...SEEDANCE_REFERENCE_MODE_OPTIONS, { label: t('音频参考'), value: 'audio_reference' }] : SEEDANCE_REFERENCE_MODE_OPTIONS;
-  useEffect(() => {
-    setFishReferences({ video: [], audio: [] });
-    setFishMediaBusy({ video: false, audio: false });
-  }, [currentModelName, params.referenceMode]);
+  const currentReferenceModeOptions = SEEDANCE_REFERENCE_MODE_OPTIONS;
   const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
   const updatePrompt = useCallback((value) => {
     setPrompt(String(value || '').slice(0, currentPromptMaxLength));
@@ -3884,7 +3929,7 @@ export default function App() {
   const isChatCompletionVideoModel = false;
   const isChatTab = activeTab === 'chat';
   const isSubmitPending =
-    (isChatTab && isGenerating) || isUploadingImage || isUploadingReferenceVideo || fishMediaBusy.video || fishMediaBusy.audio;
+    (isChatTab && isGenerating) || isUploadingImage || isUploadingReferenceVideo;
   const isVideoModel =
     typeof currentModelName === 'string' &&
     (currentModelName.includes('video') || isAdobeVideoModel);
@@ -3901,6 +3946,14 @@ export default function App() {
     currentModelName,
     params.referenceMode,
   );
+  const currentVideoReferencePolicy = getCreativeCenterVideoReferencePolicy(
+    currentModelName,
+    params.referenceMode,
+  );
+  const currentAudioReferencePolicy = getCreativeCenterAudioReferencePolicy(
+    currentModelName,
+    params.referenceMode,
+  );
   const currentAdobeImageAspectRatioOptions =
     getAdobeImageAspectRatioOptions(currentModelName);
   const currentAdobeSupportsAutoImageSize =
@@ -3912,15 +3965,17 @@ export default function App() {
   );
   const isCurrentModelVideoReferenceEnabled =
     activeTab === 'video' && typeof currentVideoReferenceLimit === 'number';
+  const isCurrentModelAudioReferenceEnabled =
+    activeTab === 'video' && currentAudioReferencePolicy !== null;
   const isCurrentModelMediaUploadEnabled =
-    isCurrentModelImageUploadEnabled || isCurrentModelVideoReferenceEnabled;
-  const currentUploadAccept = isCurrentModelImageUploadEnabled
-    ? isCurrentModelVideoReferenceEnabled
-      ? 'image/*,video/*'
-      : 'image/*'
-    : isCurrentModelVideoReferenceEnabled
-      ? 'video/*'
-      : 'image/*';
+    isCurrentModelImageUploadEnabled ||
+    isCurrentModelVideoReferenceEnabled ||
+    isCurrentModelAudioReferenceEnabled;
+  const currentUploadAccept = [
+    isCurrentModelImageUploadEnabled ? 'image/*' : '',
+    isCurrentModelVideoReferenceEnabled ? 'video/*' : '',
+    isCurrentModelAudioReferenceEnabled ? 'audio/*' : '',
+  ].filter(Boolean).join(',') || 'image/*';
   useEffect(() => {
     setPrompt((prev) =>
       typeof prev === 'string' && prev.length > currentPromptMaxLength
@@ -3962,27 +4017,42 @@ export default function App() {
     showWarning('当前模型不支持上传图片');
   }, [isCurrentModelImageUploadEnabled, uploadedImages.length]);
   useEffect(() => {
-    if (
-      typeof currentVideoReferenceLimit !== 'number' ||
-      referenceVideos.length <= currentVideoReferenceLimit
-    ) {
-      return;
-    }
+    const videoLimit = typeof currentVideoReferenceLimit === 'number'
+      ? currentVideoReferenceLimit
+      : 0;
+    const audioLimit = currentAudioReferencePolicy?.maxCount || 0;
+    const videoCount = referenceVideos.filter((item) => item?.mediaType !== 'audio').length;
+    const audioCount = referenceVideos.filter((item) => item?.mediaType === 'audio').length;
+    if (videoCount <= videoLimit && audioCount <= audioLimit) return;
 
-    setReferenceVideos((prev) => prev.slice(0, currentVideoReferenceLimit));
-    setUploadVideoNotice(
-      `当前模式最多添加 ${currentVideoReferenceLimit} 个视频链接，已自动保留前 ${currentVideoReferenceLimit} 个`,
-    );
-    showWarning(`当前模式最多添加 ${currentVideoReferenceLimit} 个视频链接`);
-  }, [currentVideoReferenceLimit, referenceVideos.length]);
+    setReferenceVideos((prev) => {
+      let keptVideos = 0;
+      let keptAudios = 0;
+      return prev.filter((item) => {
+        if (item?.mediaType === 'audio') {
+          keptAudios += 1;
+          return keptAudios <= audioLimit;
+        }
+        keptVideos += 1;
+        return keptVideos <= videoLimit;
+      });
+    });
+    const message = `当前模式最多添加 ${videoLimit} 个视频和 ${audioLimit} 个音频`;
+    setUploadVideoNotice(message);
+    showWarning(message);
+  }, [currentVideoReferenceLimit, currentAudioReferencePolicy, referenceVideos.length]);
   useEffect(() => {
-    if (isCurrentModelVideoReferenceEnabled || referenceVideos.length === 0) {
+    if (
+      isCurrentModelVideoReferenceEnabled ||
+      isCurrentModelAudioReferenceEnabled ||
+      referenceVideos.length === 0
+    ) {
       return;
     }
 
     setReferenceVideos([]);
     setUploadVideoNotice('');
-  }, [isCurrentModelVideoReferenceEnabled, referenceVideos.length]);
+  }, [isCurrentModelVideoReferenceEnabled, isCurrentModelAudioReferenceEnabled, referenceVideos.length]);
   const renderPendingTaskProgress = ({
     task,
     taskIndex,
@@ -5728,10 +5798,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     return uploadCreativeCenterImageViaBackend(file);
   };
 
-  const uploadCreativeCenterReferenceVideo = async (file) => {
+  const uploadCreativeCenterReferenceMedia = async (file) => {
     const uploadConfig = await getCreativeCenterImageUploadConfig();
     if (uploadConfig?.mode !== 'direct') {
-      throw new Error('当前上传配置暂不支持直接上传视频，请改用视频链接');
+      throw new Error('当前上传配置暂不支持直接上传音视频');
     }
     return uploadCreativeCenterImageDirectly(file, uploadConfig);
   };
@@ -5855,74 +5925,91 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     await handleCreativeCenterMediaFiles(files);
   };
 
-  const handleCreativeCenterReferenceVideoFiles = async (files) => {
+  const handleCreativeCenterReferenceMediaFiles = async (files) => {
     if (files.length === 0) {
       return;
     }
 
-    if (!isCurrentModelVideoReferenceEnabled) {
-      setUploadVideoNotice('当前模式不支持视频参考');
-      showWarning('当前模式不支持视频参考');
+    if (!isCurrentModelVideoReferenceEnabled && !isCurrentModelAudioReferenceEnabled) {
+      setUploadVideoNotice('当前模式不支持音视频参考');
+      showWarning('当前模式不支持音视频参考');
       return;
     }
 
     if (!isLoggedIn) {
-      showWarning('请先登录后再上传视频');
+      showWarning('请先登录后再上传素材');
       return;
     }
 
-    const rawVideoFiles = files.filter((file) => file.type.startsWith('video/'));
-    if (rawVideoFiles.length !== files.length) {
-      showWarning('请上传视频文件');
+    const existingByKind = {
+      video: referenceVideos.filter((item) => item?.mediaType !== 'audio'),
+      audio: referenceVideos.filter((item) => item?.mediaType === 'audio'),
+    };
+    const preparedItems = [];
+    for (const file of files) {
+      const kind = file.type.startsWith('audio/')
+        ? 'audio'
+        : file.type.startsWith('video/')
+          ? 'video'
+          : '';
+      const enabled = kind === 'audio'
+        ? isCurrentModelAudioReferenceEnabled
+        : kind === 'video' && isCurrentModelVideoReferenceEnabled;
+      if (!kind || !enabled) {
+        showWarning(kind === 'audio' ? '音频只能在多模态模式上传' : '当前模式不支持该文件类型');
+        continue;
+      }
+      const maxBytes = kind === 'audio'
+        ? CREATIVE_CENTER_AUDIO_UPLOAD_MAX_BYTES
+        : CREATIVE_CENTER_VIDEO_UPLOAD_MAX_BYTES;
+      if (file.size > maxBytes) {
+        showWarning(`${kind === 'audio' ? '音频' : '视频'}大小不能超过 ${kind === 'audio' ? 15 : 200}MB`);
+        continue;
+      }
+      const policy = kind === 'audio'
+        ? currentAudioReferencePolicy
+        : currentVideoReferencePolicy;
+      const currentItems = [...existingByKind[kind], ...preparedItems.filter((item) => item.mediaType === kind)];
+      if (policy && currentItems.length >= policy.maxCount) {
+        showWarning(`当前模式最多上传 ${policy.maxCount} 个${kind === 'audio' ? '音频' : '视频'}`);
+        continue;
+      }
+      let duration;
+      if (policy) {
+        try {
+          duration = await read933MediaDuration(file, kind);
+          validateCreativeCenterMediaReferences(
+            [...currentItems, { duration }],
+            policy,
+            kind,
+          );
+        } catch (error) {
+          showWarning(error?.message || '无法读取素材时长');
+          continue;
+        }
+      }
+      preparedItems.push({ file, mediaType: kind, duration });
     }
-    if (rawVideoFiles.length === 0) {
-      return;
-    }
+    if (preparedItems.length === 0) return;
 
-    const validVideoFiles = rawVideoFiles.filter(
-      (file) => file.size <= CREATIVE_CENTER_VIDEO_UPLOAD_MAX_BYTES,
-    );
-    if (validVideoFiles.length !== rawVideoFiles.length) {
-      showWarning('视频大小不能超过 200MB');
-    }
-    if (validVideoFiles.length === 0) {
-      setUploadVideoNotice('请重新上传不大于 200MB 的视频文件');
-      return;
-    }
-
-    const remainingSlots =
-      typeof currentVideoReferenceLimit === 'number'
-        ? currentVideoReferenceLimit - referenceVideos.length
-        : null;
-    if (remainingSlots !== null && remainingSlots <= 0) {
-      const message = `当前模式最多添加 ${currentVideoReferenceLimit} 个视频链接`;
-      setUploadVideoNotice(message);
-      showWarning(message);
-      return;
-    }
-
-    const acceptedFiles =
-      remainingSlots !== null ? validVideoFiles.slice(0, remainingSlots) : validVideoFiles;
-    if (acceptedFiles.length === 0) {
-      return;
-    }
-
-    const pendingItems = acceptedFiles.map((file) => ({
-      id: createCreativeRecordId('uploaded-video'),
+    const pendingItems = preparedItems.map(({ file, mediaType, duration }) => ({
+      id: createCreativeRecordId(`uploaded-${mediaType}`),
       url: '',
       name: file.name,
       fileName: file.name,
       size: file.size,
+      mediaType,
+      duration,
       status: 'uploading',
     }));
 
     setReferenceVideos((prev) => [...prev, ...pendingItems]);
 
     await Promise.all(
-      acceptedFiles.map(async (file, index) => {
+      preparedItems.map(async ({ file, mediaType }, index) => {
         const pendingItem = pendingItems[index];
         try {
-          const uploaded = await uploadCreativeCenterReferenceVideo(file);
+          const uploaded = await uploadCreativeCenterReferenceMedia(file);
           setReferenceVideos((prev) =>
             prev.map((item) =>
               item.id === pendingItem.id
@@ -5938,11 +6025,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
             ),
           );
         } catch (error) {
-          console.error('Failed to upload creative center reference video:', error);
+          console.error('Failed to upload creative center reference media:', error);
           setReferenceVideos((prev) =>
             prev.filter((item) => item.id !== pendingItem.id),
           );
-          setUploadVideoNotice(error?.message || '视频上传失败，请稍后重试');
+          setUploadVideoNotice(error?.message || `${mediaType === 'audio' ? '音频' : '视频'}上传失败，请稍后重试`);
         }
       }),
     );
@@ -5951,15 +6038,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   const handleCreativeCenterMediaFiles = async (files) => {
     const imageFiles = files.filter((file) => file.type.startsWith('image/'));
     const videoFiles = files.filter((file) => file.type.startsWith('video/'));
+    const audioFiles = files.filter((file) => file.type.startsWith('audio/'));
 
     if (imageFiles.length > 0) {
       await handleCreativeCenterImageFiles(imageFiles);
     }
-    if (videoFiles.length > 0) {
-      await handleCreativeCenterReferenceVideoFiles(videoFiles);
+    if (videoFiles.length > 0 || audioFiles.length > 0) {
+      await handleCreativeCenterReferenceMediaFiles([...videoFiles, ...audioFiles]);
     }
-    if (imageFiles.length === 0 && videoFiles.length === 0 && files.length > 0) {
-      showWarning('仅支持上传图片或视频文件');
+    if (imageFiles.length === 0 && videoFiles.length === 0 && audioFiles.length === 0 && files.length > 0) {
+      showWarning('仅支持上传图片、视频或音频文件');
     }
   };
 
@@ -6424,7 +6512,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     setUploadImageNotice('');
   };
 
-  const applyReusedReferenceVideos = (sourceVideos = []) => {
+  const applyReusedReferenceVideos = (sourceVideos = [], sourceAudios = []) => {
     const nextVideos = (Array.isArray(sourceVideos) ? sourceVideos : [])
       .map((item, index) => {
         const rawUrl =
@@ -6445,11 +6533,26 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           name: fallbackName,
           fileName: fallbackName,
           size: typeof item?.size === 'number' ? item.size : 0,
+          mediaType: 'video',
+          duration: Number.isFinite(Number(item?.duration)) ? Number(item.duration) : undefined,
           status: 'uploaded',
         };
       })
       .filter(Boolean);
-    setReferenceVideos(nextVideos);
+    const nextAudios = normalizeCreativeSourceMediaItems(sourceAudios).map((item, index) => {
+      const fallbackName = getCreativeCenterFilenameFromUrl(item.url) || `audio-${index + 1}.mp3`;
+      return {
+        id: createCreativeRecordId(`reused-audio-${index + 1}`),
+        url: item.url,
+        name: fallbackName,
+        fileName: fallbackName,
+        size: 0,
+        mediaType: 'audio',
+        duration: item.duration,
+        status: 'uploaded',
+      };
+    });
+    setReferenceVideos([...nextVideos, ...nextAudios]);
     setUploadVideoNotice('');
   };
 
@@ -6459,7 +6562,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     }
 
     applyReusedUploadedImages(record.sourceImages || []);
-    applyReusedReferenceVideos(record.sourceVideos || []);
+    applyReusedReferenceVideos(record.sourceVideos || [], record.sourceAudios || []);
     if (record.prompt) {
       updatePrompt(record.prompt);
     }
@@ -7485,10 +7588,35 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
   const handleSubmit = async () => {
     if (isSubmitPending) return;
-    const currentFishReferences = fishReferences;
-    if (isFishVideo) {
-      try { validate933References(currentFishReferences.video); validate933References(currentFishReferences.audio); }
-      catch (e) { showWarning(e.message); return; }
+    const currentReferenceVideoItems = isCurrentModelVideoReferenceEnabled
+      ? referenceVideos.filter(
+          (item) => item?.status === 'uploaded' && item?.url && item?.mediaType !== 'audio',
+        )
+      : [];
+    const currentReferenceAudioItems = isCurrentModelAudioReferenceEnabled
+      ? referenceVideos.filter(
+          (item) => item?.status === 'uploaded' && item?.url && item?.mediaType === 'audio',
+        )
+      : [];
+    try {
+      if (isFishVideo) {
+        validate933References(currentReferenceVideoItems);
+        validate933References(currentReferenceAudioItems);
+      } else {
+        validateCreativeCenterMediaReferences(
+          currentReferenceVideoItems,
+          currentVideoReferencePolicy,
+          'video',
+        );
+        validateCreativeCenterMediaReferences(
+          currentReferenceAudioItems,
+          currentAudioReferencePolicy,
+          'audio',
+        );
+      }
+    } catch (error) {
+      showWarning(error.message);
+      return;
     }
     const currentUploadedImageItems = uploadedImages
       .filter((item) => item?.status === 'uploaded' && item?.url)
@@ -7500,14 +7628,17 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         status: 'uploaded',
       }));
     const uploadedImageUrls = currentUploadedImageItems.map((item) => item.url);
-    const currentReferenceVideoUrls = isFishVideo ? currentFishReferences.video.map((item) => item.url) : referenceVideos
-      .filter((item) => item?.status === 'uploaded' && item?.url)
+    const currentReferenceVideoUrls = currentReferenceVideoItems
+      .map((item) => String(item?.url || '').trim())
+      .filter(Boolean);
+    const currentReferenceAudioUrls = currentReferenceAudioItems
       .map((item) => String(item?.url || '').trim())
       .filter(Boolean);
     if (
       (!prompt.trim() &&
         uploadedImageUrls.length === 0 &&
-        currentReferenceVideoUrls.length === 0) ||
+        currentReferenceVideoUrls.length === 0 &&
+        currentReferenceAudioUrls.length === 0) ||
       (isChatTab && isGenerating)
     ) {
       return;
@@ -7529,15 +7660,16 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         showWarning('首尾帧模式需要上传 2 张图片');
         return;
       }
-      if (activeReferenceMode === 'video_reference' && (isFishVideo ? currentFishReferences.video.length : currentReferenceVideoUrls.length) < 1) {
+      if (activeReferenceMode === 'video_reference' && currentReferenceVideoUrls.length < 1) {
         showWarning('视频参考模式至少需要 1 个视频链接');
         return;
       }
       if (
         !isFishVideo && activeReferenceMode === 'multimodal' &&
-        (uploadedImageUrls.length < 1 || currentReferenceVideoUrls.length < 1)
+        (uploadedImageUrls.length < 1 ||
+          (currentReferenceVideoUrls.length < 1 && currentReferenceAudioUrls.length < 1))
       ) {
-        showWarning('多模态模式至少需要 1 张图片和 1 个视频链接');
+        showWarning('多模态模式至少需要 1 张图片和 1 个音频或视频');
         return;
       }
     }
@@ -7550,8 +7682,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       showWarning('首尾帧模式需要上传 2 张图片');
       return;
     }
-    if (isFishVideo && params.referenceMode === 'audio_reference' && !currentFishReferences.audio.length) {
-      showWarning(t('音频参考模式至少需要 1 个音频')); return;
+    if (
+      activeTab === 'video' &&
+      isMiniMaxH3Model &&
+      params.referenceMode === 'multimodal' &&
+      (uploadedImageUrls.length < 1 || currentReferenceAudioUrls.length < 1)
+    ) {
+      showWarning('MiniMax H3 多模态至少需要 1 张图片和 1 个音频');
+      return;
     }
     const currentPrompt = prompt;
     const currentUploadedImageUrls = uploadedImageUrls;
@@ -7559,7 +7697,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
     updatePrompt('');
     clearUploadedImages();
     clearReferenceVideos();
-    setFishReferences({ video: [], audio: [] });
     if (isChatTab) {
       setIsGenerating(true);
     }
@@ -7933,7 +8070,14 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         group: activeGroup,
         params: currentParamsSnapshot,
         sourceImages: currentUploadedImageSources,
-        sourceVideos: currentReferenceVideoUrls,
+        sourceVideos: currentReferenceVideoItems.map((item) => ({
+          url: item.url,
+          duration: item.duration,
+        })),
+        sourceAudios: currentReferenceAudioItems.map((item) => ({
+          url: item.url,
+          duration: item.duration,
+        })),
         tasks: Array.from({ length: generationCount }, (_, index) => ({
           id: createCreativeRecordId(`video-task-${index + 1}`),
           taskId: '',
@@ -8108,8 +8252,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 [payload.start_image_url, payload.end_image_url] = currentUploadedImageUrls;
               } else {
                 if (currentUploadedImageUrls.length) payload.image_urls = currentUploadedImageUrls;
-                if (currentFishReferences.video.length) payload.video_reference = currentFishReferences.video;
-                if (currentFishReferences.audio.length) payload.audio_reference = currentFishReferences.audio;
+                if (currentReferenceVideoItems.length) {
+                  payload.video_reference = currentReferenceVideoItems.map(({ url, duration }) => ({ url, duration }));
+                }
+                if (currentParamsSnapshot.referenceMode === 'multimodal' && currentReferenceAudioItems.length) {
+                  payload.audio_reference = currentReferenceAudioItems.map(({ url, duration }) => ({ url, duration }));
+                }
               }
             } else if (isMiniMaxH3Model && currentUploadedImageUrls.length > 0) {
               const miniMaxImageUrls = currentUploadedImageUrls.slice(0, 5);
@@ -8120,6 +8268,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload.image_urls = miniMaxImageUrls;
               } else {
                 payload.image_url = miniMaxImageUrls[0];
+              }
+              if (currentParamsSnapshot.referenceMode === 'multimodal' && currentReferenceAudioItems.length) {
+                payload.audio_reference = currentReferenceAudioItems.map(({ url, duration }) => ({ url, duration }));
               }
             } else if (isAdobeKlingV3Model && currentUploadedImageUrls.length > 0) {
               payload.image_url = currentUploadedImageUrls[0];
@@ -8147,6 +8298,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 0,
                 seedanceVideoLimit,
               );
+              const seedanceVideoItems = currentReferenceVideoItems.slice(
+                0,
+                seedanceVideoLimit,
+              );
+              const seedanceAudioLimit = WAN30_MODELS.has(currentModelName) ? 5 : 3;
+              const seedanceAudioItems = currentReferenceAudioItems.slice(0, seedanceAudioLimit);
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
                   payload.start_image_url = seedanceImageUrls[0];
@@ -8162,7 +8319,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 }
               } else if (currentParamsSnapshot.referenceMode === 'video_reference') {
                 if (seedanceVideoUrls.length > 1) {
-                  payload.video_reference = seedanceVideoUrls.map((url) => ({ url }));
+                  payload.video_reference = seedanceVideoItems.map(({ url, duration }) => ({ url, duration }));
                 } else if (seedanceVideoUrls[0]) {
                   payload.video_url = seedanceVideoUrls[0];
                 }
@@ -8173,9 +8330,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   payload.image_url = seedanceImageUrls[0];
                 }
                 if (seedanceVideoUrls.length > 1) {
-                  payload.video_reference = seedanceVideoUrls.map((url) => ({ url }));
+                  payload.video_reference = seedanceVideoItems.map(({ url, duration }) => ({ url, duration }));
                 } else if (seedanceVideoUrls[0]) {
                   payload.video_url = seedanceVideoUrls[0];
+                }
+                if (seedanceAudioItems.length) {
+                  payload.audio_reference = seedanceAudioItems.map(({ url, duration }) => ({ url, duration }));
                 }
               }
             } else if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
@@ -9475,7 +9635,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 </div>
               ) : null}
 
-              {isCurrentModelVideoReferenceEnabled ? (
+              {isCurrentModelVideoReferenceEnabled || isCurrentModelAudioReferenceEnabled ? (
                 <div className='mt-3 rounded-2xl border border-slate-200/60 bg-slate-50/60 px-3 py-3 sm:mt-5 sm:px-5 sm:py-4'>
                   {referenceVideos.length > 0 ? (
                     <div className='flex flex-wrap gap-2'>
@@ -9485,7 +9645,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                           className='flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600'
                         >
                           <span className='shrink-0 font-semibold text-slate-500'>
-                            视频{index + 1}
+                            {videoItem.mediaType === 'audio' ? '音频' : '视频'}{index + 1}
                           </span>
                           <span className='truncate'>
                             {videoItem.status === 'uploading'
@@ -9505,14 +9665,6 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   ) : null}
                 </div>
               ) : null}
-
-              {isFishVideo && ['video_reference', 'multimodal', 'audio_reference'].includes(params.referenceMode) &&
-                (params.referenceMode === 'multimodal' ? ['video', 'audio'] : [params.referenceMode === 'audio_reference' ? 'audio' : 'video']).map((kind) => (
-                  <Video933References key={`${currentModelName}-${params.referenceMode}-${kind}`} kind={kind}
-                    items={fishReferences[kind]} onChange={(items) => setFishReferences((prev) => ({ ...prev, [kind]: items }))}
-                    onBusy={(busy) => setFishMediaBusy((prev) => ({ ...prev, [kind]: busy }))}
-                    upload={uploadCreativeCenterReferenceVideo} />
-                ))}
               {uploadImageNotice ? (
                 <div className='mt-4 px-3 text-xs font-bold text-red-500 flex items-center gap-2'>
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
@@ -9536,7 +9688,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频链接，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，大小不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">{MINIMAX_H3_VARIANT_MODELS.has(currentModelName) || WAN30_MODELS.has(currentModelName) ? '1-15' : '3-10'} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{VIDEO_25_MODELS.has(currentModelName) ? 30 : 15} 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，单个不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy ? `${currentVideoReferencePolicy.minDuration}-${currentVideoReferencePolicy.maxDuration}` : '3-10'} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy?.maxTotalDuration || (VIDEO_25_MODELS.has(currentModelName) ? 30 : 15)} 秒</span>
+                </div>
+              ) : null}
+              {isCurrentModelAudioReferenceEnabled ? (
+                <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
+                  多模态最多可添加 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxCount}</span> 个音频，单个不超过 <span className="text-blue-600 font-bold">15MB</span>，单音频时长 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.minDuration}-{currentAudioReferencePolicy.maxDuration} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxTotalDuration} 秒</span>
                 </div>
               ) : null}
 

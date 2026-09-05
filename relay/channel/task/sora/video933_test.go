@@ -174,6 +174,9 @@ func Test933ActualDownloadedMediaLimits(t *testing.T) {
 			w.WriteHeader(200)
 			w.(http.Flusher).Flush()
 			_, _ = io.Copy(w, bytes.NewReader(make([]byte, video933ImageMaxBytes+1)))
+		case "/audio-too-big.wav":
+			w.Header().Set("Content-Length", "15728641")
+			w.Header().Set("Content-Type", "audio/wav")
 		default:
 			seconds := 5
 			if r.URL.Path == "/short.wav" {
@@ -206,6 +209,11 @@ func Test933ActualDownloadedMediaLimits(t *testing.T) {
 		if err := check933MediaDurations(context.Background(), map[string]any{kind + "_urls": urls}); err == nil {
 			t.Fatal("total > 15 accepted")
 		}
+	}
+	if err := check933MediaDurations(context.Background(), map[string]any{
+		"audio_urls": []string{server.URL + "/audio-too-big.wav"},
+	}); err == nil || !strings.Contains(err.Error(), "15MB") {
+		t.Fatalf("oversize audio should be rejected at 15MB: %v", err)
 	}
 }
 

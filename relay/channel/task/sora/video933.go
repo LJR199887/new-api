@@ -19,8 +19,8 @@ import (
 const video933ImageMaxBytes = 20 << 20
 
 // Reuse the pure-Go media parsers. Never trust client-supplied duration metadata.
-// Spool one bounded file at a time rather than holding up to six videos in RAM.
-func probe933Media(ctx context.Context, source string) (float64, error) {
+// Spool one bounded file at a time rather than holding up to six media files in RAM.
+func probe933Media(ctx context.Context, source string, maxBytes int64) (float64, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	resp, err := service.DoDownloadRequestContext(ctx, source)
@@ -28,12 +28,11 @@ func probe933Media(ctx context.Context, source string) (float64, error) {
 		return 0, err
 	}
 	defer resp.Body.Close()
-	const maxBytes = 200 << 20
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("reference media HTTP %d", resp.StatusCode)
 	}
 	if resp.ContentLength > maxBytes {
-		return 0, fmt.Errorf("reference media exceeds 200MB")
+		return 0, fmt.Errorf("reference media exceeds %dMB", maxBytes>>20)
 	}
 	f, err := os.CreateTemp("", "new-api-933-media-*")
 	if err != nil {
@@ -46,7 +45,7 @@ func probe933Media(ctx context.Context, source string) (float64, error) {
 		return 0, err
 	}
 	if n > maxBytes {
-		return 0, fmt.Errorf("reference media exceeds 200MB")
+		return 0, fmt.Errorf("reference media exceeds %dMB", maxBytes>>20)
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -78,10 +77,14 @@ func probe933Media(ctx context.Context, source string) (float64, error) {
 
 func check933MediaDurations(ctx context.Context, body map[string]any) error {
 	for _, kind := range []string{"video", "audio"} {
+		maxBytes := int64(200 << 20)
+		if kind == "audio" {
+			maxBytes = 15 << 20
+		}
 		urls, _ := body[kind+"_urls"].([]string)
 		refs := make([]map[string]any, 0, len(urls))
 		for _, source := range urls {
-			duration, err := probe933Media(ctx, source)
+			duration, err := probe933Media(ctx, source, maxBytes)
 			if err != nil {
 				return fmt.Errorf("probe %s reference: %w", kind, err)
 			}
