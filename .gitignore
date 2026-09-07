@@ -32,3 +32,6 @@ data/
 
 # Local downstream API integration documents
 /docs/*-async-api-usage.md
+/docs/async-media-api-usage.md
+/docs/linksky-api-usage.md
+/docs/video933.md
