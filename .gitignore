@@ -29,3 +29,6 @@ data/
 .gomodcache/
 .gocache-temp
 .gopath
+
+# Local downstream API integration documents
+/docs/*-async-api-usage.md

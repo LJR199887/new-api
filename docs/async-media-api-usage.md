@@ -279,8 +279,6 @@ curl https://linksky.top/v1/video/async-generations \
 | `end_image_url` | string | 否 | 尾帧图 URL |
 | `video_url` | string | 否 | 参考视频 URL，仅支持 `1` 个视频 |
 
-完整文档见：[`docs/ko3-async-api-usage.md`](./ko3-async-api-usage.md)
-
 ### 3.4 `kling-v3`
 
 文生视频：
@@ -431,7 +429,6 @@ curl https://linksky.top/v1/video/async-generations \
 - `video-2.0-480p` / `video-2.0-fast-480p` / `video-2.0-mini-480p` 请求格式一致，但 `resolution` 固定为 `480p`。
 - 720p 新增尺寸映射：`21:9` = `1470x630`，`4:3` = `1112x834`，`3:4` = `834x1112`。
 - 480p 尺寸映射：`9:16` = `496x864`，`16:9` = `864x496`，`1:1` = `640x640`，`21:9` = `992x432`，`4:3` = `752x560`，`3:4` = `560x752`。
-- 多图、首尾帧、视频参考、音频参考等高级格式见：[`docs/seedance-async-api-usage.md`](./seedance-async-api-usage.md)
 
 提交参数：
 

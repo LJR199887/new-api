@@ -1,7 +1,5 @@
 # 933 视频模型接入
 
-面向 API 调用方的完整请求、轮询和错误处理示例见 [933 Video 2.0 系列异步视频 API 下游对接文档](933-video2.0-async-api-usage.md)。
-
 参考本地 fa2api README / model-call-guide；素材数量以本次需求为准，覆盖旧文档中的 4 图 / 1 视频 / 1 音频。
 
 ## 渠道与接口
