@@ -1,4 +1,27 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
 import { is933VideoModel } from '../../../../constants/video933';
+import {
+  getFa2ImageModelSpec,
+  isFa2ImageModel,
+} from '../../../../constants/fa2Image';
 import { useEffect, useMemo, useState } from 'react';
 import { API, showError, showSuccess } from '../../../../helpers';
 
@@ -148,9 +171,21 @@ const buildModelState = (name, sourceMaps) => {
   const durationPrices = normalizeDurationPrices(
     sourceMaps.ModelPriceBySeconds[name],
   );
-  const resolutionPrices = normalizeResolutionPrices(
+  const normalizedResolutionPrices = normalizeResolutionPrices(
     sourceMaps.ModelPriceByResolution[name],
   );
+  const resolutionPrices = isFa2ImageModel(name)
+    ? Object.fromEntries(
+        (getFa2ImageModelSpec(name)?.resolutions || []).map((resolution) => [
+          resolution,
+          normalizedResolutionPrices[resolution] || '',
+        ]),
+      )
+    : normalizedResolutionPrices;
+  Object.entries(normalizedResolutionPrices).forEach(([resolution, price]) => {
+    resolutionPrices[resolution] = price;
+  });
+  const hasResolutionPricing = Object.values(resolutionPrices).some(hasValue);
   const inputPrice = ratioToBasePrice(modelRatio);
   const inputPriceNumber = toNumberOrNull(inputPrice);
   const audioInputPrice =
@@ -164,7 +199,7 @@ const buildModelState = (name, sourceMaps) => {
     billingMode:
       is933VideoModel(name) || Object.keys(durationPrices).length > 0
         ? 'per-duration'
-        : Object.keys(resolutionPrices).length > 0
+        : isFa2ImageModel(name) || hasResolutionPricing
           ? 'per-resolution'
         : hasValue(fixedPrice)
           ? 'per-request'
@@ -219,9 +254,9 @@ const buildModelState = (name, sourceMaps) => {
     },
     hasConflict:
       (hasValue(fixedPrice) && Object.keys(durationPrices).length > 0) ||
-      (hasValue(fixedPrice) && Object.keys(resolutionPrices).length > 0) ||
+      (hasValue(fixedPrice) && hasResolutionPricing) ||
       (Object.keys(durationPrices).length > 0 &&
-        Object.keys(resolutionPrices).length > 0) ||
+        hasResolutionPricing) ||
       (Object.keys(durationPrices).length > 0 &&
         [
           modelRatio,
@@ -232,7 +267,7 @@ const buildModelState = (name, sourceMaps) => {
           audioRatio,
           audioCompletionRatio,
         ].some(hasValue)) ||
-      (Object.keys(resolutionPrices).length > 0 &&
+      (hasResolutionPricing &&
         [
           modelRatio,
           completionRatio,
@@ -259,7 +294,7 @@ export const isBasePricingUnset = (model) =>
   !hasValue(model.fixedPrice) &&
   !hasValue(model.inputPrice) &&
   !Object.values(model.durationPrices || {}).some(hasValue) &&
-  Object.keys(model.resolutionPrices || {}).length === 0;
+  !Object.values(model.resolutionPrices || {}).some(hasValue);
 
 export const getModelWarnings = (model, t) => {
   if (!model) {
@@ -291,7 +326,7 @@ export const getModelWarnings = (model, t) => {
 
   if (
     model.billingMode === 'per-resolution' &&
-    Object.keys(model.resolutionPrices || {}).length === 0
+    !Object.values(model.resolutionPrices || {}).some(hasValue)
   ) {
     warnings.push(t('按画质计费下至少需要填写一个画质价格。'));
   }
@@ -352,7 +387,9 @@ export const buildSummaryText = (model, t) => {
   }
 
   if (model.billingMode === 'per-resolution') {
-    const resolutionCount = Object.keys(model.resolutionPrices || {}).length;
+    const resolutionCount = Object.values(model.resolutionPrices || {}).filter(
+      hasValue,
+    ).length;
     return resolutionCount > 0
       ? `${t('按画质')} ${resolutionCount}${t('档价格')}`
       : t('按画质计费未设置');
@@ -1058,9 +1095,16 @@ export function useModelPricingEditorState({
       return false;
     }
 
+    const fa2Spec = getFa2ImageModelSpec(trimmedName);
     const nextModel = {
       ...EMPTY_MODEL,
       name: trimmedName,
+      billingMode: fa2Spec ? 'per-resolution' : EMPTY_MODEL.billingMode,
+      resolutionPrices: fa2Spec
+        ? Object.fromEntries(
+            fa2Spec.resolutions.map((resolution) => [resolution, '']),
+          )
+        : {},
       rawRatios: { ...EMPTY_MODEL.rawRatios },
     };
 

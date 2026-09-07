@@ -1,3 +1,22 @@
+/*
+Copyright (C) 2025 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
 import React, { useCallback, useContext, useMemo, useRef, useState, useEffect } from 'react';
 import { SSE } from 'sse.js';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +67,13 @@ import {
   read933MediaDuration,
   validate933References,
 } from '../../constants/video933';
+import {
+  FA2_IMAGE_MODELS,
+  getFa2ImageAspectRatioOptions,
+  getFa2ImageModelSpec,
+  getFa2ImageResolutionOptions,
+  isFa2ImageModel,
+} from '../../constants/fa2Image';
 
 const tabs = [
   { id: 'chat', label: '对话', icon: MessageSquare },
@@ -72,9 +98,8 @@ const GROK_IMAGINE_VIDEO_MODELS = new Set([
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
-  'nano-banana2',
-  'nano-banana-pro',
   'gpt-image2',
+  ...FA2_IMAGE_MODELS,
 ]);
 const GPT_IMAGE2_MODEL = 'gpt-image2';
 const MINIMAX_H3_MODEL = 'minimax-h3';
@@ -146,8 +171,10 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-image-edit': 3,
   'grok-imagine-video': 7,
   'nano-banana': 4,
-  'nano-banana2': 6,
-  'nano-banana-pro': 6,
+  'gpt-image-2': 17,
+  'nano-banana2': 14,
+  'nano-banana-pro': 10,
+  'seedream-5-0': 14,
   'gpt-image2': 6,
   'sora2': 1,
   'sora2-pro': 1,
@@ -1346,6 +1373,9 @@ const revokeCreativeCenterPreviewURL = (previewUrl) => {
 const isGPTImage2Model = (modelName) => modelName === GPT_IMAGE2_MODEL;
 
 const getAdobeImageAspectRatioOptions = (modelName) => {
+  if (isFa2ImageModel(modelName)) {
+    return getFa2ImageAspectRatioOptions(modelName);
+  }
   if (isGPTImage2Model(modelName)) {
     return GPT_IMAGE2_SIZE_OPTIONS;
   }
@@ -1356,6 +1386,14 @@ const getAdobeImageAspectRatioOptions = (modelName) => {
 
 const supportsAdobeImageOutputResolution = (modelName) =>
   !isGPTImage2Model(modelName);
+
+const getAdobeImageOutputResolutionOptions = (modelName) =>
+  isFa2ImageModel(modelName)
+    ? getFa2ImageResolutionOptions(modelName)
+    : ADOBE_OUTPUT_RESOLUTION_OPTIONS;
+
+const getAdobeImageDefaultOutputResolution = (modelName) =>
+  getFa2ImageModelSpec(modelName)?.defaultResolution || '2K';
 
 const supportsAdobeAutoImageSize = (modelName) =>
   getAdobeImageAspectRatioOptions(modelName).some(
@@ -3901,6 +3939,7 @@ export default function App() {
   const isGrokImageGenerationModel =
     GROK_IMAGE_GENERATION_MODELS.has(currentModelName);
   const isAdobeImageModel = ADOBE_IMAGE_MODELS.has(currentModelName);
+  const isCurrentFa2ImageModel = isFa2ImageModel(currentModelName);
   const isCurrentGPTImage2Model = isGPTImage2Model(currentModelName);
   const isAdobeVideoModel = ADOBE_VIDEO_MODELS.has(currentModelName);
   const isAdobeSoraModel =
@@ -3913,7 +3952,7 @@ export default function App() {
   const isMiniMaxH3Model = currentModelName === MINIMAX_H3_MODEL;
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const isFishVideo = is933VideoModel(currentModelName);
-  const currentImageMaxMB = isFishVideo ? 20 : 10;
+  const currentImageMaxMB = isFishVideo || isCurrentFa2ImageModel ? 20 : 10;
   const currentReferenceModeOptions = SEEDANCE_REFERENCE_MODE_OPTIONS;
   const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
   const updatePrompt = useCallback((value) => {
@@ -3949,6 +3988,8 @@ export default function App() {
   );
   const currentAdobeImageAspectRatioOptions =
     getAdobeImageAspectRatioOptions(currentModelName);
+  const currentAdobeImageOutputResolutionOptions =
+    getAdobeImageOutputResolutionOptions(currentModelName);
   const currentAdobeSupportsAutoImageSize =
     supportsAdobeAutoImageSize(currentModelName);
   const isCurrentModelImageUploadEnabled = isCreativeCenterImageUploadEnabled(
@@ -3965,7 +4006,11 @@ export default function App() {
     isCurrentModelVideoReferenceEnabled ||
     isCurrentModelAudioReferenceEnabled;
   const currentUploadAccept = [
-    isCurrentModelImageUploadEnabled ? 'image/*' : '',
+    isCurrentModelImageUploadEnabled
+      ? isCurrentFa2ImageModel
+        ? 'image/png,image/jpeg,image/webp'
+        : 'image/*'
+      : '',
     isCurrentModelVideoReferenceEnabled ? 'video/*' : '',
     isCurrentModelAudioReferenceEnabled ? 'audio/*' : '',
   ].filter(Boolean).join(',') || 'image/*';
@@ -4132,7 +4177,9 @@ export default function App() {
           snapshot.autoImageSize = sourceParams.autoImageSize;
         }
         if (supportsAdobeImageOutputResolution(modelName)) {
-          snapshot.outputResolution = sourceParams.outputResolution || '2K';
+          snapshot.outputResolution =
+            sourceParams.outputResolution ||
+            getAdobeImageDefaultOutputResolution(modelName);
         }
       }
     }
@@ -4329,12 +4376,15 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           next.autoImageSize = '1024x1024';
         }
         if (supportsAdobeImageOutputResolution(currentModelName)) {
+          const outputResolutionOptions =
+            getAdobeImageOutputResolutionOptions(currentModelName);
           if (
-            !ADOBE_OUTPUT_RESOLUTION_OPTIONS.some(
+            !outputResolutionOptions.some(
               (option) => option.value === next.outputResolution,
             )
           ) {
-            next.outputResolution = '2K';
+            next.outputResolution =
+              getAdobeImageDefaultOutputResolution(currentModelName);
           }
         }
       }
@@ -5816,22 +5866,45 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       return;
     }
 
-    const rawImageFiles = files.filter((file) => file.type.startsWith('image/'));
+    const supportedFa2ImageTypes = new Set([
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+    ]);
+    const rawImageFiles = files.filter((file) =>
+      isCurrentFa2ImageModel
+        ? supportedFa2ImageTypes.has(file.type)
+        : file.type.startsWith('image/'),
+    );
     if (rawImageFiles.length !== files.length) {
-      showWarning('请上传图片文件');
+      showWarning(
+        isCurrentFa2ImageModel
+          ? '当前模型仅支持 PNG、JPG、WEBP 图片'
+          : '请上传图片文件',
+      );
     }
     if (rawImageFiles.length === 0) {
       return;
     }
 
-    const imageFiles = rawImageFiles.filter(
-      (file) => file.size <= currentImageMaxMB * 1024 * 1024,
+    const imageFiles = rawImageFiles.filter((file) =>
+      isCurrentFa2ImageModel
+        ? file.size < currentImageMaxMB * 1024 * 1024
+        : file.size <= currentImageMaxMB * 1024 * 1024,
     );
     if (imageFiles.length !== rawImageFiles.length) {
-      showWarning(`图片大小不能超过 ${currentImageMaxMB}MB`);
+      showWarning(
+        isCurrentFa2ImageModel
+          ? `图片大小必须小于 ${currentImageMaxMB}MB`
+          : `图片大小不能超过 ${currentImageMaxMB}MB`,
+      );
     }
     if (imageFiles.length === 0) {
-      setUploadImageNotice(`上传失败，请重新上传不大于 ${currentImageMaxMB}MB 的图片`);
+      setUploadImageNotice(
+        isCurrentFa2ImageModel
+          ? `上传失败，请重新上传小于 ${currentImageMaxMB}MB 的图片`
+          : `上传失败，请重新上传不大于 ${currentImageMaxMB}MB 的图片`,
+      );
       return;
     }
 
@@ -7891,6 +7964,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                     currentUploadedImageUrls,
                   );
                 }
+              } else if (isCurrentFa2ImageModel) {
+                payload.aspect_ratio =
+                  basePayload.aspect_ratio ||
+                  currentParamsSnapshot.aspectRatio ||
+                  '1:1';
+                payload.output_resolution =
+                  basePayload.output_resolution ||
+                  currentParamsSnapshot.outputResolution ||
+                  getAdobeImageDefaultOutputResolution(currentModelName);
+                if (currentUploadedImageUrls.length > 0) {
+                  payload.image_urls = currentUploadedImageUrls;
+                }
               } else {
                 if (basePayload.size) {
                   payload.size = basePayload.size;
@@ -9672,7 +9757,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {currentImageUploadLimit ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模型最多可上传 <span className="text-blue-600 font-bold">{currentImageUploadLimit}</span> 张图片（{isFishVideo ? t('单图不大于20MB') : '建议不大于5M/张'}）
+                  当前模型最多可上传 <span className="text-blue-600 font-bold">{currentImageUploadLimit}</span> 张图片（{isCurrentFa2ImageModel ? '单图必须小于20MB，仅支持PNG/JPG/WEBP' : isFishVideo ? t('单图不大于20MB') : '建议不大于5M/张'}）
                 </div>
               ) : !isCurrentModelImageUploadEnabled && !isSeedanceVideoModel ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-400 flex items-center gap-1.5'>
@@ -9771,7 +9856,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                         options={
                           isCurrentGPTImage2Model
                             ? []
-                            : ADOBE_OUTPUT_RESOLUTION_OPTIONS
+                            : currentAdobeImageOutputResolutionOptions
                         }
                         openMenu={openMenu}
                         setOpenMenu={setOpenMenu}

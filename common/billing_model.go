@@ -31,7 +31,7 @@ func IsResolutionOnlyBillingModel(modelName string) bool {
 	if name == "" {
 		return false
 	}
-	return strings.Contains(name, "banana")
+	return IsFa2ImageModel(name) || strings.Contains(name, "banana")
 }
 
 func FilterOtherRatiosForBillingModel(modelName string, ratios map[string]float64) map[string]float64 {
