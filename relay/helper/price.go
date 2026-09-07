@@ -313,6 +313,9 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
+	if common.IsFa2ImageModel(info.OriginModelName) {
+		return requiredResolutionModelPrice(c, info, groupRatioInfo)
+	}
 
 	var groupPriceOverride bool
 	var groupPriceOverrideGroup string
@@ -466,6 +469,47 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 
 	if common.DebugEnabled {
 		println(fmt.Sprintf("model_price_helper result: %s", priceData.ToSetting()))
+	}
+	info.PriceData = priceData
+	return priceData, nil
+}
+
+func requiredResolutionModelPrice(c *gin.Context, info *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
+	resolution := ""
+	if info != nil && info.Request != nil {
+		resolution = extractResolutionKeyFromRequest(info.Request)
+	}
+	if resolution == "" && c != nil {
+		if req, err := relaycommon.GetTaskRequest(c); err == nil {
+			resolution = extractResolutionKeyFromTaskRequest(req)
+		}
+	}
+	if resolution == "" {
+		if spec, ok := common.GetFa2ImageModelSpec(info.OriginModelName); ok {
+			resolution = normalizeResolutionPriceKey(spec.DefaultResolution)
+		}
+	}
+
+	modelPrice, overrideGroup, usePrice := ResolveGroupModelPriceByResolution(info, resolution)
+	groupPriceOverride := usePrice
+	if !usePrice {
+		modelPrice, usePrice = ratio_setting.GetModelPriceByResolution(info.OriginModelName, resolution)
+	}
+	if !usePrice || modelPrice < 0 {
+		return types.PriceData{}, fmt.Errorf("%s requires ModelPriceByResolution pricing for %s", info.OriginModelName, strings.ToUpper(resolution))
+	}
+
+	quota := fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
+	freeModel := !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume &&
+		(modelPrice == 0 || (!groupPriceOverride && groupRatioInfo.GroupRatio == 0))
+	priceData := types.PriceData{
+		FreeModel:               freeModel,
+		ModelPrice:              modelPrice,
+		GroupRatioInfo:          groupRatioInfo,
+		UsePrice:                true,
+		GroupPriceOverride:      groupPriceOverride,
+		GroupPriceOverrideGroup: overrideGroup,
+		QuotaToPreConsume:       quota,
 	}
 	info.PriceData = priceData
 	return priceData, nil

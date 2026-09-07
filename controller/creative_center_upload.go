@@ -25,10 +25,42 @@ import (
 const creativeCenterImageUploadMaxBytes int64 = 10 << 20
 
 func creativeCenterUploadLimit(c *gin.Context) int64 {
-	if common.Is933VideoModel(c.Query("model")) {
+	if common.Is933VideoModel(c.Query("model")) || common.IsFa2ImageModel(c.Query("model")) {
 		return 20 << 20
 	}
 	return creativeCenterImageUploadMaxBytes
+}
+
+func validateCreativeCenterImageUpload(c *gin.Context, fileHeader *multipart.FileHeader) error {
+	if fileHeader.Size <= 0 {
+		return fmt.Errorf("图片文件不能为空")
+	}
+	limit := creativeCenterUploadLimit(c)
+	if common.IsFa2ImageModel(c.Query("model")) {
+		if fileHeader.Size >= limit {
+			return fmt.Errorf("图片大小必须小于 %dMB", limit>>20)
+		}
+		src, err := fileHeader.Open()
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+		head := make([]byte, 512)
+		headSize, err := io.ReadFull(src, head)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			return err
+		}
+		switch http.DetectContentType(head[:headSize]) {
+		case "image/jpeg", "image/png", "image/webp":
+			return nil
+		default:
+			return fmt.Errorf("当前模型仅支持 PNG、JPG、WEBP 图片")
+		}
+	}
+	if fileHeader.Size > limit {
+		return fmt.Errorf("图片大小不能超过 %dMB", limit>>20)
+	}
+	return nil
 }
 
 var creativeCenterImageExtByMime = map[string]string{
@@ -79,12 +111,8 @@ func UploadCreativeCenterImage(c *gin.Context) {
 		common.ApiErrorMsg(c, "请选择要上传的图片")
 		return
 	}
-	if fileHeader.Size <= 0 {
-		common.ApiErrorMsg(c, "图片文件不能为空")
-		return
-	}
-	if fileHeader.Size > creativeCenterUploadLimit(c) {
-		common.ApiErrorMsg(c, fmt.Sprintf("图片大小不能超过 %dMB", creativeCenterUploadLimit(c)>>20))
+	if err = validateCreativeCenterImageUpload(c, fileHeader); err != nil {
+		common.ApiErrorMsg(c, err.Error())
 		return
 	}
 
@@ -369,11 +397,8 @@ func uploadCreativeCenterImageToExternalBed(c *gin.Context) (gin.H, error) {
 	if err != nil {
 		return nil, fmt.Errorf("请选择要上传的图片")
 	}
-	if fileHeader.Size <= 0 {
-		return nil, fmt.Errorf("图片文件不能为空")
-	}
-	if fileHeader.Size > creativeCenterUploadLimit(c) {
-		return nil, fmt.Errorf("图片大小不能超过 %dMB", creativeCenterUploadLimit(c)>>20)
+	if err = validateCreativeCenterImageUpload(c, fileHeader); err != nil {
+		return nil, err
 	}
 
 	src, err := fileHeader.Open()

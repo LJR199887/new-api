@@ -43,6 +43,14 @@ type Adaptor struct {
 	ResponseFormat string
 }
 
+type fa2ImageGenerationRequest struct {
+	Model            string          `json:"model"`
+	Prompt           string          `json:"prompt"`
+	AspectRatio      string          `json:"aspect_ratio"`
+	OutputResolution string          `json:"output_resolution"`
+	ImageURLs        json.RawMessage `json:"image_urls,omitempty"`
+}
+
 // parseReasoningEffortFromModelSuffix 从模型名称中解析推理级别
 // support OAI models: o1-mini/o3-mini/o4-mini/o1/o3 etc...
 // minimal effort only available in gpt-5
@@ -437,6 +445,16 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	if info.RelayMode == relayconstant.RelayModeImagesGenerations &&
+		(common.IsFa2ImageModel(info.OriginModelName) || common.IsFa2ImageModel(request.Model)) {
+		return fa2ImageGenerationRequest{
+			Model:            request.Model,
+			Prompt:           request.Prompt,
+			AspectRatio:      request.AspectRatio,
+			OutputResolution: request.OutputResolution,
+			ImageURLs:        request.ImageUrls,
+		}, nil
+	}
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesEdits:
 
@@ -830,7 +848,11 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconstant.RelayModeAudioTranscription:
 		err, usage = OpenaiSTTHandler(c, resp, info, a.ResponseFormat)
 	case relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits:
-		usage, err = OpenaiHandlerWithUsage(c, info, resp)
+		if resp.StatusCode == http.StatusAccepted && isFa2ImageRelay(info) {
+			usage, err = a.handleFa2AsyncImageResponse(c, info, resp)
+		} else {
+			usage, err = OpenaiHandlerWithUsage(c, info, resp)
+		}
 	case relayconstant.RelayModeRerank:
 		usage, err = common_handler.RerankHandler(c, info, resp)
 	case relayconstant.RelayModeResponses:

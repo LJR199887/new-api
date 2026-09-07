@@ -18,6 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { VIDEO_933_MODELS, VIDEO_933_DURATIONS, is933VideoModel, video933Resolution } from '../../constants/video933';
+import {
+  FA2_IMAGE_MODELS,
+  getFa2ImageAspectRatioOptions,
+  getFa2ImageModelSpec,
+  getFa2ImageResolutionOptions,
+  isFa2ImageModel,
+} from '../../constants/fa2Image';
 import React, { useEffect } from 'react';
 import {
   Card,
@@ -79,9 +86,8 @@ const SettingsPanel = ({
   ]);
   const adobeImageModels = new Set([
     'nano-banana',
-    'nano-banana2',
-    'nano-banana-pro',
     'gpt-image2',
+    ...FA2_IMAGE_MODELS,
   ]);
   const chatAdobeImageModels = new Set(['nano-banana2', 'nano-banana-pro']);
   const adobeVideoModels = new Set([
@@ -430,7 +436,10 @@ const SettingsPanel = ({
     return '1080p';
   };
   const isGPTImage2Model = inputs.model === 'gpt-image2';
-  const currentAdobeAspectRatioOptions = isGPTImage2Model
+  const isCurrentFa2ImageModel = isFa2ImageModel(inputs.model);
+  const currentAdobeAspectRatioOptions = isCurrentFa2ImageModel
+    ? getFa2ImageAspectRatioOptions(inputs.model)
+    : isGPTImage2Model
     ? gptImage2SizeOptions
     : chatAdobeImageModels.has(inputs.model)
       ? chatAdobeAspectRatioOptions
@@ -438,6 +447,11 @@ const SettingsPanel = ({
   const currentAdobeSupportsAutoImageSize = currentAdobeAspectRatioOptions.some(
     (option) => option.value === 'auto',
   );
+  const currentAdobeOutputResolutionOptions = isCurrentFa2ImageModel
+    ? getFa2ImageResolutionOptions(inputs.model)
+    : adobeOutputResolutionOptions;
+  const currentAdobeDefaultOutputResolution =
+    getFa2ImageModelSpec(inputs.model)?.defaultResolution || '2K';
   const isImageUploadAllowed = !restrictedImageUploadModels.has(inputs.model);
 
   useEffect(() => {
@@ -700,8 +714,14 @@ const SettingsPanel = ({
                   </Typography.Text>
                   <Select
                     className='!rounded-lg mt-2'
-                    optionList={adobeOutputResolutionOptions}
-                    value={inputs.outputResolution || '2K'}
+                    optionList={currentAdobeOutputResolutionOptions}
+                    value={
+                      currentAdobeOutputResolutionOptions.some(
+                        (option) => option.value === inputs.outputResolution,
+                      )
+                        ? inputs.outputResolution
+                        : currentAdobeDefaultOutputResolution
+                    }
                     onChange={(value) => onInputChange('outputResolution', value)}
                     disabled={customRequestMode}
                   />
