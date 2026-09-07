@@ -101,4 +101,21 @@ describe('933 video capabilities', () => {
     expect(source).toContain("return { maxCount: 3, minDuration: 1, maxDuration: 15, maxTotalDuration: 15 }");
     expect(source).toContain("return { maxCount: 3, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 }");
   });
+  test('creative center omits probed media duration from outgoing payloads', () => {
+    const source = readFileSync(
+      new URL('../src/pages/CreativeCenter/index.jsx', import.meta.url),
+      'utf8',
+    );
+    expect(source).toContain('payload.video_urls = currentReferenceVideoUrls');
+    expect(source).toContain('payload.audio_urls = currentReferenceAudioUrls');
+    expect(source).toContain(
+      'payload.video_reference = seedanceVideoItems.map(({ url }) => ({ url }))',
+    );
+    expect(source).toContain(
+      'payload.audio_reference = seedanceAudioItems.map(({ url }) => ({ url }))',
+    );
+    expect(source).not.toMatch(
+      /payload\.(?:video_reference|audio_reference)\s*=.*map\(\(\{ url, duration \}\)/,
+    );
+  });
 });
