@@ -303,6 +303,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 8. 构建请求体
 	requestBody, err := adaptor.BuildRequestBody(c, info)
 	if err != nil {
+		if common.Is933VideoModel(info.UpstreamModelName) {
+			return nil, service.TaskErrorWrapperLocal(err, "invalid_video_reference", http.StatusBadRequest)
+		}
 		return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
 	}
 
@@ -423,7 +426,7 @@ func calcTaskQuotaWithRatios(c *gin.Context, info *relaycommon.RelayInfo, ratios
 		}
 	}
 
-	if c != nil {
+	if c != nil && !common.Is933VideoModel(info.OriginModelName) {
 		if req, err := relaycommon.GetTaskRequest(c); err == nil {
 			if resolution := extractTaskResolution(req); resolution != "" {
 				if resolutionPrice, overrideGroup, found := helper.ResolveGroupModelPriceByResolution(info, resolution); found {
@@ -444,7 +447,7 @@ func calcTaskQuotaWithRatios(c *gin.Context, info *relaycommon.RelayInfo, ratios
 	}
 
 	result := float64(baseQuota)
-	if !common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
+	if common.Is933VideoModel(info.OriginModelName) || !common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
 		for _, ra := range normalizedRatios {
 			if ra != 1.0 {
 				result *= ra

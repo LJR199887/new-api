@@ -1,6 +1,11 @@
 package sora
 
 var ModelList = []string{
+	"933-video2.0",
+	"933-video2.0-480p",
+	"933-video2.0-mini",
+	"933-video2.0-mini-480p",
+
 	"sora-2",
 	"sora-2-pro",
 	"veo31",

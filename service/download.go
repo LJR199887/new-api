@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,10 @@ type WorkerRequest struct {
 
 // DoWorkerRequest 通过Worker发送请求
 func DoWorkerRequest(req *WorkerRequest) (*http.Response, error) {
+	return doWorkerRequestContext(context.Background(), req)
+}
+
+func doWorkerRequestContext(ctx context.Context, req *WorkerRequest) (*http.Response, error) {
 	if !system_setting.EnableWorker() {
 		return nil, fmt.Errorf("worker not enabled")
 	}
@@ -41,22 +46,32 @@ func DoWorkerRequest(req *WorkerRequest) (*http.Response, error) {
 	}
 
 	// 序列化worker请求数据
-	workerPayload, err := json.Marshal(req)
+	workerPayload, err := common.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal worker payload: %v", err)
 	}
 
-	return GetHttpClient().Post(workerUrl, "application/json", bytes.NewBuffer(workerPayload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, workerUrl, bytes.NewReader(workerPayload))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	return GetHttpClient().Do(httpReq)
 }
 
 func DoDownloadRequest(originUrl string, reason ...string) (resp *http.Response, err error) {
+	return DoDownloadRequestContext(context.Background(), originUrl, reason...)
+}
+
+// DoDownloadRequestContext preserves Worker and SSRF settings while allowing cancellation.
+func DoDownloadRequestContext(ctx context.Context, originUrl string, reason ...string) (resp *http.Response, err error) {
 	if system_setting.EnableWorker() {
 		common.SysLog(fmt.Sprintf("downloading file from worker: %s, reason: %s", originUrl, strings.Join(reason, ", ")))
 		req := &WorkerRequest{
 			URL: originUrl,
 			Key: system_setting.WorkerValidKey,
 		}
-		return DoWorkerRequest(req)
+		return doWorkerRequestContext(ctx, req)
 	} else {
 		// SSRF防护：验证请求URL（非Worker模式）
 		fetchSetting := system_setting.GetFetchSetting()
@@ -65,6 +80,10 @@ func DoDownloadRequest(originUrl string, reason ...string) (resp *http.Response,
 		}
 
 		common.SysLog(fmt.Sprintf("downloading from origin: %s, reason: %s", common.MaskSensitiveInfo(originUrl), strings.Join(reason, ", ")))
-		return GetHttpClient().Get(originUrl)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, originUrl, nil)
+		if err != nil {
+			return nil, err
+		}
+		return GetHttpClient().Do(req)
 	}
 }

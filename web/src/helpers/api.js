@@ -24,6 +24,12 @@ import {
   isValidMessage,
 } from './utils';
 import axios from 'axios';
+import { is933VideoModel, build933VideoParameters } from '../constants/video933';
+import {
+  FA2_IMAGE_MODELS,
+  getFa2ImageModelSpec,
+  isFa2ImageModel,
+} from '../constants/fa2Image';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
 
 export let API = axios.create({
@@ -141,7 +147,6 @@ function tryResolveStaleGetResponse(error) {
   };
 }
 
-
 function redirectToOAuthUrl(url, options = {}) {
   const { openInNewTab = false } = options;
   const targetUrl = typeof url === 'string' ? url : url.toString();
@@ -153,7 +158,6 @@ function redirectToOAuthUrl(url, options = {}) {
 
   window.location.assign(targetUrl);
 }
-
 
 function patchAPIInstance(instance) {
   const originalGet = instance.get.bind(instance);
@@ -291,11 +295,15 @@ export const buildApiPayload = (
   ]);
   const adobeImageModels = new Set([
     'nano-banana',
-    'nano-banana2',
-    'nano-banana-pro',
     'gpt-image2',
+    ...FA2_IMAGE_MODELS,
   ]);
   const adobeVideoModels = new Set([
+    '933-video2.0',
+    '933-video2.0-480p',
+    '933-video2.0-mini',
+    '933-video2.0-mini-480p',
+
     'minimax-h3',
     'minimax-h3-480p',
     'minimax-h3-768p',
@@ -372,6 +380,7 @@ export const buildApiPayload = (
   const isGrokImagineImageEditModel = grokImagineImageEditModels.has(inputs.model);
   const isGrokImagineVideoModel = grokImagineVideoModels.has(inputs.model);
   const isAdobeImageModel = adobeImageModels.has(inputs.model);
+  const isFa2Image = isFa2ImageModel(inputs.model);
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
   const isSeedanceVideoModel =
@@ -427,13 +436,14 @@ export const buildApiPayload = (
       if (inputs.outputResolution) {
         payload.output_resolution = inputs.outputResolution;
       } else {
-        payload.output_resolution = '2K';
+        payload.output_resolution =
+          getFa2ImageModelSpec(inputs.model)?.defaultResolution || '2K';
       }
     }
-    if (Number.isFinite(normalizedSeed)) {
+    if (!isFa2Image && Number.isFinite(normalizedSeed)) {
       payload.seeds = [Math.trunc(normalizedSeed)];
     }
-    if (!isGPTImage2Model) {
+    if (!isGPTImage2Model && !isFa2Image) {
       payload.extra_body = {
         ...(payload.extra_body || {}),
         google: {
@@ -533,6 +543,12 @@ export const buildApiPayload = (
     }
   }
 
+  if (is933VideoModel(inputs.model)) {
+    Object.assign(payload, build933VideoParameters(inputs));
+    delete payload.seconds;
+    delete payload.metadata;
+    delete payload.size;
+  }
   return payload;
 };
 

@@ -1,9 +1,11 @@
 package helper
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -190,6 +192,9 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 			if err := validateGPTImage2Request(c, imageRequest); err != nil {
 				return nil, err
 			}
+			if err := validateFa2ImageRequest(imageRequest); err != nil {
+				return nil, err
+			}
 			break
 		}
 		fallthrough
@@ -234,6 +239,9 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 		if err := validateGPTImage2Request(c, imageRequest); err != nil {
 			return nil, err
 		}
+		if err := validateFa2ImageRequest(imageRequest); err != nil {
+			return nil, err
+		}
 
 		//if imageRequest.Prompt == "" {
 		//	return nil, errors.New("prompt is required")
@@ -243,8 +251,109 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 			imageRequest.N = common.GetPointer(uint(1))
 		}
 	}
+	if relayMode == relayconstant.RelayModeImagesEdits && common.IsFa2ImageModel(imageRequest.Model) {
+		return nil, fmt.Errorf("%s accepts reference image_urls through /v1/images/generations; /v1/images/edits is unsupported", imageRequest.Model)
+	}
 
 	return imageRequest, nil
+}
+
+func validateFa2ImageRequest(imageRequest *dto.ImageRequest) error {
+	if imageRequest == nil || !common.IsFa2ImageModel(imageRequest.Model) {
+		return nil
+	}
+
+	spec, _ := common.GetFa2ImageModelSpec(imageRequest.Model)
+	modelName := strings.ToLower(strings.TrimSpace(imageRequest.Model))
+	imageRequest.Model = modelName
+	if len([]rune(strings.TrimSpace(imageRequest.Prompt))) < 3 {
+		return fmt.Errorf("prompt must contain at least 3 characters for %s", modelName)
+	}
+
+	resolution := strings.ToUpper(strings.TrimSpace(imageRequest.OutputResolution))
+	if resolution == "" {
+		resolution = spec.DefaultResolution
+	}
+	if !common.Fa2ImageModelSupportsResolution(modelName, resolution) {
+		return fmt.Errorf("output_resolution must be one of %s for %s", strings.Join(spec.Resolutions, ", "), modelName)
+	}
+	imageRequest.OutputResolution = resolution
+
+	aspectRatio := strings.TrimSpace(imageRequest.AspectRatio)
+	if aspectRatio == "" && strings.Contains(imageRequest.Size, ":") {
+		aspectRatio = strings.TrimSpace(imageRequest.Size)
+	}
+	if aspectRatio == "" {
+		aspectRatio = "1:1"
+	}
+	if !common.Fa2ImageModelSupportsAspectRatio(modelName, aspectRatio) {
+		return fmt.Errorf("unsupported aspect_ratio %q for %s; allowed: %s", aspectRatio, modelName, strings.Join(spec.AspectRatios, ", "))
+	}
+	imageRequest.AspectRatio = aspectRatio
+
+	if imageRequest.N != nil && *imageRequest.N != 1 {
+		return fmt.Errorf("n must be 1 for %s", modelName)
+	}
+	if imageRequest.Seed != nil || len(imageRequest.Seeds) > 0 {
+		return fmt.Errorf("seed and seeds are unsupported for %s", modelName)
+	}
+	imageCount := countGPTImage2JSONImages(imageRequest.ImageUrls) + countGPTImage2JSONImages(imageRequest.Image)
+	if imageCount > spec.MaxImages {
+		return fmt.Errorf("%s supports at most %d reference images", modelName, spec.MaxImages)
+	}
+	imageURLs := collectGPTImage2ReferenceImageURLs(imageRequest.ImageUrls)
+	imageURLs = append(imageURLs, collectGPTImage2ReferenceImageURLs(imageRequest.Image)...)
+	if len(imageURLs) != imageCount {
+		return fmt.Errorf("reference images for %s must be URL strings or image_url objects", modelName)
+	}
+	for _, imageURL := range imageURLs {
+		if err := validateFa2ReferenceImageURL(imageURL); err != nil {
+			return fmt.Errorf("invalid reference image for %s: %w", modelName, err)
+		}
+	}
+	if len(imageURLs) > 0 {
+		normalizedURLs, err := common.Marshal(imageURLs)
+		if err != nil {
+			return err
+		}
+		imageRequest.ImageUrls = normalizedURLs
+		imageRequest.Image = nil
+	} else {
+		imageRequest.ImageUrls = nil
+		imageRequest.Image = nil
+	}
+	return nil
+}
+
+func validateFa2ReferenceImageURL(value string) error {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "data:") {
+		commaIndex := strings.IndexByte(value, ',')
+		if commaIndex < 0 {
+			return fmt.Errorf("invalid data URL")
+		}
+		header := strings.ToLower(value[:commaIndex])
+		if header != "data:image/png;base64" && header != "data:image/jpeg;base64" && header != "data:image/webp;base64" {
+			return fmt.Errorf("data URL must be a base64 PNG, JPEG, or WEBP image")
+		}
+		encoded := value[commaIndex+1:]
+		if len(encoded) > base64.StdEncoding.EncodedLen(20<<20) {
+			return fmt.Errorf("data URL image must be smaller than 20MiB")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return fmt.Errorf("invalid base64 data: %w", err)
+		}
+		if len(decoded) >= 20<<20 {
+			return fmt.Errorf("data URL image must be smaller than 20MiB")
+		}
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) || parsed.Host == "" {
+		return fmt.Errorf("image URL must use HTTP(S) or a supported data URL")
+	}
+	return nil
 }
 
 func validateGPTImage2Request(c *gin.Context, imageRequest *dto.ImageRequest) error {

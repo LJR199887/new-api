@@ -13,6 +13,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
@@ -130,7 +131,7 @@ func TestConvertImageRequestPreservesImageUrlsForGenerations(t *testing.T) {
 	converted, err := adaptor.ConvertImageRequest(nil, &relaycommon.RelayInfo{
 		RelayMode: relayconstant.RelayModeImagesGenerations,
 	}, dto.ImageRequest{
-		Model:            "nano-banana-pro",
+		Model:            "nano-banana",
 		Prompt:           "put logo on toothpaste",
 		ImageUrls:        []byte(`["https://example.com/1.png","https://example.com/2.png"]`),
 		AspectRatio:      "16:9",
@@ -154,4 +155,31 @@ func TestConvertImageRequestPreservesImageUrlsForGenerations(t *testing.T) {
 	if gjson.GetBytes(encoded, "extra_body.google.image_config.aspect_ratio").String() != "16:9" {
 		t.Fatalf("unexpected extra_body aspect ratio: %s", string(encoded))
 	}
+}
+
+func TestConvertImageRequestStripsUnsupportedFa2Fields(t *testing.T) {
+	n := uint(1)
+	adaptor := &Adaptor{}
+	converted, err := adaptor.ConvertImageRequest(nil, &relaycommon.RelayInfo{
+		RelayMode:       relayconstant.RelayModeImagesGenerations,
+		OriginModelName: "gpt-image-2",
+	}, dto.ImageRequest{
+		Model:            "gpt-image-2",
+		Prompt:           "draw a lighthouse",
+		N:                &n,
+		ResponseFormat:   "url",
+		AspectRatio:      "16:9",
+		OutputResolution: "2K",
+		ImageUrls:        []byte(`["https://example.com/reference.png"]`),
+		ExtraBody:        []byte(`{"ignored":true}`),
+	})
+	require.NoError(t, err)
+
+	encoded, err := common.Marshal(converted)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-image-2", gjson.GetBytes(encoded, "model").String())
+	require.Equal(t, "https://example.com/reference.png", gjson.GetBytes(encoded, "image_urls.0").String())
+	require.False(t, gjson.GetBytes(encoded, "n").Exists())
+	require.False(t, gjson.GetBytes(encoded, "response_format").Exists())
+	require.False(t, gjson.GetBytes(encoded, "extra_body").Exists())
 }

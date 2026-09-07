@@ -14,6 +14,10 @@ var (
 		"dall-e-2",
 		"gpt-image-1",
 		"gpt-image2",
+		"exact:gpt-image-2",
+		"exact:nano-banana-pro",
+		"exact:nano-banana2",
+		"exact:seedream-5-0",
 		"exact:grok-imagine-image",
 		"exact:grok-imagine-1.0-fast",
 		"prefix:imagen-",
@@ -24,6 +28,11 @@ var (
 		"exact:grok-imagine-image-edit",
 	}
 	OpenAIVideoModels = []string{
+		"exact:933-video2.0",
+		"exact:933-video2.0-480p",
+		"exact:933-video2.0-mini",
+		"exact:933-video2.0-mini-480p",
+
 		"exact:minimax-h3",
 		"exact:minimax-h3-480p",
 		"exact:minimax-h3-768p",

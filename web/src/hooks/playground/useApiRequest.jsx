@@ -31,6 +31,11 @@ import {
   processThinkTags,
   processIncompleteThinkTags,
 } from '../../helpers';
+import {
+  FA2_IMAGE_MODELS,
+  getFa2ImageModelSpec,
+  isFa2ImageModel,
+} from '../../constants/fa2Image';
 
 const GROK_IMAGE_GENERATION_MODELS = new Set([
   'grok-imagine-image',
@@ -43,6 +48,11 @@ const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
 ]);
 const TASK_VIDEO_MODELS = new Set([
+  '933-video2.0',
+  '933-video2.0-480p',
+  '933-video2.0-mini',
+  '933-video2.0-mini-480p',
+
   'sora2',
   'sora2-pro',
   'veo31',
@@ -88,8 +98,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
 ]);
 const ADOBE_IMAGE_MODELS = new Set([
   'nano-banana',
-  'nano-banana2',
-  'nano-banana-pro',
+  ...FA2_IMAGE_MODELS,
 ]);
 const normalizeGrokImageSize = (size) => {
   if (size === '1536x1024') {
@@ -456,6 +465,30 @@ export const useApiRequest = (
     ],
   );
 
+  const buildFa2ImageRequestPayload = useCallback(
+    (payload) => {
+      const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((message) => message?.role === 'user');
+      const prompt = getTextFromMessageContent(lastUserMessage?.content);
+      const imageUrls = getImagesFromMessageContent(lastUserMessage?.content);
+      const spec = getFa2ImageModelSpec(payload?.model);
+      return {
+        model: payload.model,
+        group: payload.group,
+        prompt,
+        n: 1,
+        response_format: 'url',
+        aspect_ratio: payload.aspect_ratio || '1:1',
+        output_resolution:
+          payload.output_resolution || spec?.defaultResolution || '2K',
+        ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
+      };
+    },
+    [getImagesFromMessageContent, getTextFromMessageContent],
+  );
+
   const extractVideoUrl = useCallback((payload) => {
     if (!payload || typeof payload !== 'object') {
       return '';
@@ -483,6 +516,13 @@ export const useApiRequest = (
 
   const resolveEndpointAndPayload = useCallback(
     (payload) => {
+      if (isFa2ImageModel(payload?.model)) {
+        return {
+          endpoint: API_ENDPOINTS.IMAGE_GENERATIONS,
+          requestPayload: buildFa2ImageRequestPayload(payload),
+          forceNonStream: true,
+        };
+      }
       if (isImageGenerationPayload(payload)) {
         const requestPayload = buildImageRequestPayload(payload);
         return {
@@ -518,6 +558,7 @@ export const useApiRequest = (
     },
     [
       buildImageRequestPayload,
+      buildFa2ImageRequestPayload,
       buildVideoRequestPayload,
       isAdobeImageModel,
       isGrokImagineImageEditModel,

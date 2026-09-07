@@ -17,6 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
+import { VIDEO_933_MODELS, VIDEO_933_DURATIONS, is933VideoModel, video933Resolution } from '../../constants/video933';
+import {
+  FA2_IMAGE_MODELS,
+  getFa2ImageAspectRatioOptions,
+  getFa2ImageModelSpec,
+  getFa2ImageResolutionOptions,
+  isFa2ImageModel,
+} from '../../constants/fa2Image';
 import React, { useEffect } from 'react';
 import {
   Card,
@@ -78,12 +86,12 @@ const SettingsPanel = ({
   ]);
   const adobeImageModels = new Set([
     'nano-banana',
-    'nano-banana2',
-    'nano-banana-pro',
     'gpt-image2',
+    ...FA2_IMAGE_MODELS,
   ]);
   const chatAdobeImageModels = new Set(['nano-banana2', 'nano-banana-pro']);
   const adobeVideoModels = new Set([
+    ...VIDEO_933_MODELS,
     'minimax-h3-480p',
     'minimax-h3-768p',
     'minimax-h3-2k',
@@ -127,6 +135,7 @@ const SettingsPanel = ({
     inputs.model === 'veo31-ref' ||
     inputs.model === 'veo31-fast';
   const isSeedanceVideoModel =
+    is933VideoModel(inputs.model) ||
     inputs.model?.startsWith('minimax-h3-') ||
     inputs.model?.startsWith('wan3.0-') ||
     inputs.model === 'seedance-2.0' ||
@@ -274,6 +283,7 @@ const SettingsPanel = ({
     (_, index) => index + 2,
   ).map((v) => ({ label: `${v}s`, value: String(v) }));
   const getAdobeVideoDurationOptions = (modelName) => {
+    if (is933VideoModel(modelName)) return VIDEO_933_DURATIONS;
     if (modelName?.startsWith('minimax-h3-')) {
       return miniMaxH3DurationOptions;
     }
@@ -309,6 +319,7 @@ const SettingsPanel = ({
     return adobeVeoDurationOptions;
   };
   const getAdobeVideoAspectRatioOptions = (modelName) => {
+    if (is933VideoModel(modelName)) return seedanceVideoAspectRatioOptions;
     if (modelName?.startsWith('minimax-h3-')) {
       return seedanceVideoAspectRatioOptions;
     }
@@ -369,6 +380,7 @@ const SettingsPanel = ({
     { label: '480p', value: '480p' },
   ];
   const getAdobeVideoResolutionOptions = (modelName) => {
+    if (is933VideoModel(modelName)) return [{ label: video933Resolution(modelName), value: video933Resolution(modelName) }];
     if (modelName?.startsWith('minimax-h3-')) {
       const resolution = modelName.slice('minimax-h3-'.length);
       return [{ label: resolution.toUpperCase(), value: resolution }];
@@ -400,6 +412,7 @@ const SettingsPanel = ({
     return adobeVideoResolutionOptions;
   };
   const getAdobeVideoDefaultResolution = (modelName) => {
+    if (is933VideoModel(modelName)) return video933Resolution(modelName);
     if (modelName?.startsWith('minimax-h3-')) {
       return modelName.slice('minimax-h3-'.length);
     }
@@ -423,7 +436,10 @@ const SettingsPanel = ({
     return '1080p';
   };
   const isGPTImage2Model = inputs.model === 'gpt-image2';
-  const currentAdobeAspectRatioOptions = isGPTImage2Model
+  const isCurrentFa2ImageModel = isFa2ImageModel(inputs.model);
+  const currentAdobeAspectRatioOptions = isCurrentFa2ImageModel
+    ? getFa2ImageAspectRatioOptions(inputs.model)
+    : isGPTImage2Model
     ? gptImage2SizeOptions
     : chatAdobeImageModels.has(inputs.model)
       ? chatAdobeAspectRatioOptions
@@ -431,6 +447,11 @@ const SettingsPanel = ({
   const currentAdobeSupportsAutoImageSize = currentAdobeAspectRatioOptions.some(
     (option) => option.value === 'auto',
   );
+  const currentAdobeOutputResolutionOptions = isCurrentFa2ImageModel
+    ? getFa2ImageResolutionOptions(inputs.model)
+    : adobeOutputResolutionOptions;
+  const currentAdobeDefaultOutputResolution =
+    getFa2ImageModelSpec(inputs.model)?.defaultResolution || '2K';
   const isImageUploadAllowed = !restrictedImageUploadModels.has(inputs.model);
 
   useEffect(() => {
@@ -693,8 +714,14 @@ const SettingsPanel = ({
                   </Typography.Text>
                   <Select
                     className='!rounded-lg mt-2'
-                    optionList={adobeOutputResolutionOptions}
-                    value={inputs.outputResolution || '2K'}
+                    optionList={currentAdobeOutputResolutionOptions}
+                    value={
+                      currentAdobeOutputResolutionOptions.some(
+                        (option) => option.value === inputs.outputResolution,
+                      )
+                        ? inputs.outputResolution
+                        : currentAdobeDefaultOutputResolution
+                    }
                     onChange={(value) => onInputChange('outputResolution', value)}
                     disabled={customRequestMode}
                   />
