@@ -274,10 +274,14 @@ type transientFailureAdaptor struct {
 	responseBody []byte
 	taskInfo     *relaycommon.TaskInfo
 	statusCode   int
+	fetchCalls   int
+	fetchedID    string
 }
 
 func (a *transientFailureAdaptor) Init(info *relaycommon.RelayInfo) {}
 func (a *transientFailureAdaptor) FetchTask(baseURL string, key string, body map[string]any, proxy string) (*http.Response, error) {
+	a.fetchCalls++
+	a.fetchedID, _ = body["task_id"].(string)
 	statusCode := a.statusCode
 	if statusCode == 0 {
 		statusCode = http.StatusOK
