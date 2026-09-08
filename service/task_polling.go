@@ -93,6 +93,15 @@ func (l *taskPollingLimiter) acquire(ctx context.Context, channelID int) (func()
 
 var pollingLimiter = newTaskPollingLimiter(taskPollingGlobalConcurrency, taskPollingPerChannelConcurrency)
 
+// Async submissions persist their public task_ ID before contacting the provider.
+// Until the upstream mapping is saved, GetUpstreamTaskID's legacy fallback is
+// not a provider ID. Wait for submission (or the timeout sweeper), never poll or
+// fail this placeholder. Explicit upstream IDs may themselves start with task_.
+func isTaskAwaitingUpstreamID(task *model.Task) bool {
+	return task != nil && strings.HasPrefix(task.TaskID, "task_") &&
+		strings.TrimSpace(task.PrivateData.UpstreamTaskID) == ""
+}
+
 func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	if task == nil {
 		return errors.New("task is nil")
@@ -101,6 +110,9 @@ func RefreshVideoTask(ctx context.Context, task *model.Task) error {
 	// be exposed as FAILURE and then reopened later, because the failure path
 	// may already have refunded the pre-consumed quota.
 	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return nil
+	}
+	if isTaskAwaitingUpstreamID(task) {
 		return nil
 	}
 	if task.ChannelId <= 0 {
@@ -324,6 +336,9 @@ func TaskPollingLoop() {
 				taskM := make(map[string]*model.Task)
 				nullTaskIds := make([]int64, 0)
 				for _, task := range tasks {
+					if isTaskAwaitingUpstreamID(task) {
+						continue
+					}
 					upstreamID := task.GetUpstreamTaskID()
 					if upstreamID == "" {
 						// 统计失败的未完成任务
@@ -606,6 +621,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if task == nil {
 		logger.LogError(ctx, fmt.Sprintf("Task %s not found in taskM", taskId))
 		return fmt.Errorf("task %s not found", taskId)
+	}
+	if isTaskAwaitingUpstreamID(task) || task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure {
+		return nil
 	}
 	release, err := pollingLimiter.acquire(ctx, ch.Id)
 	if err != nil {
