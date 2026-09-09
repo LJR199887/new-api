@@ -2161,12 +2161,8 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				if err := normalize933VideoRequest(bodyMap, upstreamModelName); err != nil {
 					return nil, err
 				}
-				if err := check933RemoteImages(c.Request.Context(), bodyMap); err != nil {
-					return nil, err
-				}
-				if err := check933MediaDurations(c.Request.Context(), bodyMap); err != nil {
-					return nil, err
-				}
+				// Forward reference URLs without downloading them locally. The
+				// upstream is responsible for validating remote media bytes/duration.
 			}
 			if isSeedanceVideoModel(upstreamModelName) {
 				if err := normalizeSeedanceVideoRequest(bodyMap, upstreamModelName); err != nil {
