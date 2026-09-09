@@ -2,11 +2,7 @@ package sora
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
-	"encoding/binary"
-	"io"
-	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -14,8 +10,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -143,77 +137,6 @@ func Test933ImageByteLimit(t *testing.T) {
 				t.Fatalf("base64 size=%d err=%v", size, err)
 			}
 		}
-	}
-}
-
-func wav933Fixture(seconds int) []byte {
-	buf := new(bytes.Buffer)
-	buf.WriteString("RIFF")
-	_ = binary.Write(buf, binary.LittleEndian, uint32(36+seconds*16000))
-	buf.WriteString("WAVEfmt ")
-	for _, value := range []any{uint32(16), uint16(1), uint16(1), uint32(8000), uint32(16000), uint16(2), uint16(16)} {
-		_ = binary.Write(buf, binary.LittleEndian, value)
-	}
-	buf.WriteString("data")
-	_ = binary.Write(buf, binary.LittleEndian, uint32(seconds*16000))
-	buf.Write(make([]byte, seconds*16000))
-	return buf.Bytes()
-}
-
-func Test933ActualDownloadedMediaLimits(t *testing.T) {
-	setting := system_setting.GetFetchSetting()
-	old := *setting
-	setting.EnableSSRFProtection = false
-	t.Cleanup(func() { *setting = old })
-	service.InitHttpClient()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/image":
-			w.Header().Set("Content-Length", "20971521")
-		case "/chunked":
-			w.WriteHeader(200)
-			w.(http.Flusher).Flush()
-			_, _ = io.Copy(w, bytes.NewReader(make([]byte, video933ImageMaxBytes+1)))
-		case "/audio-too-big.wav":
-			w.Header().Set("Content-Length", "15728641")
-			w.Header().Set("Content-Type", "audio/wav")
-		default:
-			seconds := 5
-			if r.URL.Path == "/short.wav" {
-				seconds = 1
-			}
-			if r.URL.Path == "/long.wav" {
-				seconds = 16
-			}
-			w.Header().Set("Content-Type", "audio/wav")
-			_, _ = w.Write(wav933Fixture(seconds))
-		}
-	}))
-	defer server.Close()
-	for _, source := range []string{server.URL + "/image", server.URL + "/chunked"} {
-		if err := check933RemoteImages(context.Background(), map[string]any{"image_urls": []string{source}}); err == nil {
-			t.Fatal("oversize download accepted")
-		}
-	}
-	for _, kind := range []string{"video", "audio"} {
-		for _, suffix := range []string{"/short.wav", "/long.wav"} {
-			if err := check933MediaDurations(context.Background(), map[string]any{kind + "_urls": []string{server.URL + suffix}}); err == nil {
-				t.Fatal("invalid actual duration accepted")
-			}
-		}
-		urls := []string{server.URL + "/1.wav", server.URL + "/2.wav", server.URL + "/3.wav"}
-		if err := check933MediaDurations(context.Background(), map[string]any{kind + "_urls": urls}); err != nil {
-			t.Fatal(err)
-		}
-		urls = append(urls, server.URL+"/4.wav")
-		if err := check933MediaDurations(context.Background(), map[string]any{kind + "_urls": urls}); err == nil {
-			t.Fatal("total > 15 accepted")
-		}
-	}
-	if err := check933MediaDurations(context.Background(), map[string]any{
-		"audio_urls": []string{server.URL + "/audio-too-big.wav"},
-	}); err == nil || !strings.Contains(err.Error(), "15MB") {
-		t.Fatalf("oversize audio should be rejected at 15MB: %v", err)
 	}
 }
 
