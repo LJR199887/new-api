@@ -49,6 +49,7 @@ type fa2ImageGenerationRequest struct {
 	AspectRatio      string          `json:"aspect_ratio"`
 	OutputResolution string          `json:"output_resolution"`
 	ImageURLs        json.RawMessage `json:"image_urls,omitempty"`
+	Quality          *string         `json:"quality,omitempty"`
 }
 
 // parseReasoningEffortFromModelSuffix 从模型名称中解析推理级别
@@ -447,12 +448,21 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
 	if info.RelayMode == relayconstant.RelayModeImagesGenerations &&
 		(common.IsFa2ImageModel(info.OriginModelName) || common.IsFa2ImageModel(request.Model)) {
+		spec, ok := common.GetFa2ImageModelSpec(info.OriginModelName)
+		if !ok {
+			spec, _ = common.GetFa2ImageModelSpec(request.Model)
+		}
+		var quality *string
+		if spec.SupportsQuality && request.Quality != "" {
+			quality = common.GetPointer(request.Quality)
+		}
 		return fa2ImageGenerationRequest{
 			Model:            request.Model,
 			Prompt:           request.Prompt,
 			AspectRatio:      request.AspectRatio,
 			OutputResolution: request.OutputResolution,
 			ImageURLs:        request.ImageUrls,
+			Quality:          quality,
 		}, nil
 	}
 	switch info.RelayMode {

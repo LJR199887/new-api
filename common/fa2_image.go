@@ -9,17 +9,23 @@ type Fa2ImageModelSpec struct {
 	Resolutions       []string
 	AspectRatios      []string
 	MaxImages         int
+	SupportsQuality   bool
 }
 
 func GetFa2ImageModelSpec(modelName string) (Fa2ImageModelSpec, bool) {
 	commonRatios := []string{"21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16"}
 	switch normalizeBillingModelName(modelName) {
-	case "gpt-image-2":
+	case "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst":
+		maxImages := 16
+		if normalizeBillingModelName(modelName) == "gpt-image-2" {
+			maxImages = 17
+		}
 		return Fa2ImageModelSpec{
 			DefaultResolution: "2K",
 			Resolutions:       []string{"1K", "2K", "4K"},
 			AspectRatios:      []string{"3:1", "21:9", "2:1", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16", "1:2", "1:3"},
-			MaxImages:         17,
+			MaxImages:         maxImages,
+			SupportsQuality:   true,
 		}, true
 	case "nano-banana-pro":
 		return Fa2ImageModelSpec{DefaultResolution: "1K", Resolutions: []string{"1K", "2K", "4K"}, AspectRatios: commonRatios, MaxImages: 10}, true

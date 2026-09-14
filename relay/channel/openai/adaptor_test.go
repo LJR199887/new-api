@@ -183,3 +183,24 @@ func TestConvertImageRequestStripsUnsupportedFa2Fields(t *testing.T) {
 	require.False(t, gjson.GetBytes(encoded, "response_format").Exists())
 	require.False(t, gjson.GetBytes(encoded, "extra_body").Exists())
 }
+
+func TestConvertGPTImage25Request(t *testing.T) {
+	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		for _, quality := range []string{"", "low", "medium", "high"} {
+			t.Run(name+"/"+quality, func(t *testing.T) {
+				require.Contains(t, ModelList, name)
+				request := dto.ImageRequest{Model: name, Prompt: "draw it", Quality: quality, AspectRatio: "1:3", OutputResolution: "4K", ImageUrls: []byte(`["https://example.com/reference.png"]`)}
+				converted, err := (&Adaptor{}).ConvertImageRequest(nil, &relaycommon.RelayInfo{OriginModelName: name, RelayMode: relayconstant.RelayModeImagesGenerations}, request)
+				require.NoError(t, err)
+				encoded, err := common.Marshal(converted)
+				require.NoError(t, err)
+				require.Equal(t, name, gjson.GetBytes(encoded, "model").String())
+				require.Equal(t, "4K", gjson.GetBytes(encoded, "output_resolution").String())
+				require.Equal(t, "1:3", gjson.GetBytes(encoded, "aspect_ratio").String())
+				require.Equal(t, "https://example.com/reference.png", gjson.GetBytes(encoded, "image_urls.0").String())
+				require.Equal(t, quality != "", gjson.GetBytes(encoded, "quality").Exists())
+				require.Equal(t, quality, gjson.GetBytes(encoded, "quality").String())
+			})
+		}
+	}
+}

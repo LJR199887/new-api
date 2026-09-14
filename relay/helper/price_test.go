@@ -202,6 +202,8 @@ func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
 	common.QuotaPerUnit = 500
 	require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(`{
 		"gpt-image-2":{"1K":0.1,"2K":0.2,"4K":0.4},
+		"gpt-image-2.5-flare":{"1K":0.11,"2K":0.22,"4K":0.44},
+		"gpt-image-2.5-sunburst":{"1K":0.12,"2K":0.24,"4K":0.48},
 		"nano-banana-pro":{"1K":0.05},
 		"nano-banana2":{"1K":0.06},
 		"seedream-5-0":{"2K":0.3,"3K":0.45}
@@ -213,6 +215,12 @@ func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
 		price      float64
 	}{
 		{"gpt-image-2", "4K", 0.4},
+		{"gpt-image-2.5-flare", "1K", 0.11},
+		{"gpt-image-2.5-flare", "2K", 0.22},
+		{"gpt-image-2.5-flare", "4K", 0.44},
+		{"gpt-image-2.5-sunburst", "1K", 0.12},
+		{"gpt-image-2.5-sunburst", "2K", 0.24},
+		{"gpt-image-2.5-sunburst", "4K", 0.48},
 		{"nano-banana-pro", "1K", 0.05},
 		{"nano-banana2", "1K", 0.06},
 		{"seedream-5-0", "3K", 0.45},
@@ -245,4 +253,15 @@ func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
 	}
 	_, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
 	require.ErrorContains(t, err, "requires ModelPriceByResolution pricing for 4K")
+	// New models must not silently fall back to another model or a lower tier.
+	require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(`{
+		"gpt-image-2":{"4K":0.4},
+		"gpt-image-2.5-flare":{"1K":0.1},
+		"gpt-image-2.5-sunburst":{"1K":0.1}
+	}`))
+	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default", Request: &dto.ImageRequest{Model: name, OutputResolution: "4K"}}
+		_, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
+		require.ErrorContains(t, err, "requires ModelPriceByResolution pricing for 4K")
+	}
 }
