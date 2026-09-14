@@ -17,28 +17,32 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
+const GPT_IMAGE_SPEC = Object.freeze({
+  resolutions: Object.freeze(['1K', '2K', '4K']),
+  defaultResolution: '2K',
+  aspectRatios: Object.freeze([
+    '3:1',
+    '21:9',
+    '2:1',
+    '16:9',
+    '3:2',
+    '4:3',
+    '5:4',
+    '1:1',
+    '4:5',
+    '3:4',
+    '2:3',
+    '9:16',
+    '1:2',
+    '1:3',
+  ]),
+  maxImages: 17,
+});
+
 export const FA2_IMAGE_MODEL_SPECS = Object.freeze({
-  'gpt-image-2': Object.freeze({
-    resolutions: Object.freeze(['1K', '2K', '4K']),
-    defaultResolution: '2K',
-    aspectRatios: Object.freeze([
-      '3:1',
-      '21:9',
-      '2:1',
-      '16:9',
-      '3:2',
-      '4:3',
-      '5:4',
-      '1:1',
-      '4:5',
-      '3:4',
-      '2:3',
-      '9:16',
-      '1:2',
-      '1:3',
-    ]),
-    maxImages: 17,
-  }),
+  'gpt-image-2': GPT_IMAGE_SPEC,
+  'gpt-image-2.5-flare': Object.freeze({ ...GPT_IMAGE_SPEC, maxImages: 16 }),
+  'gpt-image-2.5-sunburst': Object.freeze({ ...GPT_IMAGE_SPEC, maxImages: 16 }),
   'nano-banana-pro': Object.freeze({
     resolutions: Object.freeze(['1K', '2K', '4K']),
     defaultResolution: '1K',

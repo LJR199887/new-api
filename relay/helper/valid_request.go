@@ -278,6 +278,15 @@ func validateFa2ImageRequest(imageRequest *dto.ImageRequest) error {
 		return fmt.Errorf("output_resolution must be one of %s for %s", strings.Join(spec.Resolutions, ", "), modelName)
 	}
 	imageRequest.OutputResolution = resolution
+	if spec.SupportsQuality && imageRequest.Quality != "" {
+		quality := strings.ToLower(strings.TrimSpace(imageRequest.Quality))
+		switch quality {
+		case "low", "medium", "high":
+			imageRequest.Quality = quality
+		default:
+			return fmt.Errorf("quality must be low, medium, or high for %s", modelName)
+		}
+	}
 
 	aspectRatio := strings.TrimSpace(imageRequest.AspectRatio)
 	if aspectRatio == "" && strings.Contains(imageRequest.Size, ":") {

@@ -23,6 +23,8 @@ func TestGetAndValidOpenAIImageRequestAppliesFa2Defaults(t *testing.T) {
 		resolution string
 	}{
 		{"gpt-image-2", "2K"},
+		{"gpt-image-2.5-flare", "2K"},
+		{"gpt-image-2.5-sunburst", "2K"},
 		{"nano-banana-pro", "1K"},
 		{"nano-banana2", "1K"},
 		{"seedream-5-0", "2K"},
@@ -57,6 +59,10 @@ func TestGetAndValidOpenAIImageRequestRejectsInvalidFa2Parameters(t *testing.T) 
 		{"seed", `{"model":"gpt-image-2","prompt":"draw it","seed":0}`, "unsupported"},
 		{"reference scheme", `{"model":"gpt-image-2","prompt":"draw it","image_urls":["file:///tmp/a.png"]}`, "HTTP(S)"},
 		{"reference data type", `{"model":"gpt-image-2","prompt":"draw it","image_urls":["data:image/gif;base64,R0lGODlh"]}`, "PNG, JPEG, or WEBP"},
+		{"flare unsupported resolution", `{"model":"gpt-image-2.5-flare","prompt":"draw it","output_resolution":"3K"}`, "output_resolution"},
+		{"sunburst unsupported resolution", `{"model":"gpt-image-2.5-sunburst","prompt":"draw it","output_resolution":"3K"}`, "output_resolution"},
+		{"flare unsupported quality", `{"model":"gpt-image-2.5-flare","prompt":"draw it","quality":"ultra"}`, "quality must be"},
+		{"sunburst unsupported quality", `{"model":"gpt-image-2.5-sunburst","prompt":"draw it","quality":"ultra"}`, "quality must be"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -86,6 +92,37 @@ func TestGetAndValidOpenAIImageRequestEnforcesFa2ReferenceLimit(t *testing.T) {
 	_, err = GetAndValidOpenAIImageRequest(ctx, relayconstant.RelayModeImagesGenerations)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "at most 10")
+}
+
+func TestGPTImage25ReferencesAndResolutions(t *testing.T) {
+	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		for _, resolution := range []string{"1K", "2K", "4K"} {
+			for _, count := range []int{0, 1, 16, 17} {
+				t.Run(fmt.Sprintf("%s/%s/%d", name, resolution, count), func(t *testing.T) {
+					urls := make([]string, count)
+					for i := range urls {
+						urls[i] = fmt.Sprintf("https://example.com/%d.png", i)
+					}
+					raw, err := common.Marshal(map[string]any{"model": name, "prompt": "draw it", "image_urls": urls, "output_resolution": resolution, "aspect_ratio": "3:1", "quality": "high"})
+					require.NoError(t, err)
+					ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+					ctx.Request = httptest.NewRequest("POST", "/v1/images/generations", bytes.NewReader(raw))
+					ctx.Request.Header.Set("Content-Type", "application/json")
+					t.Cleanup(func() { common.CleanupBodyStorage(ctx) })
+					req, err := GetAndValidOpenAIImageRequest(ctx, relayconstant.RelayModeImagesGenerations)
+					if count > 16 {
+						require.ErrorContains(t, err, "at most 16")
+						return
+					}
+					require.NoError(t, err)
+					require.Equal(t, resolution, req.OutputResolution)
+					require.Equal(t, "3:1", req.AspectRatio)
+					require.Equal(t, "high", req.Quality)
+					require.Equal(t, count, countGPTImage2JSONImages(req.ImageUrls))
+				})
+			}
+		}
+	}
 }
 
 func TestGetAndValidOpenAIImageRequestRejectsFa2EditsEndpoint(t *testing.T) {

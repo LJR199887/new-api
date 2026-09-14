@@ -172,6 +172,8 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'grok-imagine-video': 7,
   'nano-banana': 4,
   'gpt-image-2': 17,
+  'gpt-image-2.5-flare': 16,
+  'gpt-image-2.5-sunburst': 16,
   'nano-banana2': 14,
   'nano-banana-pro': 10,
   'seedream-5-0': 14,
