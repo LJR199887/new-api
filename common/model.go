@@ -15,6 +15,8 @@ var (
 		"gpt-image-1",
 		"gpt-image2",
 		"exact:gpt-image-2",
+		"exact:gpt-image-2.5-flare",
+		"exact:gpt-image-2.5-sunburst",
 		"exact:nano-banana-pro",
 		"exact:nano-banana2",
 		"exact:seedream-5-0",
