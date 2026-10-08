@@ -1483,6 +1483,9 @@ const getCreativeCenterAudioReferencePolicy = (modelName, referenceMode = '') =>
   if (referenceMode !== 'multimodal') {
     return null;
   }
+  if (VIDEO_25_MODELS.has(modelName)) {
+    return { maxCount: 10 };
+  }
   if (is933VideoModel(modelName)) {
     return { maxCount: 3, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 };
   }
@@ -1498,6 +1501,9 @@ const getCreativeCenterAudioReferencePolicy = (modelName, referenceMode = '') =>
 const getCreativeCenterVideoReferencePolicy = (modelName, referenceMode = '') => {
   const maxCount = getCreativeCenterVideoReferenceLimit(modelName, referenceMode);
   if (typeof maxCount !== 'number') return null;
+  if (VIDEO_25_MODELS.has(modelName)) {
+    return { maxCount };
+  }
   if (is933VideoModel(modelName)) {
     return { maxCount, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 };
   }
@@ -1512,6 +1518,7 @@ const validateCreativeCenterMediaReferences = (items, policy, kind) => {
   if (items.length > policy.maxCount) {
     throw new Error(`最多 ${policy.maxCount} 个${kind === 'audio' ? '音频' : '视频'}参考素材`);
   }
+  if (policy.minDuration === undefined) return;
   const totalDuration = items.reduce((total, item) => {
     const duration = Number(item?.duration);
     if (!Number.isFinite(duration) || duration < policy.minDuration || duration > policy.maxDuration) {
@@ -6050,7 +6057,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         continue;
       }
       let duration;
-      if (policy) {
+      if (policy?.minDuration !== undefined) {
         try {
           duration = await read933MediaDuration(file, kind);
           validateCreativeCenterMediaReferences(
@@ -8389,7 +8396,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 0,
                 seedanceVideoLimit,
               );
-              const seedanceAudioLimit = WAN30_MODELS.has(currentModelName) ? 5 : 3;
+              const seedanceAudioLimit = VIDEO_25_MODELS.has(currentModelName)
+                ? 10
+                : WAN30_MODELS.has(currentModelName) ? 5 : 3;
               const seedanceAudioItems = currentReferenceAudioItems.slice(0, seedanceAudioLimit);
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
@@ -9775,12 +9784,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               ) : null}
               {isCurrentModelVideoReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频，分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，单个不超过 <span className="text-blue-600 font-bold">200MB</span>，单视频时长 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy ? `${currentVideoReferencePolicy.minDuration}-${currentVideoReferencePolicy.maxDuration}` : '3-10'} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy?.maxTotalDuration || (VIDEO_25_MODELS.has(currentModelName) ? 30 : 15)} 秒</span>
+                  当前模式最多可添加 <span className="text-blue-600 font-bold">{currentVideoReferenceLimit}</span> 个视频，单个不超过 <span className="text-blue-600 font-bold">200MB</span>，{VIDEO_25_MODELS.has(currentModelName) ? '素材不符合要求时，任务查询结果会返回错误' : <>分辨率必须在 <span className="text-blue-600 font-bold">720px</span> 到 <span className="text-blue-600 font-bold">2160px</span> 之间，单视频时长 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy ? `${currentVideoReferencePolicy.minDuration}-${currentVideoReferencePolicy.maxDuration}` : '3-10'} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentVideoReferencePolicy?.maxTotalDuration || 15} 秒</span></>}
                 </div>
               ) : null}
               {isCurrentModelAudioReferenceEnabled ? (
                 <div className='mt-3 px-3 text-[11px] text-slate-500 font-medium'>
-                  多模态最多可添加 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxCount}</span> 个音频，单个不超过 <span className="text-blue-600 font-bold">15MB</span>，单音频时长 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.minDuration}-{currentAudioReferencePolicy.maxDuration} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxTotalDuration} 秒</span>
+                  多模态最多可添加 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxCount}</span> 个音频，单个不超过 <span className="text-blue-600 font-bold">15MB</span>，{VIDEO_25_MODELS.has(currentModelName) ? '素材不符合要求时，任务查询结果会返回错误' : <>单音频时长 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.minDuration}-{currentAudioReferencePolicy.maxDuration} 秒</span>，总时长不超过 <span className="text-blue-600 font-bold">{currentAudioReferencePolicy.maxTotalDuration} 秒</span></>}
                 </div>
               ) : null}
 
