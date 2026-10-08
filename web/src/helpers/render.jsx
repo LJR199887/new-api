@@ -23,6 +23,7 @@ import { copy, showSuccess } from './utils';
 import { MOBILE_BREAKPOINT } from '../hooks/common/useIsMobile';
 import { visit } from 'unist-util-visit';
 import * as LobeIcons from '@lobehub/icons';
+import { FaLinkedin, FaSlack } from 'react-icons/fa';
 import {
   OpenAI,
   Claude,
@@ -90,13 +91,11 @@ import {
   SiGitlab,
   SiGoogle,
   SiKeycloak,
-  SiLinkedin,
   SiNextcloud,
   SiNotion,
   SiOkta,
   SiOpenid,
   SiReddit,
-  SiSlack,
   SiTelegram,
   SiTwitch,
   SiWechat,
@@ -507,10 +506,10 @@ const oauthProviderIconMap = {
   google: SiGoogle,
   discord: SiDiscord,
   facebook: SiFacebook,
-  linkedin: SiLinkedin,
+  linkedin: FaLinkedin,
   x: SiX,
   twitter: SiX,
-  slack: SiSlack,
+  slack: FaSlack,
   telegram: SiTelegram,
   wechat: SiWechat,
   keycloak: SiKeycloak,

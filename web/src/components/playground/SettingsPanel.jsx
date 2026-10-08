@@ -381,6 +381,8 @@ const SettingsPanel = ({
   ];
   const getAdobeVideoResolutionOptions = (modelName) => {
     if (is933VideoModel(modelName)) return [{ label: video933Resolution(modelName), value: video933Resolution(modelName) }];
+    if (modelName === 'video-2.5') return [{ label: '720p', value: '720p' }];
+    if (modelName === 'video-2.5-480p') return [{ label: '480p', value: '480p' }];
     if (modelName?.startsWith('minimax-h3-')) {
       const resolution = modelName.slice('minimax-h3-'.length);
       return [{ label: resolution.toUpperCase(), value: resolution }];

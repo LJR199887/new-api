@@ -807,80 +807,6 @@ func seedanceReferenceDuration(entry map[string]any) (float64, bool, error) {
 	return duration, true, nil
 }
 
-func validateVideo25ReferenceDurations(kind string, refs []map[string]any, minDuration, maxDuration, maxTotal float64) error {
-	totalDuration := 0.0
-	for index, ref := range refs {
-		duration, exists, err := seedanceReferenceDuration(ref)
-		if err != nil {
-			return fmt.Errorf("%s_reference[%d].duration %w", kind, index, err)
-		}
-		if !exists {
-			continue
-		}
-		if duration < minDuration || duration > maxDuration {
-			return fmt.Errorf("%s_reference[%d].duration must be between %g and %g seconds for video-2.5", kind, index, minDuration, maxDuration)
-		}
-		totalDuration += duration
-	}
-	if totalDuration > maxTotal {
-		return fmt.Errorf("total %s reference duration must not exceed %g seconds for video-2.5", kind, maxTotal)
-	}
-	return nil
-}
-
-func validateVideo25MaterialLimits(bodyMap map[string]interface{}) error {
-	imageCount := len(collectSeedanceImageValues(bodyMap))
-	if startFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["start_frame"]); len(startFrame) > 0 {
-		imageCount += len(startFrame)
-	} else if stringifyBodyValue(bodyMap["start_image_url"]) != "" {
-		imageCount++
-	}
-	if endFrame := normalizeSeedanceReferenceFrameEntries(bodyMap["end_frame"]); len(endFrame) > 0 {
-		imageCount += len(endFrame)
-	} else if stringifyBodyValue(bodyMap["end_image_url"]) != "" {
-		imageCount++
-	}
-	if imageCount > 30 {
-		return fmt.Errorf("video-2.5 supports at most 30 image references")
-	}
-
-	videoReferences := collectSeedanceVideoReferences(bodyMap)
-	if len(videoReferences) == 0 {
-		if videoURL := stringifyBodyValue(bodyMap["video_url"]); videoURL != "" {
-			videoReferences = []map[string]any{{"url": videoURL}}
-		}
-	}
-	if len(videoReferences) > 10 {
-		return fmt.Errorf("video-2.5 supports at most 10 video references")
-	}
-	if err := validateVideo25ReferenceDurations("video", videoReferences, 3, 10, 30); err != nil {
-		return err
-	}
-
-	audioReferences := collectSeedanceAudioReferences(bodyMap)
-	if len(audioReferences) == 0 {
-		if audioURL := stringifyBodyValue(bodyMap["audio_url"]); audioURL != "" {
-			audioReferences = []map[string]any{{"url": audioURL}}
-		}
-	}
-	if len(audioReferences) > 10 {
-		return fmt.Errorf("video-2.5 supports at most 10 audio references")
-	}
-	return validateVideo25ReferenceDurations("audio", audioReferences, 3, 30, 30)
-}
-
-func validateVideo25GenerationDuration(value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	duration, err := strconv.Atoi(value)
-	if err != nil || duration < 4 || duration > 30 {
-		return fmt.Errorf("duration must be an integer between 4 and 30 for video-2.5 models")
-	}
-	return nil
-}
-
 type videoReferencePolicy struct {
 	modelName          string
 	maxImages          int
@@ -1173,9 +1099,7 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 		return nil
 	}
 	if isVideo25VideoModel(upstreamModel) {
-		if err := validateVideo25MaterialLimits(bodyMap); err != nil {
-			return err
-		}
+		return normalizeVideo25Request(bodyMap, upstreamModel)
 	}
 	if err := validateNewVideoModelRequest(bodyMap, upstreamModel); err != nil {
 		return err
@@ -1207,11 +1131,6 @@ func normalizeSeedanceVideoRequest(bodyMap map[string]interface{}, upstreamModel
 	duration := stringifyBodyValue(bodyMap["duration"])
 	if duration == "" {
 		duration = stringifyBodyValue(bodyMap["seconds"])
-	}
-	if isVideo25VideoModel(upstreamModel) {
-		if err := validateVideo25GenerationDuration(duration); err != nil {
-			return err
-		}
 	}
 
 	size := stringifyBodyValue(bodyMap["size"])
@@ -2074,8 +1993,13 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 				return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
 			}
 		}
-	} else if common.Is933VideoModel(info.OriginModelName) {
-		return service.TaskErrorWrapperLocal(fmt.Errorf("933 video requires application/json"), "invalid_request", http.StatusBadRequest)
+		if isVideo25VideoModel(info.OriginModelName) {
+			if err := normalizeVideo25Request(body, info.OriginModelName); err != nil {
+				return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+			}
+		}
+	} else if common.Is933VideoModel(info.OriginModelName) || isVideo25VideoModel(info.OriginModelName) {
+		return service.TaskErrorWrapperLocal(fmt.Errorf("%s requires application/json", info.OriginModelName), "invalid_request", http.StatusBadRequest)
 	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
@@ -2102,6 +2026,14 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if isGrokImagineVideoModel(info.UpstreamModelName) {
 		if seconds != 6 && seconds != 10 {
 			seconds = 10
+		}
+	} else if isVideo25VideoModel(info.UpstreamModelName) {
+		if seconds <= 0 {
+			if req.StartImageURL != "" || req.EndImageURL != "" || len(req.StartFrame) > 0 || len(req.EndFrame) > 0 || req.Image != "" || req.ImageURL != "" || req.InputReference != "" || len(req.ImageURLs) > 0 || len(req.Images) > 0 {
+				seconds = 4
+			} else {
+				seconds = 5
+			}
 		}
 	} else if isSeedanceVideoModel(info.UpstreamModelName) || common.Is933VideoModel(info.UpstreamModelName) {
 		if seconds <= 0 {
