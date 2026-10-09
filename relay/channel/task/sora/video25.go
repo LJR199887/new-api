@@ -83,6 +83,8 @@ func normalizeVideo25Request(body map[string]interface{}, model string) error {
 	resolution := "720p"
 	if model == "video-2.5-480p" {
 		resolution = "480p"
+	} else if model == "video-2.5-1080p" {
+		resolution = "1080p"
 	}
 	providedResolution := strings.TrimSpace(stringifyBodyValue(body["resolution"]))
 	if providedResolution == "" {

@@ -662,7 +662,14 @@ func upsertRelayTaskRecord(c *gin.Context, relayInfo *relaycommon.RelayInfo, res
 		if task.Properties.Input == "" {
 			task.Properties.Input = strings.TrimSpace(req.GetPrompt())
 		}
-		if clientRequestID := strings.TrimSpace(req.RequestId); clientRequestID != "" {
+		clientRequestID := strings.TrimSpace(req.RequestId)
+		if clientRequestID == "" {
+			clientRequestID = strings.TrimSpace(c.GetHeader("X-Creative-Center-Request-Id"))
+		}
+		if clientRequestID == "" {
+			clientRequestID = strings.TrimSpace(c.GetHeader("X-Request-Id"))
+		}
+		if clientRequestID != "" {
 			task.PrivateData.ClientRequestId = clientRequestID
 		}
 	}

@@ -59,11 +59,13 @@ import {
 import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+import { buildCreativeUpstreamPayload } from './creativeRequestPayload';
 
 import {
   VIDEO_933_MODELS,
   VIDEO_933_DURATIONS,
   is933VideoModel,
+  video933Resolution,
   read933MediaDuration,
   validate933References,
 } from '../../constants/video933';
@@ -116,7 +118,8 @@ const WAN30_MODELS = new Set([
 ]);
 const VIDEO_25_MODEL = 'video-2.5';
 const VIDEO_25_480P_MODEL = 'video-2.5-480p';
-const VIDEO_25_MODELS = new Set([VIDEO_25_MODEL, VIDEO_25_480P_MODEL]);
+const VIDEO_25_1080P_MODEL = 'video-2.5-1080p';
+const VIDEO_25_MODELS = new Set([VIDEO_25_MODEL, VIDEO_25_480P_MODEL, VIDEO_25_1080P_MODEL]);
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -137,6 +140,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'seedance-2.0-fast',
   VIDEO_25_MODEL,
   VIDEO_25_480P_MODEL,
+  VIDEO_25_1080P_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -151,6 +155,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'seedance-2.0',  'seedance-2.0-fast',
   VIDEO_25_MODEL,
   VIDEO_25_480P_MODEL,
+  VIDEO_25_1080P_MODEL,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -200,6 +205,7 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'seedance-2.0-fast': 4,
   [VIDEO_25_MODEL]: 30,
   [VIDEO_25_480P_MODEL]: 30,
+  [VIDEO_25_1080P_MODEL]: 30,
   'video-2.0': 4,
   'video-2.0-fast': 4,
   'video-2.0-mini': 4,
@@ -386,6 +392,13 @@ const SEEDANCE_480P_VIDEO_RESOLUTION_OPTIONS = [
   { label: '480p', value: '480p' },
 ];
 const getAdobeVideoResolutionOptions = (modelName) => {
+  if (is933VideoModel(modelName)) {
+    const resolution = video933Resolution(modelName);
+    return [{ label: resolution, value: resolution }];
+  }
+  if (modelName === VIDEO_25_1080P_MODEL) {
+    return [{ label: '1080p', value: '1080p' }];
+  }
   if (MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     const resolution = modelName.slice('minimax-h3-'.length);
     return [{ label: resolution.toUpperCase(), value: resolution }];
@@ -405,16 +418,20 @@ const getAdobeVideoResolutionOptions = (modelName) => {
   }
   return ADOBE_VIDEO_RESOLUTION_OPTIONS;
 };
-const getAdobeVideoDefaultResolution = (modelName) =>
-  MINIMAX_H3_VARIANT_MODELS.has(modelName)
-    ? modelName.slice('minimax-h3-'.length)
-    : WAN30_MODELS.has(modelName)
-      ? modelName.slice('wan3.0-'.length)
-      : modelName === MINIMAX_H3_MODEL
-    ? '2K'
-    : SEEDANCE_480P_VIDEO_MODELS.has(modelName)
-    ? '480p'
-    : SEEDANCE_VIDEO_MODELS.has(modelName) ? '720p' : '1080p';
+const getAdobeVideoDefaultResolution = (modelName) => {
+  if (is933VideoModel(modelName)) return video933Resolution(modelName);
+  if (modelName === VIDEO_25_1080P_MODEL) return '1080p';
+  if (MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
+    return modelName.slice('minimax-h3-'.length);
+  }
+  if (WAN30_MODELS.has(modelName)) {
+    return modelName.slice('wan3.0-'.length);
+  }
+  if (modelName === MINIMAX_H3_MODEL) return '2K';
+  if (SEEDANCE_480P_VIDEO_MODELS.has(modelName)) return '480p';
+  if (SEEDANCE_VIDEO_MODELS.has(modelName)) return '720p';
+  return '1080p';
+};
 const ADOBE_REFERENCE_MODE_OPTIONS = [
   { label: 'Frame', value: 'frame' },
   { label: 'Image', value: 'image' },
@@ -4220,9 +4237,12 @@ export default function App() {
           isCurrentAdobeVeoModel ||
           isCurrentSeedanceVideoModel
         ) {
-          snapshot.videoResolution =
-            sourceParams.videoResolution ||
-            getAdobeVideoDefaultResolution(modelName);
+          const resolutionOptions = getAdobeVideoResolutionOptions(modelName);
+          snapshot.videoResolution = resolutionOptions.some(
+            (option) => option.value === sourceParams.videoResolution,
+          )
+            ? sourceParams.videoResolution
+            : getAdobeVideoDefaultResolution(modelName);
         }
         if (isCurrentSeedanceVideoModel) {
           snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
@@ -4935,9 +4955,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   };
 
   const postCreativeRequest = async (endpoint, payload, requestHeaders = {}) => {
-    const response = await API.post(endpoint, payload, {
+    const response = await API.post(endpoint, buildCreativeUpstreamPayload(payload), {
       headers: {
         'New-API-User': getUserIdFromLocalStorage(),
+        'X-Creative-Center-Group': activeGroup,
         ...requestHeaders,
       },
     });
@@ -4961,10 +4982,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         headers: {
           'Content-Type': 'application/json',
           'New-API-User': getUserIdFromLocalStorage(),
+          'X-Creative-Center-Group': activeGroup,
         },
         method: 'POST',
         payload: JSON.stringify({
-          ...payload,
+          ...buildCreativeUpstreamPayload(payload),
           stream: true,
         }),
       });
@@ -8063,7 +8085,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               imageSubmitEndpoint,
               payload,
               {
-                'X-Request-Id': requestId,
+                'X-Creative-Center-Request-Id': requestId,
               },
             );
             const remoteTaskId = data?.task_id || data?.id || '';
@@ -8256,7 +8278,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 API_ENDPOINTS.CHAT_COMPLETIONS,
                 basePayload,
                 {
-                  'X-Request-Id': requestId,
+                  'X-Creative-Center-Request-Id': requestId,
                 },
               );
               const content = data?.choices?.[0]?.message?.content || '';
@@ -8461,7 +8483,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               });
             }
             data = await postCreativeRequest(API_ENDPOINTS.VIDEO_ASYNC_GENERATIONS, payload, {
-              'X-Request-Id': requestId,
+              'X-Creative-Center-Request-Id': requestId,
             });
             const submitPayload =
               data?.data && typeof data.data === 'object' ? data.data : data;

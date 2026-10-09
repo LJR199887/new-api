@@ -216,6 +216,8 @@ func initAsyncVideoTask(c *gin.Context, req relaycommon.TaskSubmitReq) *model.Ta
 	task.PrivateData.RequestId = strings.TrimSpace(c.GetString(common.RequestIdKey))
 	if clientRequestID := strings.TrimSpace(req.RequestId); clientRequestID != "" {
 		task.PrivateData.ClientRequestId = clientRequestID
+	} else if clientRequestID := strings.TrimSpace(c.GetHeader("X-Creative-Center-Request-Id")); clientRequestID != "" {
+		task.PrivateData.ClientRequestId = clientRequestID
 	} else if clientRequestID := strings.TrimSpace(c.GetHeader("X-Request-Id")); clientRequestID != "" {
 		task.PrivateData.ClientRequestId = clientRequestID
 	}

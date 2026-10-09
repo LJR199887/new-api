@@ -43,6 +43,16 @@ func TestShouldRealtimeFetchForRequestOnlyRefreshesPlayground(t *testing.T) {
 	}
 }
 
+func TestExtractTaskClientRequestIDFromCreativeCenterHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/pg/video/async-generations", nil)
+	c.Request.Header.Set("X-Creative-Center-Request-Id", "creative-request-123")
+	if got := extractTaskClientRequestIDFromContext(c); got != "creative-request-123" {
+		t.Fatalf("client request ID = %q", got)
+	}
+}
+
 func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 	original := ratio_setting.ModelPriceBySeconds2JSONString()
 	originalQuotaPerUnit := common.QuotaPerUnit
@@ -279,7 +289,7 @@ func Test933AllModelsGroupPricingIgnoresResolutionAndReferenceCounts(t *testing.
 		_ = ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(groupsBackup)
 		_ = ratio_setting.UpdateModelPriceByResolutionByJSONString(resolutionBackup)
 	})
-	for _, name := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
+	for _, name := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
 		data, err := common.Marshal(map[string]any{name: map[string]float64{"per_second": 0.2}})
 		require.NoError(t, err)
 		require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(string(data)))

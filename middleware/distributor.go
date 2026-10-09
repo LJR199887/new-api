@@ -81,20 +81,20 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// playground requests may override group in body
+				// Creative Center keeps its routing group out of the provider payload.
+				// Other playground clients can still specify group in the body.
 				if strings.HasPrefix(c.Request.URL.Path, "/pg/") {
-					playgroundRequest := &dto.PlayGroundRequest{}
-					err = common.UnmarshalBodyReusable(c, playgroundRequest)
-					if err != nil {
-						abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidPlayground, map[string]any{"Error": err.Error()}))
+					requestedGroup, groupErr := getPlaygroundRequestedGroup(c)
+					if groupErr != nil {
+						abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidPlayground, map[string]any{"Error": groupErr.Error()}))
 						return
 					}
-					if playgroundRequest.Group != "" {
-						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
+					if requestedGroup != "" {
+						if !service.GroupInUserUsableGroups(usingGroup, requestedGroup) && requestedGroup != usingGroup {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
-						usingGroup = playgroundRequest.Group
+						usingGroup = requestedGroup
 						common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 					}
 				}
@@ -162,6 +162,17 @@ func Distribute() func(c *gin.Context) {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
 	}
+}
+
+func getPlaygroundRequestedGroup(c *gin.Context) (string, error) {
+	if group := strings.TrimSpace(c.GetHeader("X-Creative-Center-Group")); group != "" {
+		return group, nil
+	}
+	request := &dto.PlayGroundRequest{}
+	if err := common.UnmarshalBodyReusable(c, request); err != nil {
+		return "", err
+	}
+	return request.Group, nil
 }
 
 // getModelFromRequest 从请求中读取模型信息

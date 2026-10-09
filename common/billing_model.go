@@ -17,7 +17,7 @@ func IsDurationOnlyBillingModel(modelName string) bool {
 	if Is933VideoModel(name) {
 		return true
 	}
-	if name == "video-2.5" || name == "video-2.5-480p" {
+	if name == "video-2.5" || name == "video-2.5-480p" || name == "video-2.5-1080p" {
 		return true
 	}
 	if strings.HasPrefix(name, "minimax-h3-") || strings.HasPrefix(name, "wan3.0-") {

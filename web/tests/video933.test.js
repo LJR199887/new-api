@@ -10,15 +10,15 @@ import {
 } from '../src/constants/video933';
 
 describe('933 video capabilities', () => {
-  test('exactly four models, fixed resolution, 4–15 seconds', () => {
-    expect(VIDEO_933_MODELS.size).toBe(4);
+  test('five models, fixed resolution, 4–15 seconds', () => {
+    expect(VIDEO_933_MODELS.size).toBe(5);
     expect(is933VideoModel('933-video2.0-fast')).toBe(false);
     expect(VIDEO_933_DURATIONS.map((v) => v.value)).toEqual(
       Array.from({ length: 12 }, (_, index) => String(index + 4)),
     );
     for (const name of VIDEO_933_MODELS) {
       expect(video933Resolution(name)).toBe(
-        name.endsWith('-480p') ? '480p' : '720p',
+        name.endsWith('-480p') ? '480p' : name.endsWith('-1080p') ? '1080p' : '720p',
       );
     }
   });

@@ -32,6 +32,7 @@ var (
 	OpenAIVideoModels = []string{
 		"exact:933-video2.0",
 		"exact:933-video2.0-480p",
+		"exact:933-video2.0-1080p",
 		"exact:933-video2.0-mini",
 		"exact:933-video2.0-mini-480p",
 
@@ -51,6 +52,7 @@ var (
 		"exact:seedance-2.0-fast",
 		"exact:video-2.5",
 		"exact:video-2.5-480p",
+		"exact:video-2.5-1080p",
 		"exact:video-2.0",
 		"exact:video-2.0-fast",
 		"exact:video-2.0-mini",

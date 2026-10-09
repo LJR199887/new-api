@@ -109,6 +109,7 @@ const SettingsPanel = ({
     'seedance-2.0-fast',
     'video-2.5',
     'video-2.5-480p',
+    'video-2.5-1080p',
     'video-2.0',
     'video-2.0-fast',
     'video-2.0-mini',
@@ -142,6 +143,7 @@ const SettingsPanel = ({
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.5' ||
     inputs.model === 'video-2.5-480p' ||
+    inputs.model === 'video-2.5-1080p' ||
     inputs.model === 'video-2.0' ||
     inputs.model === 'video-2.0-fast' ||
     inputs.model === 'video-2.0-mini' ||
@@ -299,7 +301,7 @@ const SettingsPanel = ({
     if (modelName === 'kling-v3') {
       return adobeKlingDurationOptions;
     }
-    if (modelName === 'video-2.5' || modelName === 'video-2.5-480p') {
+    if (modelName === 'video-2.5' || modelName === 'video-2.5-480p' || modelName === 'video-2.5-1080p') {
       return video25DurationOptions;
     }
     if (
@@ -307,6 +309,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
       modelName === 'video-2.5-480p' ||
+      modelName === 'video-2.5-1080p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -338,6 +341,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
       modelName === 'video-2.5-480p' ||
+      modelName === 'video-2.5-1080p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -357,6 +361,7 @@ const SettingsPanel = ({
     modelName === 'seedance-2.0-fast' ||
     modelName === 'video-2.5' ||
     modelName === 'video-2.5-480p' ||
+    modelName === 'video-2.5-1080p' ||
     modelName === 'video-2.0' ||
     modelName === 'video-2.0-fast' ||
     modelName === 'video-2.0-mini' ||
@@ -383,6 +388,7 @@ const SettingsPanel = ({
     if (is933VideoModel(modelName)) return [{ label: video933Resolution(modelName), value: video933Resolution(modelName) }];
     if (modelName === 'video-2.5') return [{ label: '720p', value: '720p' }];
     if (modelName === 'video-2.5-480p') return [{ label: '480p', value: '480p' }];
+    if (modelName === 'video-2.5-1080p') return [{ label: '1080p', value: '1080p' }];
     if (modelName?.startsWith('minimax-h3-')) {
       const resolution = modelName.slice('minimax-h3-'.length);
       return [{ label: resolution.toUpperCase(), value: resolution }];
@@ -407,6 +413,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0' ||
       modelName === 'video-2.5' ||
       modelName === 'video-2.5-480p' ||
+      modelName === 'video-2.5-1080p' ||
       modelName === 'video-2.0'
     ) {
       return seedanceVideoResolutionOptions;
@@ -426,6 +433,7 @@ const SettingsPanel = ({
       modelName === 'seedance-2.0-fast' ||
       modelName === 'video-2.5' ||
       modelName === 'video-2.5-480p' ||
+      modelName === 'video-2.5-1080p' ||
       modelName === 'video-2.0' ||
       modelName === 'video-2.0-fast' ||
       modelName === 'video-2.0-mini' ||
@@ -433,7 +441,7 @@ const SettingsPanel = ({
       modelName === 'video-2.0-fast-480p' ||
       modelName === 'video-2.0-mini-480p'
     ) {
-      return seedance480PVideoModels.has(modelName) ? '480p' : '720p';
+      return seedance480PVideoModels.has(modelName) ? '480p' : modelName === 'video-2.5-1080p' ? '1080p' : '720p';
     }
     return '1080p';
   };
@@ -485,7 +493,7 @@ const SettingsPanel = ({
     ? inputs.videoDuration
     : getAdobeVideoDefaultDuration(inputs.model);
   const isVideo25Model =
-    inputs.model === 'video-2.5' || inputs.model === 'video-2.5-480p';
+    inputs.model === 'video-2.5' || inputs.model === 'video-2.5-480p' || inputs.model === 'video-2.5-1080p';
   const selectedAdobeVideoAspectRatio = currentAdobeVideoAspectRatioOptions.some(
     (option) => option.value === inputs.aspectRatio,
   )

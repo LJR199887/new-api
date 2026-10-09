@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var video933Models = []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-mini", "933-video2.0-mini-480p"}
+var video933Models = []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p", "933-video2.0-mini", "933-video2.0-mini-480p"}
 
 func Test933ModelRoutingAndBilling(t *testing.T) {
 	for _, name := range video933Models {
@@ -66,6 +66,8 @@ func Test933NormalizesWithoutAdobeFieldConversion(t *testing.T) {
 			resolution := "720p"
 			if strings.HasSuffix(name, "-480p") {
 				resolution = "480p"
+			} else if strings.HasSuffix(name, "-1080p") {
+				resolution = "1080p"
 			}
 			if body["resolution"] != resolution {
 				t.Fatal("wrong resolution")
@@ -86,6 +88,9 @@ func Test933NormalizesWithoutAdobeFieldConversion(t *testing.T) {
 	}
 	if body["start_image_url"] != "https://example.com/start.png" || body["end_image_url"] != "https://example.com/end.png" {
 		t.Fatal("frame order lost")
+	}
+	if err := normalize933VideoRequest(map[string]any{"prompt": "forest motion", "resolution": "720p"}, "933-video2.0-1080p"); err == nil {
+		t.Fatal("1080p variant accepted conflicting 720p resolution")
 	}
 }
 

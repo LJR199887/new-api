@@ -21,6 +21,7 @@ func TestVideo25DocumentedModes(t *testing.T) {
 	}{
 		{"text", "video-2.5", "t2v", map[string]interface{}{}},
 		{"text-480p", "video-2.5-480p", "t2v", map[string]interface{}{"resolution": "480p"}},
+		{"text-1080p", "video-2.5-1080p", "t2v", map[string]interface{}{"resolution": "1080p"}},
 		{"frames", "video-2.5", "i2v_start_end", map[string]interface{}{"start_image_url": "https://example.com/start.png", "end_image_url": "https://example.com/end.png"}},
 		{"image", "video-2.5-480p", "i2v_ref", map[string]interface{}{"image_urls": []any{"https://example.com/image.png"}}},
 		{"video-audio", "video-2.5", "t2v_video_ref", map[string]interface{}{"video_urls": []any{"https://example.com/motion.mp4"}, "audio_urls": []any{"https://example.com/music.mp3"}}},
@@ -41,6 +42,8 @@ func TestVideo25DocumentedModes(t *testing.T) {
 			wantResolution := "720p"
 			if tt.model == "video-2.5-480p" {
 				wantResolution = "480p"
+			} else if tt.model == "video-2.5-1080p" {
+				wantResolution = "1080p"
 			}
 			if body["resolution"] != wantResolution || body["aspect_ratio"] != "9:16" {
 				t.Fatalf("unexpected resolution or ratio: %#v", body)
@@ -137,9 +140,26 @@ func TestVideo25RejectsShortPrompt(t *testing.T) {
 	}
 }
 
+func TestVideo251080PResolution(t *testing.T) {
+	for _, input := range []map[string]interface{}{
+		{"prompt": "forest motion"},
+		{"prompt": "forest motion", "resolution": "1080p"},
+	} {
+		if err := normalizeVideo25Request(input, "video-2.5-1080p"); err != nil {
+			t.Fatal(err)
+		}
+		if input["resolution"] != "1080p" || input["model"] != "video-2.5-1080p" {
+			t.Fatalf("unexpected upstream payload: %#v", input)
+		}
+	}
+	if err := normalizeVideo25Request(map[string]interface{}{"prompt": "forest motion", "resolution": "720p"}, "video-2.5-1080p"); err == nil {
+		t.Fatal("1080p variant accepted conflicting 720p resolution")
+	}
+}
+
 func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, modelName := range []string{"video-2.5", "video-2.5-480p"} {
+	for _, modelName := range []string{"video-2.5", "video-2.5-480p", "video-2.5-1080p"} {
 		t.Run(modelName, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
@@ -168,7 +188,59 @@ func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 			if body["duration"] != float64(4) {
 				t.Fatalf("image-reference default duration should be 4: %#v", body)
 			}
+			wantResolution := "720p"
+			if modelName == "video-2.5-480p" {
+				wantResolution = "480p"
+			} else if modelName == "video-2.5-1080p" {
+				wantResolution = "1080p"
+			}
+			if body["resolution"] != wantResolution {
+				t.Fatalf("resolution = %v, want %s", body["resolution"], wantResolution)
+			}
 		})
+	}
+}
+
+func TestVideo25MappedModelDropsCreativeCenterInternalFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(`{
+		"model":"video-2.5",
+		"prompt":"forest motion",
+		"duration":10,
+		"image_urls":["https://example.com/a.png"],
+		"group":"default",
+		"request_id":"creative-request-123",
+		"user":"creative-center-123",
+		"metadata":{"creative_index":1}
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "video-2.5",
+		RequestURLPath:  "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.5",
+		},
+	}
+	reader, err := (&TaskAdaptor{}).BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := common.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"group", "request_id", "user", "metadata"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("internal field %s leaked to mapped provider: %s", key, raw)
+		}
+	}
+	if body["model"] != "seedance-2.5" || body["image_urls"] == nil || body["duration"] != float64(10) {
+		t.Fatalf("unexpected mapped request: %s", raw)
 	}
 }
 
@@ -187,7 +259,7 @@ func TestVideo25BillingDefaultMatchesImageReference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Set("task_request", tt.req)
-			info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "video-2.5"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+			info := &relaycommon.RelayInfo{OriginModelName: "video-2.5", ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "seedance-2.5"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
 			if got := adaptor.EstimateBilling(c, info)["seconds"]; got != tt.want {
 				t.Fatalf("seconds = %v, want %v", got, tt.want)
 			}

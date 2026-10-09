@@ -60,6 +60,9 @@ func extractTaskClientRequestIDFromContext(c *gin.Context) string {
 			return requestID
 		}
 	}
+	if requestID := strings.TrimSpace(c.GetHeader("X-Creative-Center-Request-Id")); requestID != "" {
+		return requestID
+	}
 	return strings.TrimSpace(c.GetHeader("X-Request-Id"))
 }
 
