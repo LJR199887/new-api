@@ -172,6 +172,49 @@ func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 	}
 }
 
+func TestVideo25MappedModelDropsCreativeCenterInternalFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(`{
+		"model":"video-2.5",
+		"prompt":"forest motion",
+		"duration":10,
+		"image_urls":["https://example.com/a.png"],
+		"group":"default",
+		"request_id":"creative-request-123",
+		"user":"creative-center-123",
+		"metadata":{"creative_index":1}
+	}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "video-2.5",
+		RequestURLPath:  "/v1/video/generations",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "seedance-2.5",
+		},
+	}
+	reader, err := (&TaskAdaptor{}).BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := common.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"group", "request_id", "user", "metadata"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("internal field %s leaked to mapped provider: %s", key, raw)
+		}
+	}
+	if body["model"] != "seedance-2.5" || body["image_urls"] == nil || body["duration"] != float64(10) {
+		t.Fatalf("unexpected mapped request: %s", raw)
+	}
+}
+
 func TestVideo25BillingDefaultMatchesImageReference(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	adaptor := &TaskAdaptor{}
@@ -187,7 +230,7 @@ func TestVideo25BillingDefaultMatchesImageReference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Set("task_request", tt.req)
-			info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "video-2.5"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+			info := &relaycommon.RelayInfo{OriginModelName: "video-2.5", ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "seedance-2.5"}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
 			if got := adaptor.EstimateBilling(c, info)["seconds"]; got != tt.want {
 				t.Fatalf("seconds = %v, want %v", got, tt.want)
 			}

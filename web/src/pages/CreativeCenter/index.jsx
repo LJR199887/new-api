@@ -59,6 +59,7 @@ import {
 import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
+import { buildCreativeUpstreamPayload } from './creativeRequestPayload';
 
 import {
   VIDEO_933_MODELS,
@@ -4928,9 +4929,10 @@ const getCreativeVideoCardObjectFitClass = (record) =>
   };
 
   const postCreativeRequest = async (endpoint, payload, requestHeaders = {}) => {
-    const response = await API.post(endpoint, payload, {
+    const response = await API.post(endpoint, buildCreativeUpstreamPayload(payload), {
       headers: {
         'New-API-User': getUserIdFromLocalStorage(),
+        'X-Creative-Center-Group': activeGroup,
         ...requestHeaders,
       },
     });
@@ -4954,10 +4956,11 @@ const getCreativeVideoCardObjectFitClass = (record) =>
         headers: {
           'Content-Type': 'application/json',
           'New-API-User': getUserIdFromLocalStorage(),
+          'X-Creative-Center-Group': activeGroup,
         },
         method: 'POST',
         payload: JSON.stringify({
-          ...payload,
+          ...buildCreativeUpstreamPayload(payload),
           stream: true,
         }),
       });
@@ -8056,7 +8059,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               imageSubmitEndpoint,
               payload,
               {
-                'X-Request-Id': requestId,
+                'X-Creative-Center-Request-Id': requestId,
               },
             );
             const remoteTaskId = data?.task_id || data?.id || '';
@@ -8249,7 +8252,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 API_ENDPOINTS.CHAT_COMPLETIONS,
                 basePayload,
                 {
-                  'X-Request-Id': requestId,
+                  'X-Creative-Center-Request-Id': requestId,
                 },
               );
               const content = data?.choices?.[0]?.message?.content || '';
@@ -8454,7 +8457,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
               });
             }
             data = await postCreativeRequest(API_ENDPOINTS.VIDEO_ASYNC_GENERATIONS, payload, {
-              'X-Request-Id': requestId,
+              'X-Creative-Center-Request-Id': requestId,
             });
             const submitPayload =
               data?.data && typeof data.data === 'object' ? data.data : data;

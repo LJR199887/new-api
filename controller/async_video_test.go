@@ -185,6 +185,7 @@ func TestInitAsyncVideoTaskStoresClientRequestID(t *testing.T) {
 	tests := []struct {
 		name          string
 		bodyRequestID string
+		creativeHeaderID string
 		headerID      string
 		want          string
 	}{
@@ -193,6 +194,11 @@ func TestInitAsyncVideoTaskStoresClientRequestID(t *testing.T) {
 			bodyRequestID: "creative-request-body",
 			headerID:      "creative-request-header",
 			want:          "creative-request-body",
+		},
+		{
+			name:             "creative center header fallback",
+			creativeHeaderID: "creative-request-private-header",
+			want:             "creative-request-private-header",
 		},
 		{
 			name:     "header fallback",
@@ -210,6 +216,9 @@ func TestInitAsyncVideoTaskStoresClientRequestID(t *testing.T) {
 			c.Set(common.RequestIdKey, "internal-request-id")
 			if tt.headerID != "" {
 				c.Request.Header.Set("X-Request-Id", tt.headerID)
+			}
+			if tt.creativeHeaderID != "" {
+				c.Request.Header.Set("X-Creative-Center-Request-Id", tt.creativeHeaderID)
 			}
 
 			task := initAsyncVideoTask(c, relaycommon.TaskSubmitReq{

@@ -43,6 +43,16 @@ func TestShouldRealtimeFetchForRequestOnlyRefreshesPlayground(t *testing.T) {
 	}
 }
 
+func TestExtractTaskClientRequestIDFromCreativeCenterHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/pg/video/async-generations", nil)
+	c.Request.Header.Set("X-Creative-Center-Request-Id", "creative-request-123")
+	if got := extractTaskClientRequestIDFromContext(c); got != "creative-request-123" {
+		t.Fatalf("client request ID = %q", got)
+	}
+}
+
 func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
 	original := ratio_setting.ModelPriceBySeconds2JSONString()
 	originalQuotaPerUnit := common.QuotaPerUnit

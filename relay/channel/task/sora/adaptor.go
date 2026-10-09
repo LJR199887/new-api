@@ -2027,7 +2027,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		if seconds != 6 && seconds != 10 {
 			seconds = 10
 		}
-	} else if isVideo25VideoModel(info.UpstreamModelName) {
+	} else if isVideo25VideoModel(info.OriginModelName) || isVideo25VideoModel(info.UpstreamModelName) {
 		if seconds <= 0 {
 			if req.StartImageURL != "" || req.EndImageURL != "" || len(req.StartFrame) > 0 || len(req.EndFrame) > 0 || req.Image != "" || req.ImageURL != "" || req.InputReference != "" || len(req.ImageURLs) > 0 || len(req.Images) > 0 {
 				seconds = 4
@@ -2096,7 +2096,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 				// Forward reference URLs without downloading them locally. The
 				// upstream is responsible for validating remote media bytes/duration.
 			}
-			if isSeedanceVideoModel(upstreamModelName) {
+			if isVideo25VideoModel(info.OriginModelName) {
+				if err := normalizeVideo25Request(bodyMap, info.OriginModelName); err != nil {
+					return nil, err
+				}
+				bodyMap["model"] = upstreamModelName
+			} else if isSeedanceVideoModel(upstreamModelName) {
 				if err := normalizeSeedanceVideoRequest(bodyMap, upstreamModelName); err != nil {
 					return nil, err
 				}
@@ -2117,7 +2122,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 					return nil, err
 				}
 			}
-			normalizeSoraVideoRequest(bodyMap, upstreamModelName)
+			if !isVideo25VideoModel(info.OriginModelName) {
+				normalizeSoraVideoRequest(bodyMap, upstreamModelName)
+			}
 			if newBody, err := common.Marshal(bodyMap); err == nil {
 				c.Request.Header.Set("Content-Type", "application/json")
 				return bytes.NewReader(newBody), nil
