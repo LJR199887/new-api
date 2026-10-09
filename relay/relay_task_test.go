@@ -289,7 +289,7 @@ func Test933AllModelsGroupPricingIgnoresResolutionAndReferenceCounts(t *testing.
 		_ = ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(groupsBackup)
 		_ = ratio_setting.UpdateModelPriceByResolutionByJSONString(resolutionBackup)
 	})
-	for _, name := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
+	for _, name := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
 		data, err := common.Marshal(map[string]any{name: map[string]float64{"per_second": 0.2}})
 		require.NoError(t, err)
 		require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(string(data)))

@@ -32,7 +32,7 @@ func TestIsTaskAwaitingUpstreamID(t *testing.T) {
 }
 
 func TestVideoPollingWaitsForSubmissionMapping(t *testing.T) {
-	for _, modelName := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
+	for _, modelName := range []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p", "933-video2.0-mini", "933-video2.0-mini-480p"} {
 		t.Run(modelName, func(t *testing.T) {
 			task := &model.Task{
 				TaskID: "task_local", ChannelId: 1,

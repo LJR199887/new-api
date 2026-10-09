@@ -23,6 +23,7 @@ func TestFilterOtherRatiosForVideo25DurationBilling(t *testing.T) {
 	for _, modelName := range []string{
 		"video-2.5",
 		"video-2.5-480p",
+		"video-2.5-1080p",
 		"minimax-h3-480p",
 		"minimax-h3-768p",
 		"minimax-h3-2k",
@@ -76,6 +77,7 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 	appendTaskPricePatchDefault("kling-video-o-3")
 	appendTaskPricePatchDefault("video-2.5")
 	appendTaskPricePatchDefault("video-2.5-480p")
+	appendTaskPricePatchDefault("video-2.5-1080p")
 	appendTaskPricePatchDefault("video-2.0")
 	appendTaskPricePatchDefault("video-2.0-fast")
 	appendTaskPricePatchDefault("video-2.0-mini")
@@ -99,6 +101,7 @@ func TestAppendTaskPricePatchDefault(t *testing.T) {
 		"kling-v3",
 		"video-2.5",
 		"video-2.5-480p",
+		"video-2.5-1080p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",

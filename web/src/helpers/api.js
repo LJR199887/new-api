@@ -301,6 +301,7 @@ export const buildApiPayload = (
   const adobeVideoModels = new Set([
     '933-video2.0',
     '933-video2.0-480p',
+    '933-video2.0-1080p',
     '933-video2.0-mini',
     '933-video2.0-mini-480p',
 
@@ -322,6 +323,7 @@ export const buildApiPayload = (
     'seedance-2.0-fast',
     'video-2.5',
     'video-2.5-480p',
+    'video-2.5-1080p',
     'video-2.0',
     'video-2.0-fast',
     'video-2.0-mini',
@@ -390,12 +392,16 @@ export const buildApiPayload = (
     inputs.model === 'seedance-2.0-fast' ||
     inputs.model === 'video-2.5' ||
     inputs.model === 'video-2.5-480p' ||
+    inputs.model === 'video-2.5-1080p' ||
     inputs.model === 'video-2.0' ||
     inputs.model === 'video-2.0-fast' ||
     inputs.model === 'video-2.0-mini' ||
     inputs.model === 'video-2.0-480p' ||
     inputs.model === 'video-2.0-fast-480p' ||
     inputs.model === 'video-2.0-mini-480p';
+  const isVideo25Model = inputs.model === 'video-2.5' ||
+    inputs.model === 'video-2.5-480p' ||
+    inputs.model === 'video-2.5-1080p';
   const isSeedance480PVideoModel = seedance480PVideoModels.has(inputs.model);
   const isVideoModel =
     typeof inputs.model === 'string' &&
@@ -506,6 +512,8 @@ export const buildApiPayload = (
       ? Math.min(Math.max(Number(inputs.videoDuration || 5), 5), 15)
       : isWan30Model
         ? Math.min(Math.max(Number(inputs.videoDuration || 5), 2), 30)
+      : isVideo25Model
+        ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 30)
       : isSeedanceVideoModel
         ? Math.min(Math.max(Number(inputs.videoDuration || 5), 4), 15)
         : inputs.model === 'veo31-ref'
@@ -520,9 +528,11 @@ export const buildApiPayload = (
       payload.metadata = {
         ...(payload.metadata || {}),
         ratio: forcedAspectRatio || '16:9',
-        resolution: isSeedance480PVideoModel
-          ? '480p'
-          : inputs.videoResolution || '720p',
+        resolution: isVideo25Model
+          ? (inputs.model === 'video-2.5-1080p' ? '1080p' : inputs.model === 'video-2.5-480p' ? '480p' : '720p')
+          : isSeedance480PVideoModel
+            ? '480p'
+            : inputs.videoResolution || '720p',
       };
     } else {
       payload.duration = forcedDuration;

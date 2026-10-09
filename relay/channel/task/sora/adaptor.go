@@ -550,7 +550,7 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 
 func isVideo25VideoModel(upstreamModel string) bool {
 	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return upstreamModel == "video-2.5" || upstreamModel == "video-2.5-480p"
+	return upstreamModel == "video-2.5" || upstreamModel == "video-2.5-480p" || upstreamModel == "video-2.5-1080p"
 }
 
 func isSeedance480PVideoModel(upstreamModel string) bool {

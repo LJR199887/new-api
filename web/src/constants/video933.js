@@ -1,13 +1,14 @@
 export const VIDEO_933_MODELS = new Set([
   '933-video2.0',
   '933-video2.0-480p',
+  '933-video2.0-1080p',
   '933-video2.0-mini',
   '933-video2.0-mini-480p',
 ]);
 
 export const is933VideoModel = (name) => VIDEO_933_MODELS.has(name);
 export const video933Resolution = (name) =>
-  name.endsWith('-480p') ? '480p' : '720p';
+  name.endsWith('-480p') ? '480p' : name.endsWith('-1080p') ? '1080p' : '720p';
 export const VIDEO_933_DURATIONS = Array.from(
   { length: 12 },
   (_, index) => index + 4,

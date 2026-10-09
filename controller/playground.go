@@ -38,6 +38,7 @@ var (
 	playgroundChatVideoModels = map[string]struct{}{
 		"933-video2.0":           {},
 		"933-video2.0-480p":      {},
+		"933-video2.0-1080p":     {},
 		"933-video2.0-mini":      {},
 		"933-video2.0-mini-480p": {},
 
@@ -59,6 +60,7 @@ var (
 		"seedance-2.0-fast":   {},
 		"video-2.5":           {},
 		"video-2.5-480p":      {},
+		"video-2.5-1080p":     {},
 		"video-2.0":           {},
 		"video-2.0-fast":      {},
 		"video-2.0-mini":      {},

@@ -21,6 +21,7 @@ func TestVideo25DocumentedModes(t *testing.T) {
 	}{
 		{"text", "video-2.5", "t2v", map[string]interface{}{}},
 		{"text-480p", "video-2.5-480p", "t2v", map[string]interface{}{"resolution": "480p"}},
+		{"text-1080p", "video-2.5-1080p", "t2v", map[string]interface{}{"resolution": "1080p"}},
 		{"frames", "video-2.5", "i2v_start_end", map[string]interface{}{"start_image_url": "https://example.com/start.png", "end_image_url": "https://example.com/end.png"}},
 		{"image", "video-2.5-480p", "i2v_ref", map[string]interface{}{"image_urls": []any{"https://example.com/image.png"}}},
 		{"video-audio", "video-2.5", "t2v_video_ref", map[string]interface{}{"video_urls": []any{"https://example.com/motion.mp4"}, "audio_urls": []any{"https://example.com/music.mp3"}}},
@@ -41,6 +42,8 @@ func TestVideo25DocumentedModes(t *testing.T) {
 			wantResolution := "720p"
 			if tt.model == "video-2.5-480p" {
 				wantResolution = "480p"
+			} else if tt.model == "video-2.5-1080p" {
+				wantResolution = "1080p"
 			}
 			if body["resolution"] != wantResolution || body["aspect_ratio"] != "9:16" {
 				t.Fatalf("unexpected resolution or ratio: %#v", body)
@@ -137,9 +140,26 @@ func TestVideo25RejectsShortPrompt(t *testing.T) {
 	}
 }
 
+func TestVideo251080PResolution(t *testing.T) {
+	for _, input := range []map[string]interface{}{
+		{"prompt": "forest motion"},
+		{"prompt": "forest motion", "resolution": "1080p"},
+	} {
+		if err := normalizeVideo25Request(input, "video-2.5-1080p"); err != nil {
+			t.Fatal(err)
+		}
+		if input["resolution"] != "1080p" || input["model"] != "video-2.5-1080p" {
+			t.Fatalf("unexpected upstream payload: %#v", input)
+		}
+	}
+	if err := normalizeVideo25Request(map[string]interface{}{"prompt": "forest motion", "resolution": "720p"}, "video-2.5-1080p"); err == nil {
+		t.Fatal("1080p variant accepted conflicting 720p resolution")
+	}
+}
+
 func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, modelName := range []string{"video-2.5", "video-2.5-480p"} {
+	for _, modelName := range []string{"video-2.5", "video-2.5-480p", "video-2.5-1080p"} {
 		t.Run(modelName, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
@@ -167,6 +187,15 @@ func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 			}
 			if body["duration"] != float64(4) {
 				t.Fatalf("image-reference default duration should be 4: %#v", body)
+			}
+			wantResolution := "720p"
+			if modelName == "video-2.5-480p" {
+				wantResolution = "480p"
+			} else if modelName == "video-2.5-1080p" {
+				wantResolution = "1080p"
+			}
+			if body["resolution"] != wantResolution {
+				t.Fatalf("resolution = %v, want %s", body["resolution"], wantResolution)
 			}
 		})
 	}
