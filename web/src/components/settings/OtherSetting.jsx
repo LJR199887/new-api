@@ -25,7 +25,6 @@ import {
   Form,
   Row,
   Modal,
-  Space,
   Card,
 } from '@douyinfe/semi-ui';
 import { API, showError, showSuccess, timestamp2string } from '../../helpers';
@@ -328,22 +327,6 @@ const OtherSetting = () => {
         <Form>
           <Card>
             <Form.Section text={t('系统信息')}>
-              <Row>
-                <Col span={16}>
-                  <Space>
-                    <Text>
-                      {t('当前版本')}�?                      {statusState?.status?.version || t('未知')}
-                    </Text>
-                    <Button
-                      type='primary'
-                      onClick={checkUpdate}
-                      loading={loadingInput['CheckUpdate']}
-                    >
-                      {t('\u68c0\u67e5\u66f4\u65b0')}
-                    </Button>
-                  </Space>
-                </Col>
-              </Row>
               <Row>
                 <Col span={16}>
                   <Text>
