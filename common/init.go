@@ -181,9 +181,6 @@ func initConstantEnv() {
 		"kling-v3",
 		"seedance-2.0",
 		"seedance-2.0-fast",
-		"video-2.5",
-		"video-2.5-480p",
-		"video-2.5-1080p",
 		"video-2.0",
 		"video-2.0-fast",
 		"video-2.0-mini",
@@ -191,6 +188,9 @@ func initConstantEnv() {
 		"video-2.0-fast-480p",
 		"video-2.0-mini-480p",
 	} {
+		appendTaskPricePatchDefault(modelName)
+	}
+	for _, modelName := range Video25ModelNames() {
 		appendTaskPricePatchDefault(modelName)
 	}
 

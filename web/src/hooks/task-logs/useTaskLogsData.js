@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@douyinfe/semi-ui';
@@ -227,6 +227,7 @@ export const useTaskLogsData = () => {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [requestSnapshotLoading, setRequestSnapshotLoading] = useState(false);
   const [requestSnapshot, setRequestSnapshot] = useState(null);
+  const requestDetailsVersion = useRef(0);
   const [requestTask, setRequestTask] = useState(null);
   const [showUserInfo, setShowUserInfoModal] = useState(false);
   const [userInfoData, setUserInfoData] = useState(null);
@@ -558,6 +559,7 @@ export const useTaskLogsData = () => {
       if (!isAdminUser || !task?.task_id) {
         return;
       }
+      const version = ++requestDetailsVersion.current;
       setRequestTask(task);
       setRequestSnapshot(null);
       setIsRequestModalOpen(true);
@@ -566,6 +568,7 @@ export const useTaskLogsData = () => {
         const res = await API.get(
           `/api/task/${encodeURIComponent(task.task_id)}/request`,
         );
+        if (version !== requestDetailsVersion.current) return;
         const { success, message, data } = res.data;
         if (success) {
           setRequestSnapshot(data);
@@ -573,9 +576,13 @@ export const useTaskLogsData = () => {
           showError(message);
         }
       } catch (error) {
-        showError(error?.message || t('加载任务请求失败'));
+        if (version === requestDetailsVersion.current) {
+          showError(error?.message || t('加载任务请求失败'));
+        }
       } finally {
-        setRequestSnapshotLoading(false);
+        if (version === requestDetailsVersion.current) {
+          setRequestSnapshotLoading(false);
+        }
       }
     },
     [isAdminUser, t],

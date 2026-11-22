@@ -60,12 +60,18 @@ import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { buildCreativeUpstreamPayload } from './creativeRequestPayload';
+import {
+  VIDEO_25_MODELS,
+  video25Resolution,
+  video25SupportsFirstLast,
+} from '../../constants/video25';
 
 import {
   VIDEO_933_MODELS,
   VIDEO_933_DURATIONS,
   is933VideoModel,
   video933Resolution,
+  video933SupportsFirstLast,
   read933MediaDuration,
   validate933References,
 } from '../../constants/video933';
@@ -116,10 +122,6 @@ const WAN30_MODELS = new Set([
   'wan3.0-720p',
   'wan3.0-1080p',
 ]);
-const VIDEO_25_MODEL = 'video-2.5';
-const VIDEO_25_480P_MODEL = 'video-2.5-480p';
-const VIDEO_25_1080P_MODEL = 'video-2.5-1080p';
-const VIDEO_25_MODELS = new Set([VIDEO_25_MODEL, VIDEO_25_480P_MODEL, VIDEO_25_1080P_MODEL]);
 const ADOBE_CHAT_IMAGE_MODELS = new Set([
   'nano-banana',
   'nano-banana2',
@@ -138,9 +140,7 @@ const ADOBE_VIDEO_MODELS = new Set([
   'kling-v3',
   'seedance-2.0',
   'seedance-2.0-fast',
-  VIDEO_25_MODEL,
-  VIDEO_25_480P_MODEL,
-  VIDEO_25_1080P_MODEL,
+  ...VIDEO_25_MODELS,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -153,9 +153,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   ...MINIMAX_H3_VARIANT_MODELS,
   ...WAN30_MODELS,
   'seedance-2.0',  'seedance-2.0-fast',
-  VIDEO_25_MODEL,
-  VIDEO_25_480P_MODEL,
-  VIDEO_25_1080P_MODEL,
+  ...VIDEO_25_MODELS,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -164,10 +162,8 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'video-2.0-mini-480p',
 ]);
 const SEEDANCE_480P_VIDEO_MODELS = new Set([
-  '933-video2.0-480p', '933-video2.0-mini-480p',
   'minimax-h3-480p',
   'wan3.0-480p',
-  VIDEO_25_480P_MODEL,
   'video-2.0-480p',
   'video-2.0-fast-480p',
   'video-2.0-mini-480p',
@@ -203,9 +199,6 @@ const CREATIVE_CENTER_IMAGE_UPLOAD_LIMITS = {
   'wan3.0-1080p': 10,
   'seedance-2.0': 4,
   'seedance-2.0-fast': 4,
-  [VIDEO_25_MODEL]: 30,
-  [VIDEO_25_480P_MODEL]: 30,
-  [VIDEO_25_1080P_MODEL]: 30,
   'video-2.0': 4,
   'video-2.0-fast': 4,
   'video-2.0-mini': 4,
@@ -396,8 +389,9 @@ const getAdobeVideoResolutionOptions = (modelName) => {
     const resolution = video933Resolution(modelName);
     return [{ label: resolution, value: resolution }];
   }
-  if (modelName === VIDEO_25_1080P_MODEL) {
-    return [{ label: '1080p', value: '1080p' }];
+  if (VIDEO_25_MODELS.has(modelName)) {
+    const resolution = video25Resolution(modelName);
+    return [{ label: resolution, value: resolution }];
   }
   if (MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     const resolution = modelName.slice('minimax-h3-'.length);
@@ -420,7 +414,7 @@ const getAdobeVideoResolutionOptions = (modelName) => {
 };
 const getAdobeVideoDefaultResolution = (modelName) => {
   if (is933VideoModel(modelName)) return video933Resolution(modelName);
-  if (modelName === VIDEO_25_1080P_MODEL) return '1080p';
+  if (VIDEO_25_MODELS.has(modelName)) return video25Resolution(modelName);
   if (MINIMAX_H3_VARIANT_MODELS.has(modelName)) {
     return modelName.slice('minimax-h3-'.length);
   }
@@ -442,6 +436,18 @@ const SEEDANCE_REFERENCE_MODE_OPTIONS = [
   { label: '视频参考', value: 'video_reference' },
   { label: '多模态', value: 'multimodal' },
 ];
+const NO_FIRST_LAST_REFERENCE_MODE_OPTIONS = SEEDANCE_REFERENCE_MODE_OPTIONS.filter(
+  ({ value }) => value !== 'first_last',
+);
+const getSeedanceReferenceModeOptions = (modelName) =>
+  (VIDEO_25_MODELS.has(modelName) && !video25SupportsFirstLast(modelName)) ||
+  (is933VideoModel(modelName) && !video933SupportsFirstLast(modelName))
+    ? NO_FIRST_LAST_REFERENCE_MODE_OPTIONS
+    : SEEDANCE_REFERENCE_MODE_OPTIONS;
+const getSeedanceReferenceMode = (modelName, mode) =>
+  getSeedanceReferenceModeOptions(modelName).some(({ value }) => value === mode)
+    ? mode
+    : 'multi_image';
 const MINIMAX_H3_REFERENCE_MODE_OPTIONS = [
   { label: '多图参考', value: 'multi_image' },
   { label: '首尾帧', value: 'first_last' },
@@ -1453,7 +1459,8 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
     return MINIMAX_H3_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? 5;
   }
   if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName) || is933VideoModel(normalizedModelName)) {
-    return referenceMode === 'first_last'
+    return referenceMode === 'first_last' &&
+      (!is933VideoModel(normalizedModelName) || video933SupportsFirstLast(normalizedModelName))
       ? 2
       : ['multi_image', 'multimodal'].includes(referenceMode)
         ? 9
@@ -1467,7 +1474,7 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
         : null;
   }
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
-    return referenceMode === 'first_last'
+    return referenceMode === 'first_last' && video25SupportsFirstLast(normalizedModelName)
       ? 2
       : ['multi_image', 'multimodal'].includes(referenceMode)
         ? 30
@@ -3986,7 +3993,10 @@ export default function App() {
   const isSeedanceVideoModel = SEEDANCE_VIDEO_MODELS.has(currentModelName);
   const isFishVideo = is933VideoModel(currentModelName);
   const currentImageMaxMB = isFishVideo || isCurrentFa2ImageModel ? 20 : 10;
-  const currentReferenceModeOptions = SEEDANCE_REFERENCE_MODE_OPTIONS;
+  const currentReferenceModeOptions = getSeedanceReferenceModeOptions(currentModelName);
+  const currentReferenceMode = isSeedanceVideoModel
+    ? getSeedanceReferenceMode(currentModelName, params.referenceMode)
+    : params.referenceMode;
   const currentPromptMaxLength = getCreativeCenterPromptMaxLength(currentModelName);
   const updatePrompt = useCallback((value) => {
     setPrompt(String(value || '').slice(0, currentPromptMaxLength));
@@ -4005,19 +4015,19 @@ export default function App() {
     : GENERIC_VIDEO_SECONDS_OPTIONS;
   const currentImageUploadLimit = getCreativeCenterImageUploadLimit(
     currentModelName,
-    params.referenceMode,
+    currentReferenceMode,
   );
   const currentVideoReferenceLimit = getCreativeCenterVideoReferenceLimit(
     currentModelName,
-    params.referenceMode,
+    currentReferenceMode,
   );
   const currentVideoReferencePolicy = getCreativeCenterVideoReferencePolicy(
     currentModelName,
-    params.referenceMode,
+    currentReferenceMode,
   );
   const currentAudioReferencePolicy = getCreativeCenterAudioReferencePolicy(
     currentModelName,
-    params.referenceMode,
+    currentReferenceMode,
   );
   const currentAdobeImageAspectRatioOptions =
     getAdobeImageAspectRatioOptions(currentModelName);
@@ -4028,7 +4038,7 @@ export default function App() {
   const isCurrentModelImageUploadEnabled = isCreativeCenterImageUploadEnabled(
     activeTab,
     currentModelName,
-    params.referenceMode,
+    currentReferenceMode,
   );
   const isCurrentModelVideoReferenceEnabled =
     activeTab === 'video' && typeof currentVideoReferenceLimit === 'number';
@@ -4245,7 +4255,7 @@ export default function App() {
             : getAdobeVideoDefaultResolution(modelName);
         }
         if (isCurrentSeedanceVideoModel) {
-          snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
+          snapshot.referenceMode = getSeedanceReferenceMode(modelName, sourceParams.referenceMode);
         }
         if (isCurrentMiniMaxH3Model) {
           snapshot.referenceMode = sourceParams.referenceMode || 'multi_image';
@@ -7759,7 +7769,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
       return;
     }
     if (activeTab === 'video' && isSeedanceVideoModel) {
-      const activeReferenceMode = params.referenceMode;
+      const activeReferenceMode = currentReferenceMode;
       if (activeReferenceMode === 'first_last' && uploadedImageUrls.length < 2) {
         showWarning('首尾帧模式需要上传 2 张图片');
         return;
@@ -10032,9 +10042,9 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                           icon={<Layers size={14} />}
                           label={`参考 ${getOptionLabel(
                             currentReferenceModeOptions,
-                            params.referenceMode,
+                            currentReferenceMode,
                           )}`}
-                          value={params.referenceMode}
+                          value={currentReferenceMode}
                           options={currentReferenceModeOptions}
                           openMenu={openMenu}
                           setOpenMenu={setOpenMenu}

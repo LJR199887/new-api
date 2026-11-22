@@ -36,12 +36,6 @@ var (
 		"nano-banana-pro": {},
 	}
 	playgroundChatVideoModels = map[string]struct{}{
-		"933-video2.0":           {},
-		"933-video2.0-480p":      {},
-		"933-video2.0-1080p":     {},
-		"933-video2.0-mini":      {},
-		"933-video2.0-mini-480p": {},
-
 		"minimax-h3":          {},
 		"minimax-h3-480p":     {},
 		"minimax-h3-768p":     {},
@@ -58,9 +52,6 @@ var (
 		"veo31-fast":          {},
 		"seedance-2.0":        {},
 		"seedance-2.0-fast":   {},
-		"video-2.5":           {},
-		"video-2.5-480p":      {},
-		"video-2.5-1080p":     {},
 		"video-2.0":           {},
 		"video-2.0-fast":      {},
 		"video-2.0-mini":      {},
@@ -560,6 +551,8 @@ func extractPlaygroundChatMediaURLs(responseBody []byte) ([]string, []string) {
 
 func inferPlaygroundChatTaskAction(meta playgroundChatRequestMeta, imageURLs []string, videoURLs []string) string {
 	modelName := strings.ToLower(strings.TrimSpace(meta.ModelName))
+	_, isVideoModel := playgroundChatVideoModels[modelName]
+	isVideoModel = isVideoModel || common.Is933VideoModel(modelName) || common.IsVideo25Model(modelName)
 
 	if _, ok := playgroundChatImageModels[modelName]; ok && len(imageURLs) > 0 {
 		if meta.HasVisualInput {
@@ -567,7 +560,7 @@ func inferPlaygroundChatTaskAction(meta playgroundChatRequestMeta, imageURLs []s
 		}
 		return constant.TaskActionImageGenerate
 	}
-	if _, ok := playgroundChatVideoModels[modelName]; ok && len(videoURLs) > 0 {
+	if isVideoModel && len(videoURLs) > 0 {
 		if meta.HasVisualInput {
 			return constant.TaskActionGenerate
 		}
@@ -588,7 +581,7 @@ func inferPlaygroundChatTaskAction(meta playgroundChatRequestMeta, imageURLs []s
 		return constant.TaskActionImageGenerate
 	}
 
-	if _, ok := playgroundChatVideoModels[modelName]; ok {
+	if isVideoModel {
 		if meta.HasVisualInput {
 			return constant.TaskActionGenerate
 		}

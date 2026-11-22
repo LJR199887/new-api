@@ -76,10 +76,12 @@ func GetTaskRequestSnapshot(c *gin.Context) {
 		common.ApiError(c, fmt.Errorf("task_id is required"))
 		return
 	}
-	if _, exists, err := model.GetByOnlyTaskId(taskID); err != nil {
+	task, exists, err := model.GetByOnlyTaskId(taskID)
+	if err != nil {
 		common.ApiError(c, err)
 		return
-	} else if !exists {
+	}
+	if !exists || task == nil {
 		common.ApiError(c, fmt.Errorf("task not found"))
 		return
 	}
@@ -89,29 +91,26 @@ func GetTaskRequestSnapshot(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if !exists || snapshot == nil {
-		common.ApiSuccess(c, gin.H{
-			"recorded": false,
-			"task_id":  taskID,
-		})
-		return
+	detail := gin.H{"recorded": false, "task_id": taskID}
+	if exists && snapshot != nil {
+		var body any
+		if err := common.Unmarshal([]byte(snapshot.Body), &body); err != nil {
+			body = string(snapshot.Body)
+		}
+		detail["recorded"] = true
+		detail["created_at"] = snapshot.CreatedAt
+		detail["method"] = snapshot.Method
+		detail["request_path"] = snapshot.RequestPath
+		detail["content_type"] = snapshot.ContentType
+		detail["body"] = body
+		detail["original_size"] = snapshot.OriginalSize
+		detail["truncated"] = snapshot.Truncated
 	}
-
-	var body any
-	if err := common.Unmarshal([]byte(snapshot.Body), &body); err != nil {
-		body = string(snapshot.Body)
+	if response, truncated := service.BuildTaskResponsePreview(task); response != nil {
+		detail["response_body"] = response
+		detail["response_truncated"] = truncated
 	}
-	common.ApiSuccess(c, gin.H{
-		"recorded":      true,
-		"task_id":       snapshot.TaskID,
-		"created_at":    snapshot.CreatedAt,
-		"method":        snapshot.Method,
-		"request_path":  snapshot.RequestPath,
-		"content_type":  snapshot.ContentType,
-		"body":          body,
-		"original_size": snapshot.OriginalSize,
-		"truncated":     snapshot.Truncated,
-	})
+	common.ApiSuccess(c, detail)
 }
 
 func ResolveUserTask(c *gin.Context) {

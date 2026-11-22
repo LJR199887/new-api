@@ -30,12 +30,6 @@ var (
 		"exact:grok-imagine-image-edit",
 	}
 	OpenAIVideoModels = []string{
-		"exact:933-video2.0",
-		"exact:933-video2.0-480p",
-		"exact:933-video2.0-1080p",
-		"exact:933-video2.0-mini",
-		"exact:933-video2.0-mini-480p",
-
 		"exact:minimax-h3",
 		"exact:minimax-h3-480p",
 		"exact:minimax-h3-768p",
@@ -50,9 +44,6 @@ var (
 		"exact:grok-imagine-video",
 		"exact:seedance-2.0",
 		"exact:seedance-2.0-fast",
-		"exact:video-2.5",
-		"exact:video-2.5-480p",
-		"exact:video-2.5-1080p",
 		"exact:video-2.0",
 		"exact:video-2.0-fast",
 		"exact:video-2.0-mini",
@@ -123,6 +114,9 @@ func IsImageEditModel(modelName string) bool {
 }
 
 func IsOpenAIVideoModel(modelName string) bool {
+	if Is933VideoModel(modelName) || IsVideo25Model(modelName) {
+		return true
+	}
 	modelName = strings.ToLower(modelName)
 	for _, m := range OpenAIVideoModels {
 		if strings.HasPrefix(m, "exact:") && modelName == strings.TrimPrefix(m, "exact:") {

@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SSE } from 'sse.js';
+import { VIDEO_25_MODELS } from '../../constants/video25';
+import { VIDEO_933_MODELS } from '../../constants/video933';
 import {
   API_ENDPOINTS,
   MESSAGE_STATUS,
@@ -48,11 +50,7 @@ const GROK_IMAGINE_VIDEO_MODELS = new Set([
   'grok-imagine-video',
 ]);
 const TASK_VIDEO_MODELS = new Set([
-  '933-video2.0',
-  '933-video2.0-480p',
-  '933-video2.0-1080p',
-  '933-video2.0-mini',
-  '933-video2.0-mini-480p',
+  ...VIDEO_933_MODELS,
 
   'sora2',
   'sora2-pro',
@@ -69,9 +67,7 @@ const TASK_VIDEO_MODELS = new Set([
   'wan3.0-1080p',
   'seedance-2.0',
   'seedance-2.0-fast',
-  'video-2.5',
-  'video-2.5-480p',
-  'video-2.5-1080p',
+  ...VIDEO_25_MODELS,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',
@@ -89,9 +85,7 @@ const SEEDANCE_VIDEO_MODELS = new Set([
   'wan3.0-1080p',
   'seedance-2.0',
   'seedance-2.0-fast',
-  'video-2.5',
-  'video-2.5-480p',
-  'video-2.5-1080p',
+  ...VIDEO_25_MODELS,
   'video-2.0',
   'video-2.0-fast',
   'video-2.0-mini',

@@ -5,6 +5,8 @@
     "请求方法": "Phương thức yêu cầu",
     "内容类型": "Loại nội dung",
     "任务请求详情": "Chi tiết yêu cầu tác vụ",
+    "返回内容": "Nội dung phản hồi",
+    "暂无返回内容": "Chưa có nội dung phản hồi",
     "该任务未记录请求内容或快照已过期": "Yêu cầu chưa được ghi lại hoặc bản chụp đã hết hạn",
     "已截断": "Đã cắt bớt",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

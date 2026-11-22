@@ -5,6 +5,8 @@
     "请求方法": "Request method",
     "内容类型": "Content type",
     "任务请求详情": "Task request details",
+    "返回内容": "Response content",
+    "暂无返回内容": "No response content yet",
     "该任务未记录请求内容或快照已过期": "No request content was recorded for this task or the snapshot has expired",
     "请求内容": "Request content",
     "已截断": "Truncated",
