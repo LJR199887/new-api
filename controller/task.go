@@ -92,6 +92,9 @@ func GetTaskRequestSnapshot(c *gin.Context) {
 		return
 	}
 	detail := gin.H{"recorded": false, "task_id": taskID}
+	if upstreamTaskID := strings.TrimSpace(task.PrivateData.UpstreamTaskID); upstreamTaskID != "" {
+		detail["upstream_task_id"] = upstreamTaskID
+	}
 	if exists && snapshot != nil {
 		var body any
 		if err := common.Unmarshal([]byte(snapshot.Body), &body); err != nil {

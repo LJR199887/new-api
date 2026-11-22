@@ -63,6 +63,9 @@ const (
 	// It is not returned to end users, but can be persisted into consume/error logs for debugging.
 	ContextKeyAdminRejectReason ContextKey = "admin_reject_reason"
 
+	// ContextKeyRecordImageUpstreamTaskID carries the async image job's ID recorder.
+	ContextKeyRecordImageUpstreamTaskID ContextKey = "record_image_upstream_task_id"
+
 	// ContextKeyLanguage stores the user's language preference for i18n
 	ContextKeyLanguage ContextKey = "language"
 )

@@ -219,6 +219,9 @@ func runAsyncImageJob(job asyncImageJob) {
 	}
 	ctx.Set(common.RequestIdKey, task.TaskID)
 	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now())
+	common.SetContextKey(ctx, constant.ContextKeyRecordImageUpstreamTaskID, func(upstreamTaskID string) {
+		recordAsyncImageUpstreamTaskID(task, upstreamTaskID)
+	})
 
 	bodyStorage, err := common.CreateBodyStorage(job.Body)
 	if err != nil {
@@ -241,6 +244,18 @@ func runAsyncImageJob(job asyncImageJob) {
 		return
 	}
 	updateAsyncImageTaskSuccess(task, ctx, responseBody)
+}
+
+func recordAsyncImageUpstreamTaskID(task *model.Task, upstreamTaskID string) {
+	upstreamTaskID = strings.TrimSpace(upstreamTaskID)
+	if upstreamTaskID == "" || upstreamTaskID == task.PrivateData.UpstreamTaskID {
+		return
+	}
+	task.PrivateData.UpstreamTaskID = upstreamTaskID
+	// Persist before waiting for the result, without rewriting the task status.
+	if err := model.TaskBulkUpdateByID([]int64{task.ID}, map[string]any{"private_data": task.PrivateData}); err != nil {
+		common.SysError("record async image upstream task ID error: " + err.Error())
+	}
 }
 
 func updateAsyncImageTaskRunning(task *model.Task) {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,10 @@ func TestHandleFa2AsyncImageResponsePollsAndNormalizesResult(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(nil))
+			var recordedIDs []string
+			common.SetContextKey(c, constant.ContextKeyRecordImageUpstreamTaskID, func(id string) {
+				recordedIDs = append(recordedIDs, id)
+			})
 			info := &relaycommon.RelayInfo{
 				OriginModelName: modelName,
 				ChannelMeta: &relaycommon.ChannelMeta{
@@ -56,7 +61,57 @@ func TestHandleFa2AsyncImageResponsePollsAndNormalizesResult(t *testing.T) {
 			require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 			require.Len(t, response.Data, 1)
 			require.Equal(t, "https://cdn.example.com/result.webp", response.Data[0].Url)
+			require.Equal(t, []string{"task-123"}, recordedIDs)
+			require.NotContains(t, recorder.Body.String(), "task-123")
 
+		})
+	}
+}
+
+func TestRecordFa2ImageUpstreamIDWhenPollingFails(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		submitBody string
+		pollBody   string
+		expected   []string
+	}{
+		{
+			name:       "ID from submission",
+			submitBody: `{"task_id":"provider-id"}`,
+			pollBody:   `{"status":"failed","error":"generation failed"}`,
+			expected:   []string{"provider-id"},
+		},
+		{
+			name:       "ID from poll when submission only supplies URL",
+			submitBody: `{"poll_url":"/v1/images/generations/provider-id"}`,
+			pollBody:   `{"task_id":"provider-id","status":"failed","error":"generation failed"}`,
+			expected:   []string{"provider-id"},
+		},
+		{
+			name:       "no explicit upstream ID",
+			submitBody: `{"poll_url":"/v1/images/generations/provider-id"}`,
+			pollBody:   `{"status":"failed","error":"generation failed"}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.WriteString(w, tc.pollBody)
+			}))
+			defer server.Close()
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+			var recordedIDs []string
+			common.SetContextKey(c, constant.ContextKeyRecordImageUpstreamTaskID, func(id string) {
+				recordedIDs = append(recordedIDs, id)
+			})
+			response := &http.Response{
+				Body:    io.NopCloser(bytes.NewBufferString(tc.submitBody)),
+				Request: httptest.NewRequest(http.MethodPost, server.URL+"/v1/images/generations", nil),
+			}
+			_, apiErr := (&Adaptor{}).handleFa2AsyncImageResponse(c, nil, response)
+			require.NotNil(t, apiErr)
+			require.Contains(t, apiErr.Error(), "generation failed")
+			require.Equal(t, tc.expected, recordedIDs)
 		})
 	}
 }

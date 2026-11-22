@@ -1,5 +1,7 @@
 {
   "translation": {
+    "上游任务 ID": "ID tác vụ phía nhà cung cấp",
+    "未获取": "Chưa nhận được",
     "查看请求": "Xem yêu cầu",
     "加载任务请求失败": "Không thể tải yêu cầu tác vụ",
     "请求方法": "Phương thức yêu cầu",

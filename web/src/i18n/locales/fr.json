@@ -1,5 +1,7 @@
 {
   "translation": {
+    "上游任务 ID": "ID de tâche en amont",
+    "未获取": "Non reçu",
     "查看请求": "Voir la requête",
     "加载任务请求失败": "Échec du chargement de la requête de la tâche",
     "请求方法": "Méthode de requête",
