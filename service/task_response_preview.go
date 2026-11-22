@@ -2,16 +2,21 @@ package service
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 )
 
-// BuildTaskResponsePreview returns a bounded view of the latest stored task
-// response. Older tasks may have only a result URL or a failure reason.
+// BuildTaskResponsePreview is a read-only view of the final task response.
+// Task.Data may still contain the submission or an intermediate poll response.
 func BuildTaskResponsePreview(task *model.Task) (any, bool) {
-	if task == nil {
+	if task == nil || (task.Status != model.TaskStatusSuccess && task.Status != model.TaskStatusFailure) {
+		return nil, false
+	}
+	if task.Status == model.TaskStatusFailure && isLocalTaskTimeout(task.FailReason) {
 		return nil, false
 	}
 
@@ -27,6 +32,9 @@ func BuildTaskResponsePreview(task *model.Task) (any, bool) {
 	}
 	switch value := body.(type) {
 	case map[string]any:
+		if isIntermediateTaskResponse(value) {
+			return nil, false
+		}
 		if len(value) == 0 {
 			body = nil
 		}
@@ -40,6 +48,10 @@ func BuildTaskResponsePreview(task *model.Task) (any, bool) {
 		}
 	}
 	if body == nil {
+		// A local failure reason alone is not a returned response.
+		if task.Status != model.TaskStatusSuccess {
+			return nil, false
+		}
 		fallback := taskResponseFallback(task)
 		if len(fallback) == 0 {
 			return nil, false
@@ -53,6 +65,45 @@ func BuildTaskResponsePreview(task *model.Task) (any, bool) {
 		return summarizeTaskResponse(task, len(raw), "sanitized response exceeded 64 KiB"), true
 	}
 	return body, truncated
+}
+
+func isLocalTaskTimeout(reason string) bool {
+	reason = strings.TrimSpace(reason)
+	if reason == legacyTaskTimeoutReason || strings.HasPrefix(reason, constant.Fa2ImagePollingTimeoutReason+": ") {
+		return true
+	}
+	minutes, ok := strings.CutPrefix(reason, taskTimeoutReasonPrefix)
+	if !ok {
+		return false
+	}
+	minutes, ok = strings.CutSuffix(minutes, taskTimeoutReasonSuffix)
+	if !ok {
+		return false
+	}
+	value, err := strconv.Atoi(minutes)
+	return err == nil && value > 0
+}
+
+func isIntermediateTaskResponse(body map[string]any) bool {
+	status, _ := body["status"].(string)
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		for _, key := range []string{"data", "result", "task"} {
+			if nested, ok := body[key].(map[string]any); ok {
+				value, _ := nested["status"].(string)
+				if value = strings.ToLower(strings.TrimSpace(value)); value != "" {
+					status = value
+					break
+				}
+			}
+		}
+	}
+	switch status {
+	case "not_start", "submitted", "queued", "pending", "processing", "running", "in_progress":
+		return true
+	default:
+		return false
+	}
 }
 
 func taskResponseFallback(task *model.Task) map[string]any {

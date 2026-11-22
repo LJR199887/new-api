@@ -260,6 +260,12 @@ func ShouldRetryTransientAsyncVideoFailure(task *model.Task, now int64) bool {
 	return isTransientVideoMediaPreparationError(task, task.FailReason, now)
 }
 
+const (
+	taskTimeoutReasonPrefix = "任务超时（"
+	taskTimeoutReasonSuffix = "分钟）"
+	legacyTaskTimeoutReason = "任务超时（旧系统遗留任务，不进行退款，请联系管理员）"
+)
+
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
 // 每次最多处理 100 条，剩余的下个周期继续处理。
 // 使用 per-task CAS (UpdateWithStatus) 防止覆盖被正常轮询已推进的任务。
@@ -274,8 +280,7 @@ func sweepTimedOutTasks(ctx context.Context) {
 	}
 
 	const legacyTaskCutoff int64 = 1740182400 // 2026-02-22 00:00:00 UTC
-	reason := fmt.Sprintf("任务超时（%d分钟）", constant.TaskTimeoutMinutes)
-	legacyReason := "任务超时（旧系统遗留任务，不进行退款，请联系管理员）"
+	reason := fmt.Sprintf("%s%d%s", taskTimeoutReasonPrefix, constant.TaskTimeoutMinutes, taskTimeoutReasonSuffix)
 	now := time.Now().Unix()
 	timedOutCount := 0
 
@@ -287,7 +292,7 @@ func sweepTimedOutTasks(ctx context.Context) {
 		task.Progress = "100%"
 		task.FinishTime = now
 		if isLegacy {
-			task.FailReason = legacyReason
+			task.FailReason = legacyTaskTimeoutReason
 		} else {
 			task.FailReason = reason
 		}

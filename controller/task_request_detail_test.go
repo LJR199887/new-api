@@ -28,6 +28,7 @@ func TestTaskRequestDetailIncludesStoredResponse(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.TaskRequestSnapshot{}))
 
 	for _, recorded := range []bool{true, false} {
+		const queuedResponse = `{"status":"queued","progress":5}`
 		taskID := "task_with_request"
 		if !recorded {
 			taskID = "task_without_request"
@@ -79,5 +80,31 @@ func TestTaskRequestDetailIncludesStoredResponse(t *testing.T) {
 		require.Equal(t, map[string]any{"data": []any{map[string]any{"url": "https://example.com/result.png"}}}, response.Data["response_body"])
 		require.Equal(t, false, response.Data["response_truncated"])
 		require.NotContains(t, writer.Body.String(), "internal-key")
+
+		for _, state := range []struct {
+			status model.TaskStatus
+			reason string
+		}{
+			{status: model.TaskStatusQueued},
+			{status: model.TaskStatusFailure, reason: "任务超时（59分钟）"},
+		} {
+			require.NoError(t, db.Model(task).Updates(map[string]any{
+				"status": state.status, "fail_reason": state.reason, "data": []byte(queuedResponse),
+			}).Error)
+			writer := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(writer)
+			ctx.Request = c.Request
+			ctx.Params = c.Params
+			GetTaskRequestSnapshot(ctx)
+			current := response
+			current.Data = nil
+			require.NoError(t, common.Unmarshal(writer.Body.Bytes(), &current))
+			require.True(t, current.Success, writer.Body.String())
+			require.Equal(t, taskID, current.Data["task_id"])
+			require.Equal(t, recorded, current.Data["recorded"])
+			require.Equal(t, response.Data["upstream_task_id"], current.Data["upstream_task_id"])
+			require.NotContains(t, current.Data, "response_body")
+			require.NotContains(t, current.Data, "response_truncated")
+		}
 	}
 }

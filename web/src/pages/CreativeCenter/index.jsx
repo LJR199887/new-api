@@ -60,6 +60,7 @@ import { API_ENDPOINTS } from '../../constants/playground.constants';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { buildCreativeUpstreamPayload } from './creativeRequestPayload';
+import { planCreativeVideoTaskRefresh } from './creativeVideoPolling';
 import {
   VIDEO_25_MODELS,
   video25Resolution,
@@ -6457,43 +6458,24 @@ const getCreativeVideoCardObjectFitClass = (record) =>
           tasksToPoll.map(async (task) => {
             videoPollingInFlightRef.current.add(task.localTaskId);
             try {
-              let queryTaskId = task.queryTaskId;
-              const exactTaskByRequest = exactTaskByRequestId.get(task.requestId);
-              if (!queryTaskId && exactTaskByRequest) {
-                const exactTaskState = parseTaskDtoVideoState(exactTaskByRequest);
-                queryTaskId = exactTaskState.taskId;
+              const cachedTask = task.queryTaskId
+                ? exactTaskByTaskId.get(task.queryTaskId)
+                : exactTaskByRequestId.get(task.requestId) ||
+                  fallbackTaskMatches.get(task.localTaskId);
+              const { queryTaskId, terminalState, shouldRefresh } =
+                planCreativeVideoTaskRefresh(
+                  task.queryTaskId,
+                  cachedTask ? parseTaskDtoVideoState(cachedTask) : null,
+                );
+              if (terminalState) {
                 patchVideoTask(
                   task.recordId,
                   task.localTaskId,
-                  buildResolvedVideoTaskPatch(queryTaskId, exactTaskState),
+                  buildResolvedVideoTaskPatch(queryTaskId, terminalState),
                 );
                 return;
               }
-
-              const fallbackTask = fallbackTaskMatches.get(task.localTaskId);
-              if (fallbackTask) {
-                const fallbackTaskState = parseTaskDtoVideoState(fallbackTask);
-                queryTaskId = fallbackTaskState.taskId || queryTaskId;
-                patchVideoTask(
-                  task.recordId,
-                  task.localTaskId,
-                  buildResolvedVideoTaskPatch(queryTaskId, fallbackTaskState),
-                );
-                return;
-              }
-
-              if (!queryTaskId) {
-                return;
-              }
-
-              const exactTaskById = exactTaskByTaskId.get(queryTaskId);
-              if (exactTaskById) {
-                const exactTaskState = parseTaskDtoVideoState(exactTaskById);
-                patchVideoTask(
-                  task.recordId,
-                  task.localTaskId,
-                  buildResolvedVideoTaskPatch(queryTaskId, exactTaskState),
-                );
+              if (!shouldRefresh) {
                 return;
               }
 
@@ -7144,45 +7126,27 @@ const getCreativeVideoCardObjectFitClass = (record) =>
 
           const batchResults = await Promise.allSettled(
             currentBatch.map(async (candidate) => {
-              let queryTaskId = candidate.queryTaskId;
-              const matchedTask = taskMatches.get(candidate.taskId);
-              if (matchedTask) {
-                const matchedTaskState = parseTaskDtoVideoState(matchedTask);
-                queryTaskId = matchedTaskState.taskId || queryTaskId;
-                if (queryTaskId || ['completed', 'failed'].includes(matchedTaskState.status)) {
-                  return {
-                    candidate,
-                    queryTaskId,
-                    nextTaskState: matchedTaskState,
-                  };
-                }
-              }
-
-              const exactTask = exactTaskByRequestId.get(candidate.requestId);
-
-              if (!queryTaskId && exactTask) {
-                const exactTaskState = parseTaskDtoVideoState(exactTask);
-                queryTaskId = exactTaskState.taskId;
-                if (queryTaskId) {
-                  return {
-                    candidate,
-                    queryTaskId,
-                    nextTaskState: exactTaskState,
-                  };
-                }
-              }
-
-              if (!queryTaskId || cancelled) {
+              if (cancelled) {
                 return null;
               }
-
-              const exactTaskById = exactTaskByTaskId.get(queryTaskId);
-              if (exactTaskById) {
+              const cachedTask = candidate.queryTaskId
+                ? exactTaskByTaskId.get(candidate.queryTaskId)
+                : exactTaskByRequestId.get(candidate.requestId) ||
+                  taskMatches.get(candidate.taskId);
+              const { queryTaskId, terminalState, shouldRefresh } =
+                planCreativeVideoTaskRefresh(
+                  candidate.queryTaskId,
+                  cachedTask ? parseTaskDtoVideoState(cachedTask) : null,
+                );
+              if (terminalState) {
                 return {
                   candidate,
                   queryTaskId,
-                  nextTaskState: parseTaskDtoVideoState(exactTaskById),
+                  nextTaskState: terminalState,
                 };
+              }
+              if (!shouldRefresh) {
+                return null;
               }
 
               try {
