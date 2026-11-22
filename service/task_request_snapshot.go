@@ -35,6 +35,9 @@ var taskRequestSnapshotSensitiveFields = map[string]struct{}{
 	"signature":     {},
 	"sig":           {},
 	"key":           {},
+	"privatedata":   {},
+	"cookie":        {},
+	"setcookie":     {},
 }
 
 func BuildTaskRequestSnapshot(c *gin.Context, taskID string) (*model.TaskRequestSnapshot, error) {
@@ -401,7 +404,8 @@ func redactSensitiveTaskRequestURL(value string) string {
 		return value
 	}
 	query := parsed.Query()
-	changed := false
+	changed := parsed.User != nil
+	parsed.User = nil
 	for key := range query {
 		if isSensitiveTaskRequestSnapshotField(key) {
 			query.Set(key, "[REDACTED]")

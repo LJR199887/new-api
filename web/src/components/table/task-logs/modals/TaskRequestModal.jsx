@@ -23,6 +23,71 @@ import { Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { copy, showError, showSuccess } from '../../../../helpers';
 
+const TaskPayloadSection = ({ title, payload, truncated, emptyDescription }) => {
+  const { t } = useTranslation();
+  const text = useMemo(() => {
+    if (payload == null) return '';
+    return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+  }, [payload]);
+
+  const handleCopy = async () => {
+    if (await copy(text)) {
+      showSuccess(t('复制成功'));
+    } else {
+      showError(t('复制失败，请手动复制'));
+    }
+  };
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Typography.Text strong>{title}</Typography.Text>
+          {truncated && <Tag color='orange'>{t('已截断')}</Tag>}
+        </div>
+        {text && (
+          <Button
+            theme='borderless'
+            type='tertiary'
+            icon={<Copy size={16} />}
+            onClick={handleCopy}
+          >
+            {t('复制')}
+          </Button>
+        )}
+      </div>
+      {text ? (
+        <pre
+          style={{
+            margin: 0,
+            padding: 16,
+            maxHeight: '32vh',
+            overflow: 'auto',
+            border: '1px solid var(--semi-color-border)',
+            borderRadius: 6,
+            background: 'var(--semi-color-fill-0)',
+            fontSize: 13,
+            lineHeight: 1.55,
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {text}
+        </pre>
+      ) : (
+        <Empty description={emptyDescription} />
+      )}
+    </section>
+  );
+};
+
 const TaskRequestModal = ({
   isRequestModalOpen,
   setIsRequestModalOpen,
@@ -31,23 +96,6 @@ const TaskRequestModal = ({
   requestTask,
 }) => {
   const { t } = useTranslation();
-  const formattedBody = useMemo(() => {
-    if (!requestSnapshot?.recorded) {
-      return '';
-    }
-    return JSON.stringify(requestSnapshot.body ?? {}, null, 2);
-  }, [requestSnapshot]);
-
-  const handleCopy = async () => {
-    if (!formattedBody) {
-      return;
-    }
-    if (await copy(formattedBody)) {
-      showSuccess(t('复制成功'));
-    } else {
-      showError(t('复制失败，请手动复制'));
-    }
-  };
 
   const metadata = [
     [t('任务ID'), requestTask?.task_id || requestSnapshot?.task_id || '-'],
@@ -76,8 +124,6 @@ const TaskRequestModal = ({
         <div style={{ minHeight: 260, display: 'grid', placeItems: 'center' }}>
           <Spin size='large' tip={t('加载中...')} />
         </div>
-      ) : !requestSnapshot?.recorded ? (
-        <Empty description={t('该任务未记录请求内容或快照已过期')} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div
@@ -102,47 +148,18 @@ const TaskRequestModal = ({
             ))}
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Typography.Text strong>{t('请求内容')}</Typography.Text>
-              {requestSnapshot.truncated && (
-                <Tag color='orange'>{t('已截断')}</Tag>
-              )}
-            </div>
-            <Button
-              theme='borderless'
-              type='tertiary'
-              icon={<Copy size={16} />}
-              onClick={handleCopy}
-            >
-              {t('复制')}
-            </Button>
-          </div>
-
-          <pre
-            style={{
-              margin: 0,
-              padding: 16,
-              maxHeight: '48vh',
-              overflow: 'auto',
-              border: '1px solid var(--semi-color-border)',
-              borderRadius: 6,
-              background: 'var(--semi-color-fill-0)',
-              fontSize: 13,
-              lineHeight: 1.55,
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-            }}
-          >
-            {formattedBody}
-          </pre>
+          <TaskPayloadSection
+            title={t('请求内容')}
+            payload={requestSnapshot?.recorded ? requestSnapshot.body ?? {} : null}
+            truncated={requestSnapshot?.truncated}
+            emptyDescription={t('该任务未记录请求内容或快照已过期')}
+          />
+          <TaskPayloadSection
+            title={t('返回内容')}
+            payload={requestSnapshot?.response_body}
+            truncated={requestSnapshot?.response_truncated}
+            emptyDescription={t('暂无返回内容')}
+          />
         </div>
       )}
     </Modal>

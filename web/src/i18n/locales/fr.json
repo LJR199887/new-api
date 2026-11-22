@@ -5,6 +5,8 @@
     "请求方法": "Méthode de requête",
     "内容类型": "Type de contenu",
     "任务请求详情": "Détails de la requête de la tâche",
+    "返回内容": "Contenu de la réponse",
+    "暂无返回内容": "Aucun contenu de réponse pour le moment",
     "该任务未记录请求内容或快照已过期": "Aucun contenu de requête enregistré ou l'instantané a expiré",
     "请求内容": "Contenu de la requête",
     "已截断": "Tronqué",
