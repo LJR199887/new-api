@@ -97,6 +97,7 @@ const TaskRequestModal = ({
 }) => {
   const { t } = useTranslation();
 
+  const upstreamTaskId = requestSnapshot?.upstream_task_id;
   const metadata = [
     [t('任务ID'), requestTask?.task_id || requestSnapshot?.task_id || '-'],
     [t('用户'), requestTask?.username || requestTask?.user_id || '-'],
@@ -146,6 +147,18 @@ const TaskRequestModal = ({
                 </Typography.Paragraph>
               </div>
             ))}
+          </div>
+
+          <div>
+            <Typography.Text type='tertiary' size='small'>
+              {t('上游任务 ID')}
+            </Typography.Text>
+            <Typography.Paragraph
+              copyable={upstreamTaskId ? { content: upstreamTaskId } : false}
+              style={{ margin: '2px 0 0', overflowWrap: 'anywhere' }}
+            >
+              {upstreamTaskId || t('未获取')}
+            </Typography.Paragraph>
           </div>
 
           <TaskPayloadSection

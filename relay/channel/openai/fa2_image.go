@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
@@ -108,6 +109,15 @@ func (a *Adaptor) handleFa2AsyncImageResponse(c *gin.Context, info *relaycommon.
 	if err := common.Unmarshal(responseBody, &submitted); err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
 	}
+	var recordUpstreamTaskID func(string)
+	if c != nil {
+		value, _ := c.Get(string(constant.ContextKeyRecordImageUpstreamTaskID))
+		recordUpstreamTaskID, _ = value.(func(string))
+	}
+	upstreamTaskID := strings.TrimSpace(submitted.TaskID)
+	if recordUpstreamTaskID != nil && upstreamTaskID != "" {
+		recordUpstreamTaskID(upstreamTaskID)
+	}
 	pollURL, err := resolveFa2ImagePollURL(resp, info, submitted.PollURL, submitted.TaskID)
 	if err != nil {
 		return nil, fa2ImageNewAPIError(err, http.StatusBadGateway)
@@ -177,6 +187,12 @@ func (a *Adaptor) handleFa2AsyncImageResponse(c *gin.Context, info *relaycommon.
 		var task fa2ImageTaskResponse
 		if err := common.Unmarshal(pollBody, &task); err != nil {
 			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusBadGateway)
+		}
+		if recordUpstreamTaskID != nil && upstreamTaskID == "" {
+			upstreamTaskID = strings.TrimSpace(task.TaskID)
+			if upstreamTaskID != "" {
+				recordUpstreamTaskID(upstreamTaskID)
+			}
 		}
 		switch strings.ToLower(strings.TrimSpace(task.Status)) {
 		case "succeeded", "completed", "success":

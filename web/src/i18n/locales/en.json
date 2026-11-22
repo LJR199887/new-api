@@ -1,5 +1,7 @@
 {
   "translation": {
+    "上游任务 ID": "Upstream task ID",
+    "未获取": "Not received",
     "查看请求": "View request",
     "加载任务请求失败": "Failed to load task request",
     "请求方法": "Request method",
