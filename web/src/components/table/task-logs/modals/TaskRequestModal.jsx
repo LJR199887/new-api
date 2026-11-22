@@ -81,9 +81,9 @@ const TaskPayloadSection = ({ title, payload, truncated, emptyDescription }) => 
         >
           {text}
         </pre>
-      ) : (
+      ) : emptyDescription ? (
         <Empty description={emptyDescription} />
-      )}
+      ) : null}
     </section>
   );
 };
@@ -171,7 +171,6 @@ const TaskRequestModal = ({
             title={t('返回内容')}
             payload={requestSnapshot?.response_body}
             truncated={requestSnapshot?.response_truncated}
-            emptyDescription={t('暂无返回内容')}
           />
         </div>
       )}

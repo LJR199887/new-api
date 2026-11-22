@@ -165,7 +165,7 @@ func (a *Adaptor) handleFa2AsyncImageResponse(c *gin.Context, info *relaycommon.
 		pollResp, err := client.Do(pollRequest)
 		if err != nil {
 			if waitErr := waitForFa2ImagePoll(ctx); waitErr != nil {
-				return nil, fa2ImageNewAPIError(fmt.Errorf("fa2api image polling timed out: %w", waitErr), http.StatusGatewayTimeout)
+				return nil, fa2ImageNewAPIError(fmt.Errorf("%s: %w", constant.Fa2ImagePollingTimeoutReason, waitErr), http.StatusGatewayTimeout)
 			}
 			continue
 		}
@@ -176,7 +176,7 @@ func (a *Adaptor) handleFa2AsyncImageResponse(c *gin.Context, info *relaycommon.
 		}
 		if pollResp.StatusCode == http.StatusTooManyRequests || pollResp.StatusCode >= http.StatusInternalServerError {
 			if waitErr := waitForFa2ImagePoll(ctx); waitErr != nil {
-				return nil, fa2ImageNewAPIError(fmt.Errorf("fa2api image polling timed out: %w", waitErr), http.StatusGatewayTimeout)
+				return nil, fa2ImageNewAPIError(fmt.Errorf("%s: %w", constant.Fa2ImagePollingTimeoutReason, waitErr), http.StatusGatewayTimeout)
 			}
 			continue
 		}
@@ -226,7 +226,7 @@ func (a *Adaptor) handleFa2AsyncImageResponse(c *gin.Context, info *relaycommon.
 			return nil, fa2ImageNewAPIError(fmt.Errorf("%s", message), http.StatusBadGateway)
 		case "queued", "running", "processing", "in_progress", "submitted", "":
 			if waitErr := waitForFa2ImagePoll(ctx); waitErr != nil {
-				return nil, fa2ImageNewAPIError(fmt.Errorf("fa2api image polling timed out: %w", waitErr), http.StatusGatewayTimeout)
+				return nil, fa2ImageNewAPIError(fmt.Errorf("%s: %w", constant.Fa2ImagePollingTimeoutReason, waitErr), http.StatusGatewayTimeout)
 			}
 		default:
 			return nil, fa2ImageNewAPIError(fmt.Errorf("unknown fa2api image task status: %s", task.Status), http.StatusBadGateway)

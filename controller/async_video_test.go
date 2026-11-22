@@ -1,18 +1,89 @@
 package controller
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
+
+func TestCreativeVideoStatusRefreshesQueuedTaskWithoutBackgroundPolling(t *testing.T) {
+	const upstreamID = "kv-video25-test"
+	const videoURL = "https://example.com/final.mp4"
+	var upstreamCalls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls.Add(1)
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/video/generations/"+upstreamID {
+			t.Errorf("unexpected upstream request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"completed","progress":100,"video_url":"` + videoURL + `"}`))
+	}))
+	defer upstream.Close()
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "video-status.db")), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	oldDB, oldFactory := model.DB, service.GetTaskAdaptorFunc
+	model.DB = db
+	service.InitHttpClient()
+	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
+		return relay.GetTaskAdaptor(platform)
+	}
+	t.Cleanup(func() {
+		model.DB, service.GetTaskAdaptorFunc = oldDB, oldFactory
+		_ = sqlDB.Close()
+	})
+	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.Channel{}))
+	baseURL := upstream.URL
+	ch := &model.Channel{Type: constant.ChannelTypeOpenAI, BaseURL: &baseURL, Key: "test-key"}
+	require.NoError(t, db.Create(ch).Error)
+	task := &model.Task{
+		TaskID: "task_queued_video25", UserId: 10, ChannelId: ch.Id, Platform: "1",
+		Status: model.TaskStatusQueued, Progress: "5%",
+		Properties: model.Properties{
+			OriginModelName: "A-video2.5-flash-480p", UpstreamModelName: "video2.5-flash-480p",
+		},
+		PrivateData: model.TaskPrivateData{
+			UpstreamTaskID: upstreamID, UpstreamRequestPath: "/v1/video/generations",
+			BillingContext: &model.TaskBillingContext{PerCallBilling: true},
+		},
+	}
+	task.SetData(map[string]any{"status": "queued", "progress": 5})
+	require.NoError(t, db.Create(task).Error)
+
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodGet, "/pg/video/async-generations/"+task.TaskID, nil)
+	c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}}
+	c.Set("id", task.UserId)
+	RelayAsyncVideoFetch(c)
+
+	require.Equal(t, http.StatusOK, writer.Code, writer.Body.String())
+	require.Equal(t, int32(1), upstreamCalls.Load())
+	var stored model.Task
+	require.NoError(t, db.First(&stored, task.ID).Error)
+	require.Equal(t, model.TaskStatus(model.TaskStatusSuccess), stored.Status)
+	require.Equal(t, "100%", stored.Progress)
+	require.Equal(t, videoURL, stored.GetResultURL())
+}
 
 func TestShouldRefreshAsyncVideoTask(t *testing.T) {
 	oldGraceMinutes := constant.TaskNotFoundGraceMinutes
@@ -183,11 +254,11 @@ func TestInitAsyncVideoTaskStoresClientRequestID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name          string
-		bodyRequestID string
+		name             string
+		bodyRequestID    string
 		creativeHeaderID string
-		headerID      string
-		want          string
+		headerID         string
+		want             string
 	}{
 		{
 			name:          "body request id wins",
