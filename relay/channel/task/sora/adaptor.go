@@ -544,13 +544,13 @@ func isSeedanceVideoModel(upstreamModel string) bool {
 	return strings.HasPrefix(upstreamModel, "seedance-2.0") ||
 		strings.HasPrefix(upstreamModel, "video-2.0") ||
 		strings.HasPrefix(upstreamModel, "video-2.5") ||
+		common.IsVideo25Model(upstreamModel) ||
 		isMiniMaxH3VariantVideoModel(upstreamModel) ||
 		isWan30VideoModel(upstreamModel)
 }
 
 func isVideo25VideoModel(upstreamModel string) bool {
-	upstreamModel = strings.ToLower(strings.TrimSpace(upstreamModel))
-	return upstreamModel == "video-2.5" || upstreamModel == "video-2.5-480p" || upstreamModel == "video-2.5-1080p"
+	return common.IsVideo25Model(upstreamModel)
 }
 
 func isSeedance480PVideoModel(upstreamModel string) bool {

@@ -115,9 +115,10 @@ func normalize933VideoRequest(body map[string]any, modelName string) error {
 	}
 	metadata, _ := body["metadata"].(map[string]any)
 	resolution := "720p"
-	if strings.HasSuffix(modelName, "-480p") {
+	normalizedModelName := strings.ToLower(strings.TrimSpace(modelName))
+	if strings.HasSuffix(normalizedModelName, "-480p") {
 		resolution = "480p"
-	} else if strings.HasSuffix(modelName, "-1080p") {
+	} else if strings.HasSuffix(normalizedModelName, "-1080p") {
 		resolution = "1080p"
 	}
 	for _, raw := range []any{body["resolution"], body["resolution_name"], metadata["resolution"]} {

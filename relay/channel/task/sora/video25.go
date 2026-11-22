@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // video-2.5 uses fa2api's URL-based video-generation contract, not the
@@ -80,12 +82,7 @@ func normalizeVideo25Request(body map[string]interface{}, model string) error {
 		return fmt.Errorf("unsupported aspect_ratio %q for video-2.5", ratio)
 	}
 
-	resolution := "720p"
-	if model == "video-2.5-480p" {
-		resolution = "480p"
-	} else if model == "video-2.5-1080p" {
-		resolution = "1080p"
-	}
+	resolution := common.Video25Resolution(model)
 	providedResolution := strings.TrimSpace(stringifyBodyValue(body["resolution"]))
 	if providedResolution == "" {
 		providedResolution = strings.TrimSpace(stringifyBodyValue(metadata["resolution"]))

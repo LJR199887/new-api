@@ -159,14 +159,34 @@ func TestVideo251080PResolution(t *testing.T) {
 
 func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, modelName := range []string{"video-2.5", "video-2.5-480p", "video-2.5-1080p"} {
+	for modelName, wantResolution := range map[string]string{
+		"video-2.5":             "720p",
+		"video-2.5-480p":        "480p",
+		"video-2.5-1080p":       "1080p",
+		"video2.5":              "720p",
+		"video2.5-480p":         "480p",
+		"video2.5-1080p":        "1080p",
+		"video2.5-flash":        "720p",
+		"video2.5-flash-480p":   "480p",
+		"A-video2.5":            "720p",
+		"A-video2.5-480p":       "480p",
+		"A-video2.5-1080p":      "1080p",
+		"A-video2.5-flash":      "720p",
+		"A-video2.5-flash-480p": "480p",
+	} {
 		t.Run(modelName, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 			c.Request = httptest.NewRequest("POST", "/v1/video/generations", strings.NewReader(fmt.Sprintf(`{"model":%q,"prompt":"forest motion","image_urls":["https://example.com/a.png"],"video_urls":["https://example.com/v.mp4"],"audio_urls":["https://example.com/a.mp3"]}`, modelName)))
 			c.Request.Header.Set("Content-Type", "application/json")
 			adaptor := &TaskAdaptor{}
-			info := &relaycommon.RelayInfo{RequestURLPath: "/v1/video/generations", ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: modelName}}
+			info := &relaycommon.RelayInfo{OriginModelName: modelName, RequestURLPath: "/v1/video/generations", ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: modelName}, TaskRelayInfo: &relaycommon.TaskRelayInfo{}}
+			if endpoint, err := adaptor.BuildRequestURL(info); err != nil || endpoint != videoGenerationsTaskPath {
+				t.Fatalf("submit endpoint = %q, err = %v", endpoint, err)
+			}
+			if endpoint, err := buildTaskFetchURL("", map[string]any{"model": modelName, "task_id": "test", "request_path": info.RequestURLPath}); err != nil || endpoint != videoGenerationsTaskPath+"/test" {
+				t.Fatalf("fetch endpoint = %q, err = %v", endpoint, err)
+			}
 			bodyReader, err := adaptor.BuildRequestBody(c, info)
 			if err != nil {
 				t.Fatal(err)
@@ -188,14 +208,40 @@ func TestVideo25BuildRequestBodyForwardsCanonicalReferences(t *testing.T) {
 			if body["duration"] != float64(4) {
 				t.Fatalf("image-reference default duration should be 4: %#v", body)
 			}
-			wantResolution := "720p"
-			if modelName == "video-2.5-480p" {
-				wantResolution = "480p"
-			} else if modelName == "video-2.5-1080p" {
-				wantResolution = "1080p"
+			if body["model"] != modelName || body["resolution"] != wantResolution {
+				t.Fatalf("unexpected model or resolution (want %s / %s): %#v", modelName, wantResolution, body)
 			}
-			if body["resolution"] != wantResolution {
-				t.Fatalf("resolution = %v, want %s", body["resolution"], wantResolution)
+		})
+	}
+}
+
+func TestVideo25AllowsFirstLastPair(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, modelName := range common.Video25ModelNames() {
+		t.Run(modelName, func(t *testing.T) {
+			const start, end = "https://example.com/start.png", "https://example.com/end.png"
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", videoGenerationsTaskPath, strings.NewReader(fmt.Sprintf(`{"model":%q,"prompt":"forest motion","generation_mode":"i2v_start_end","start_image_url":%q,"end_image_url":%q}`, modelName, start, end)))
+			c.Request.Header.Set("Content-Type", "application/json")
+			t.Cleanup(func() { common.CleanupBodyStorage(c) })
+			info := &relaycommon.RelayInfo{OriginModelName: modelName, TaskRelayInfo: &relaycommon.TaskRelayInfo{}, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: modelName}}
+			a := &TaskAdaptor{}
+			if taskErr := a.ValidateRequestAndSetAction(c, info); taskErr != nil {
+				t.Fatal(taskErr)
+			}
+			r, err := a.BuildRequestBody(c, info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var body map[string]any
+			if err := common.DecodeJson(r, &body); err != nil {
+				t.Fatal(err)
+			}
+			if body["model"] != modelName || body["generation_mode"] != "i2v_start_end" || body["start_image_url"] != start || body["end_image_url"] != end {
+				t.Fatalf("first/last frame passthrough failed: %#v", body)
+			}
+			if err := normalizeVideo25Request(map[string]any{"prompt": "forest motion", "start_image_url": start}, modelName); err == nil {
+				t.Fatal("accepted a start frame without an end frame")
 			}
 		})
 	}

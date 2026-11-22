@@ -13,12 +13,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var video933Models = []string{"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p", "933-video2.0-mini", "933-video2.0-mini-480p"}
+var video933Models = common.Video933ModelNames()
 
 func Test933ModelRoutingAndBilling(t *testing.T) {
 	for _, name := range video933Models {
 		t.Run(name, func(t *testing.T) {
-			if !common.IsDurationOnlyBillingModel(name) || !common.StringsContains(ModelList, name) || !isVideoGenerationsTaskModel(name) {
+			if !common.IsOpenAIVideoModel(name) || !common.IsDurationOnlyBillingModel(name) || !common.StringsContains(ModelList, name) || !isVideoGenerationsTaskModel(name) {
 				t.Fatal("model registration missing")
 			}
 			a := &TaskAdaptor{baseURL: "https://upstream.example"}
@@ -146,24 +146,64 @@ func Test933ImageByteLimit(t *testing.T) {
 }
 
 func Test933BuildAndValidateRequest(t *testing.T) {
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("POST", videoGenerationsTaskPath, strings.NewReader(`{"model":"933-video2.0-mini","prompt":"test video","duration":4,"aspect_ratio":"21:9","seed":0,"watermark":false}`))
-	c.Request.Header.Set("Content-Type", "application/json")
-	info := &relaycommon.RelayInfo{OriginModelName: "933-video2.0-mini", TaskRelayInfo: &relaycommon.TaskRelayInfo{}, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: "933-video2.0-mini"}}
-	a := &TaskAdaptor{}
-	if err := a.ValidateRequestAndSetAction(c, info); err != nil {
-		t.Fatal(err)
+	for _, name := range video933Models {
+		t.Run(name, func(t *testing.T) {
+			payload, err := common.Marshal(map[string]any{
+				"model": name, "prompt": "test video", "duration": 4, "aspect_ratio": "21:9", "seed": 0, "watermark": false,
+				"image_urls": []string{"https://example.com/a.png"}, "video_urls": []string{"https://example.com/a.mp4"}, "audio_urls": []string{"https://example.com/a.mp3"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", videoGenerationsTaskPath, bytes.NewReader(payload))
+			c.Request.Header.Set("Content-Type", "application/json")
+			info := &relaycommon.RelayInfo{OriginModelName: name, TaskRelayInfo: &relaycommon.TaskRelayInfo{}, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: name}}
+			a := &TaskAdaptor{}
+			if err := a.ValidateRequestAndSetAction(c, info); err != nil {
+				t.Fatal(err)
+			}
+			r, err := a.BuildRequestBody(c, info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var body map[string]any
+			if err := common.DecodeJson(r, &body); err != nil {
+				t.Fatal(err)
+			}
+			resolution := "720p"
+			for _, value := range []string{"480p", "1080p"} {
+				if strings.HasSuffix(name, "-"+value) {
+					resolution = value
+				}
+			}
+			if body["model"] != name || body["resolution"] != resolution || body["aspect_ratio"] != "21:9" || body["duration"] != float64(4) || body["seed"] != float64(0) || body["watermark"] != false || body["image_urls"] == nil || body["video_urls"] == nil || body["audio_urls"] == nil {
+				t.Fatalf("payload: %#v", body)
+			}
+		})
 	}
-	r, err := a.BuildRequestBody(c, info)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var body map[string]any
-	if err := common.DecodeJson(r, &body); err != nil {
-		t.Fatal(err)
-	}
-	if body["resolution"] != "720p" || body["aspect_ratio"] != "21:9" || body["duration"] != float64(4) || body["seed"] != float64(0) || body["watermark"] != false {
-		t.Fatalf("payload: %#v", body)
+}
+
+func TestVideo20VariantsAllowFirstLastPair(t *testing.T) {
+	for _, prefix := range []string{"", "A-"} {
+		for _, variant := range []string{"video2.0", "video2.0-fast", "video2.0-mini"} {
+			for _, suffix := range []string{"", "-480p", "-1080p"} {
+				name := prefix + variant + suffix
+				t.Run(name, func(t *testing.T) {
+					if !common.Is933VideoModel(name) {
+						t.Fatal("missing model")
+					}
+					const start, end = "https://example.com/start.png", "https://example.com/end.png"
+					body := map[string]any{"start_image_url": start, "end_image_url": end, "reference_mode": "first_last"}
+					if err := normalize933VideoRequest(body, name); err != nil || body["start_image_url"] != start || body["end_image_url"] != end {
+						t.Fatalf("first/last frame passthrough failed: %#v, %v", body, err)
+					}
+					if err := normalize933VideoRequest(map[string]any{"start_image_url": start}, name); err == nil {
+						t.Fatal("accepted a start frame without an end frame")
+					}
+				})
+			}
+		}
 	}
 }
 

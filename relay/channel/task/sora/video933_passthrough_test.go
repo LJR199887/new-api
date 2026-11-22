@@ -64,8 +64,8 @@ func Test933ForwardsReferenceURLsWithoutDownloading(t *testing.T) {
 				t.Cleanup(func() { common.CleanupBodyStorage(c) })
 				info := &relaycommon.RelayInfo{OriginModelName: name, TaskRelayInfo: &relaycommon.TaskRelayInfo{}, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: name}}
 				a := &TaskAdaptor{}
-				if err := a.ValidateRequestAndSetAction(c, info); err != nil {
-					t.Fatal(err)
+				if taskErr := a.ValidateRequestAndSetAction(c, info); taskErr != nil {
+					t.Fatal(taskErr)
 				}
 				body, err := a.BuildRequestBody(c, info)
 				if err != nil {

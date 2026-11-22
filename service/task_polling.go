@@ -195,7 +195,7 @@ func isGracefulVideoGenerationNotFoundModel(modelNames ...string) bool {
 func isSeedanceVideoPollingModel(modelNames ...string) bool {
 	for _, modelName := range modelNames {
 		modelName = strings.ToLower(strings.TrimSpace(modelName))
-		if strings.HasPrefix(modelName, "video-2.0") || strings.HasPrefix(modelName, "video-2.5") || strings.HasPrefix(modelName, "seedance-2.0") {
+		if strings.HasPrefix(modelName, "video-2.0") || strings.HasPrefix(modelName, "video-2.5") || strings.HasPrefix(modelName, "seedance-2.0") || common.IsVideo25Model(modelName) {
 			return true
 		}
 	}

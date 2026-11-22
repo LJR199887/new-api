@@ -20,10 +20,7 @@ func TestFilterOtherRatiosForDurationOnlyModel(t *testing.T) {
 }
 
 func TestFilterOtherRatiosForVideo25DurationBilling(t *testing.T) {
-	for _, modelName := range []string{
-		"video-2.5",
-		"video-2.5-480p",
-		"video-2.5-1080p",
+	for _, modelName := range append(Video25ModelNames(),
 		"minimax-h3-480p",
 		"minimax-h3-768p",
 		"minimax-h3-2k",
@@ -31,7 +28,7 @@ func TestFilterOtherRatiosForVideo25DurationBilling(t *testing.T) {
 		"wan3.0-480p",
 		"wan3.0-720p",
 		"wan3.0-1080p",
-	} {
+	) {
 		t.Run(modelName, func(t *testing.T) {
 			filtered := FilterOtherRatiosForBillingModel(modelName, map[string]float64{
 				"seconds":    10,

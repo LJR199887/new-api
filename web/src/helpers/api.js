@@ -24,7 +24,8 @@ import {
   isValidMessage,
 } from './utils';
 import axios from 'axios';
-import { is933VideoModel, build933VideoParameters } from '../constants/video933';
+import { VIDEO_933_MODELS, is933VideoModel, build933VideoParameters } from '../constants/video933';
+import { VIDEO_25_MODELS, video25Resolution } from '../constants/video25';
 import {
   FA2_IMAGE_MODELS,
   getFa2ImageModelSpec,
@@ -299,11 +300,7 @@ export const buildApiPayload = (
     ...FA2_IMAGE_MODELS,
   ]);
   const adobeVideoModels = new Set([
-    '933-video2.0',
-    '933-video2.0-480p',
-    '933-video2.0-1080p',
-    '933-video2.0-mini',
-    '933-video2.0-mini-480p',
+    ...VIDEO_933_MODELS,
 
     'minimax-h3',
     'minimax-h3-480p',
@@ -321,9 +318,7 @@ export const buildApiPayload = (
     'kling-v3',
     'seedance-2.0',
     'seedance-2.0-fast',
-    'video-2.5',
-    'video-2.5-480p',
-    'video-2.5-1080p',
+    ...VIDEO_25_MODELS,
     'video-2.0',
     'video-2.0-fast',
     'video-2.0-mini',
@@ -385,23 +380,19 @@ export const buildApiPayload = (
   const isFa2Image = isFa2ImageModel(inputs.model);
   const isGPTImage2Model = inputs.model === 'gpt-image2';
   const isAdobeVideoModel = adobeVideoModels.has(inputs.model);
+  const isVideo25Model = VIDEO_25_MODELS.has(inputs.model);
   const isSeedanceVideoModel =
     inputs.model?.startsWith('minimax-h3-') ||
     inputs.model?.startsWith('wan3.0-') ||
     inputs.model === 'seedance-2.0' ||
     inputs.model === 'seedance-2.0-fast' ||
-    inputs.model === 'video-2.5' ||
-    inputs.model === 'video-2.5-480p' ||
-    inputs.model === 'video-2.5-1080p' ||
+    isVideo25Model ||
     inputs.model === 'video-2.0' ||
     inputs.model === 'video-2.0-fast' ||
     inputs.model === 'video-2.0-mini' ||
     inputs.model === 'video-2.0-480p' ||
     inputs.model === 'video-2.0-fast-480p' ||
     inputs.model === 'video-2.0-mini-480p';
-  const isVideo25Model = inputs.model === 'video-2.5' ||
-    inputs.model === 'video-2.5-480p' ||
-    inputs.model === 'video-2.5-1080p';
   const isSeedance480PVideoModel = seedance480PVideoModels.has(inputs.model);
   const isVideoModel =
     typeof inputs.model === 'string' &&
@@ -529,7 +520,7 @@ export const buildApiPayload = (
         ...(payload.metadata || {}),
         ratio: forcedAspectRatio || '16:9',
         resolution: isVideo25Model
-          ? (inputs.model === 'video-2.5-1080p' ? '1080p' : inputs.model === 'video-2.5-480p' ? '480p' : '720p')
+          ? video25Resolution(inputs.model)
           : isSeedance480PVideoModel
             ? '480p'
             : inputs.videoResolution || '720p',
