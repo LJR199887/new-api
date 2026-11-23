@@ -28,7 +28,6 @@ func TestFa2ImageModelSpecs(t *testing.T) {
 			require.Equal(t, test.maxImages, spec.MaxImages)
 			require.True(t, Fa2ImageModelSupportsResolution(test.model, test.defaultResolution))
 			require.True(t, Fa2ImageModelSupportsAspectRatio(test.model, "1:1"))
-			require.True(t, IsResolutionOnlyBillingModel(test.model))
 		})
 	}
 

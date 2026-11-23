@@ -19,7 +19,6 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -105,7 +104,9 @@ func upsertPendingRelayTaskRecord(c *gin.Context, info *relaycommon.RelayInfo, p
 		ModelRatio:              info.PriceData.ModelRatio,
 		OtherRatios:             info.PriceData.OtherRatios,
 		OriginModelName:         info.OriginModelName,
-		PerCallBilling:          common.StringsContains(constant.TaskPricePatches, info.OriginModelName),
+		PerCallBilling:          info.TaskPriceFinalizedAtSubmit(),
+		BillingType:             info.PriceData.BillingType,
+		RequestDurationSeconds:  info.RequestDurationSeconds,
 		GroupPriceOverride:      info.PriceData.GroupPriceOverride,
 		GroupPriceOverrideGroup: info.PriceData.GroupPriceOverrideGroup,
 		UsingGroup:              info.UsingGroup,
@@ -198,30 +199,28 @@ func ResolveOriginTask(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskErr
 		info.ApiKey = key
 	}
 
-	// 提取 remix 参数（时长、分辨率 → OtherRatios）
+	// A remix without an explicit duration inherits the original task duration.
 	if info.Action == constant.TaskActionRemix {
-		if originTask.PrivateData.BillingContext != nil {
-			// 新的 remix 逻辑：直接从原始任务的 BillingContext 中提取 OtherRatios（如果存在）
-			for s, f := range originTask.PrivateData.BillingContext.OtherRatios {
-				info.PriceData.AddOtherRatio(s, f)
+		if billing := originTask.PrivateData.BillingContext; billing != nil {
+			info.RequestDurationSeconds = billing.RequestDurationSeconds
+			if info.RequestDurationSeconds == 0 {
+				info.RequestDurationSeconds = int(billing.OtherRatios["seconds"])
 			}
-		} else {
-			// 旧的 remix 逻辑：直接从 task data 解析 seconds 和 size（如果存在）
-			var taskData map[string]interface{}
+		}
+		if info.RequestDurationSeconds <= 1 {
+			var taskData struct {
+				Seconds  any `json:"seconds"`
+				Duration any `json:"duration"`
+			}
 			_ = common.Unmarshal(originTask.Data, &taskData)
-			secondsStr, _ := taskData["seconds"].(string)
-			seconds, _ := strconv.Atoi(secondsStr)
-			if seconds <= 0 {
-				seconds = 4
+			for _, value := range []any{taskData.Seconds, taskData.Duration} {
+				if seconds, err := strconv.Atoi(common.Interface2String(value)); err == nil && seconds > 0 {
+					info.RequestDurationSeconds = seconds
+					break
+				}
 			}
-			sizeStr, _ := taskData["size"].(string)
-			if info.PriceData.OtherRatios == nil {
-				info.PriceData.OtherRatios = map[string]float64{}
-			}
-			info.PriceData.OtherRatios["seconds"] = float64(seconds)
-			info.PriceData.OtherRatios["size"] = 1
-			if sizeStr == "1792x1024" || sizeStr == "1024x1792" {
-				info.PriceData.OtherRatios["size"] = 1.666667
+			if info.RequestDurationSeconds <= 1 {
+				info.RequestDurationSeconds = 4
 			}
 		}
 	}
@@ -269,25 +268,16 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		info.PublicTaskID = model.GenerateTaskID()
 	}
 
-	// 4. 价格计算：基础模型价格
+	// Resolve the configured tariff after the adaptor supplies request usage.
 	info.OriginModelName = modelName
-	priceData, err := helper.ModelPriceHelperPerCall(c, info)
+	if seconds := int(adaptor.EstimateBilling(c, info)["seconds"]); seconds > 0 {
+		info.RequestDurationSeconds = seconds
+	}
+	priceData, err := helper.ModelPriceHelperPerCall(c, info, info.RequestDurationSeconds)
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "model_price_error", http.StatusBadRequest)
 	}
 	info.PriceData = priceData
-
-	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）
-	//    必须在 ModelPriceHelperPerCall 之后调用（它会重建 PriceData）。
-	//    ResolveOriginTask 可能已在 remix 路径中预设了 OtherRatios，此处合并。
-	if estimatedRatios := adaptor.EstimateBilling(c, info); len(estimatedRatios) > 0 {
-		for k, v := range estimatedRatios {
-			info.PriceData.AddOtherRatio(k, v)
-		}
-	}
-
-	// 6. 将 OtherRatios 应用到基础额度
-	info.PriceData.Quota, info.PriceData.OtherRatios = calcTaskQuotaWithRatios(c, info, info.PriceData.OtherRatios)
 
 	// 7. 预扣费（仅首次 — 重试时 info.Billing 已存在，跳过）
 	if info.Billing == nil && !info.PriceData.FreeModel {
@@ -343,148 +333,18 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		return nil, taskErr
 	}
 
-	// 11. 提交后计费调整：让适配器根据上游实际返回调整 OtherRatios
-	finalQuota := info.PriceData.Quota
-	if adjustedRatios := adaptor.AdjustBillingOnSubmit(info, taskData); len(adjustedRatios) > 0 {
-		// 基于调整后的 ratios 重新计算 quota
-		finalQuota, adjustedRatios = calcTaskQuotaWithRatios(c, info, adjustedRatios)
-		info.PriceData.OtherRatios = adjustedRatios
-		info.PriceData.Quota = finalQuota
+	if !info.TaskPriceFinalizedAtSubmit() {
+		if outcome, err := adaptor.ParseTaskResult(taskData); err == nil && outcome != nil && outcome.Status == model.TaskStatusSuccess && outcome.TotalTokens > 0 {
+			info.PriceData.Quota = int(float64(outcome.TotalTokens) * info.PriceData.ModelRatio * info.PriceData.GroupRatioInfo.GroupRatio)
+		}
 	}
 
 	return &TaskSubmitResult{
 		UpstreamTaskID: upstreamTaskID,
 		TaskData:       taskData,
 		Platform:       platform,
-		Quota:          finalQuota,
+		Quota:          info.PriceData.Quota,
 	}, nil
-}
-
-// recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
-// 公式: baseQuota × ∏(ratio) — 其中 baseQuota 是不含 OtherRatios 的基础额度。
-func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float64) int {
-	// 从 PriceData 获取不含 OtherRatios 的基础价格
-	baseQuota := info.PriceData.Quota
-	// 先除掉原有的 OtherRatios 恢复基础额度
-	for _, ra := range info.PriceData.OtherRatios {
-		if ra != 1.0 && ra > 0 {
-			baseQuota = int(float64(baseQuota) / ra)
-		}
-	}
-	// 应用新的 ratios
-	result := float64(baseQuota)
-	for _, ra := range ratios {
-		if ra != 1.0 {
-			result *= ra
-		}
-	}
-	return int(result)
-}
-
-func normalizeTaskResolutionKey(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
-}
-
-func extractTaskResolution(req relaycommon.TaskSubmitReq) string {
-	candidates := []string{
-		req.Quality,
-		req.ResolutionName,
-		common.Interface2String(req.Metadata["output_resolution"]),
-		common.Interface2String(req.Metadata["resolution"]),
-		common.Interface2String(req.Metadata["resolution_name"]),
-		common.Interface2String(req.Metadata["quality"]),
-	}
-	for _, candidate := range candidates {
-		if key := normalizeTaskResolutionKey(candidate); key != "" {
-			return key
-		}
-	}
-	return ""
-}
-
-func calcTaskQuotaWithRatios(c *gin.Context, info *relaycommon.RelayInfo, ratios map[string]float64) (int, map[string]float64) {
-	normalizedRatios := common.FilterOtherRatiosForBillingModel(info.OriginModelName, cloneTaskRatios(ratios))
-	baseQuota := info.PriceData.BaseQuota
-	if baseQuota <= 0 {
-		baseQuota = info.PriceData.Quota
-	}
-
-	if seconds, ok := extractTaskSeconds(normalizedRatios); ok {
-		if secondsPrice, overrideGroup, found := helper.ResolveGroupModelPriceBySeconds(info, seconds); found {
-			info.PriceData.BillingType = "duration"
-			info.PriceData.BillingSeconds = seconds
-			info.PriceData.ModelPrice = secondsPrice
-			info.PriceData.GroupPriceOverride = true
-			info.PriceData.GroupPriceOverrideGroup = overrideGroup
-			baseQuota = int(secondsPrice * common.QuotaPerUnit)
-			normalizedRatios["seconds"] = 1
-		} else if secondsPrice, found := ratio_setting.GetModelPriceBySeconds(info.OriginModelName, seconds); found {
-			info.PriceData.BillingType = "duration"
-			info.PriceData.BillingSeconds = seconds
-			info.PriceData.ModelPrice = secondsPrice
-			info.PriceData.GroupPriceOverride = false
-			info.PriceData.GroupPriceOverrideGroup = ""
-			baseQuota = int(secondsPrice * common.QuotaPerUnit * info.PriceData.GroupRatioInfo.GroupRatio)
-			normalizedRatios["seconds"] = 1
-		}
-	}
-
-	if c != nil && !common.Is933VideoModel(info.OriginModelName) {
-		if req, err := relaycommon.GetTaskRequest(c); err == nil {
-			if resolution := extractTaskResolution(req); resolution != "" {
-				if resolutionPrice, overrideGroup, found := helper.ResolveGroupModelPriceByResolution(info, resolution); found {
-					info.PriceData.ModelPrice = resolutionPrice
-					info.PriceData.GroupPriceOverride = true
-					info.PriceData.GroupPriceOverrideGroup = overrideGroup
-					baseQuota = int(resolutionPrice * common.QuotaPerUnit)
-					normalizedRatios["resolution"] = 1
-				} else if resolutionPrice, found := ratio_setting.GetModelPriceByResolution(info.OriginModelName, resolution); found {
-					info.PriceData.ModelPrice = resolutionPrice
-					info.PriceData.GroupPriceOverride = false
-					info.PriceData.GroupPriceOverrideGroup = ""
-					baseQuota = int(resolutionPrice * common.QuotaPerUnit * info.PriceData.GroupRatioInfo.GroupRatio)
-					normalizedRatios["resolution"] = 1
-				}
-			}
-		}
-	}
-
-	result := float64(baseQuota)
-	if common.Is933VideoModel(info.OriginModelName) || !common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
-		for _, ra := range normalizedRatios {
-			if ra != 1.0 {
-				result *= ra
-			}
-		}
-	}
-	quota := int(result)
-	if info.PriceData.BillingType == "duration" && info.PriceData.BillingSeconds > 0 && common.QuotaPerUnit > 0 {
-		info.PriceData.BillingTotalPrice = float64(quota) / float64(common.QuotaPerUnit)
-		info.PriceData.BillingUnitPrice = info.PriceData.BillingTotalPrice / float64(info.PriceData.BillingSeconds)
-	}
-	return quota, normalizedRatios
-}
-
-func cloneTaskRatios(ratios map[string]float64) map[string]float64 {
-	if len(ratios) == 0 {
-		return map[string]float64{}
-	}
-	cloned := make(map[string]float64, len(ratios))
-	for key, value := range ratios {
-		cloned[key] = value
-	}
-	return cloned
-}
-
-func extractTaskSeconds(ratios map[string]float64) (int, bool) {
-	if len(ratios) == 0 {
-		return 0, false
-	}
-	seconds, ok := ratios["seconds"]
-	if !ok || seconds <= 0 {
-		return 0, false
-	}
-	return int(seconds), true
 }
 
 var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp *dto.TaskError){

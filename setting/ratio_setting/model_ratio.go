@@ -1192,6 +1192,12 @@ func FormatMatchingModelName(name string) string {
 
 // result: 倍率or价格， usePrice， exist
 func GetModelRatioOrPrice(model string) (float64, bool, bool) { // price or ratio
+	if price, ok := GetModelPriceBySecondsMin(model); ok {
+		return price, true, true
+	}
+	if price, ok := GetModelPriceByResolutionMin(model); ok {
+		return price, true, true
+	}
 	price, usePrice := GetModelPrice(model, false)
 	if usePrice {
 		return price, true, true

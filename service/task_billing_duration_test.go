@@ -27,14 +27,9 @@ func TestBuildTaskConsumptionLogContentUsesDurationBillingLabel(t *testing.T) {
 }
 
 func TestBuildTaskConsumptionLogContentKeepsPerCallLabel(t *testing.T) {
-	originalPatches := constant.TaskPricePatches
-	t.Cleanup(func() {
-		constant.TaskPricePatches = originalPatches
-	})
-	constant.TaskPricePatches = []string{"video-2.0"}
-
 	info := &relaycommon.RelayInfo{
 		OriginModelName: "video-2.0",
+		PriceData:       types.PriceData{BillingType: "per-request"},
 		TaskRelayInfo: &relaycommon.TaskRelayInfo{
 			Action: constant.TaskActionTextGenerate,
 		},

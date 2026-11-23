@@ -161,9 +161,6 @@ func (i *ImageRequest) GetTokenCountMeta() *types.TokenCountMeta {
 		n = *i.N
 	}
 	imagePriceRatio := sizeRatio * qualityRatio * float64(n)
-	if common.IsResolutionOnlyBillingModel(i.Model) {
-		imagePriceRatio = 1
-	}
 	return &types.TokenCountMeta{
 		CombineText:     i.Prompt,
 		MaxTokens:       1584,

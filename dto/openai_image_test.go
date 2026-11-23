@@ -99,7 +99,7 @@ func TestImageRequestPreservesExtraBody(t *testing.T) {
 	require.NotContains(t, req.Extra, "extra_body")
 }
 
-func TestImageRequestBananaUsesNeutralImagePriceRatio(t *testing.T) {
+func TestImageRequestReportsImageCountInTokenMetadata(t *testing.T) {
 	n := uint(3)
 	req := ImageRequest{
 		Model:            "nano-banana-pro",
@@ -111,5 +111,5 @@ func TestImageRequestBananaUsesNeutralImagePriceRatio(t *testing.T) {
 	meta := req.GetTokenCountMeta()
 
 	require.NotNil(t, meta)
-	require.Equal(t, 1.0, meta.ImagePriceRatio)
+	require.Equal(t, 3.0, meta.ImagePriceRatio)
 }

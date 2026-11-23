@@ -318,7 +318,7 @@ func TestCalculateTextQuotaSummaryKeepsPrePRClaudeOpenRouterBilling(t *testing.T
 	require.Equal(t, 798, summary.Quota)
 }
 
-func TestCalculateTextQuotaSummaryIgnoresBananaOtherRatios(t *testing.T) {
+func TestCalculateTextQuotaSummaryDoesNotMultiplyConfiguredRequestPrice(t *testing.T) {
 	originalQuotaPerUnit := common.QuotaPerUnit
 	defer func() {
 		common.QuotaPerUnit = originalQuotaPerUnit
@@ -330,7 +330,7 @@ func TestCalculateTextQuotaSummaryIgnoresBananaOtherRatios(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(w)
 
 	relayInfo := &relaycommon.RelayInfo{
-		OriginModelName: "nano-banana-pro",
+		OriginModelName: "example-image",
 		PriceData: types.PriceData{
 			ModelPrice: 2,
 			UsePrice:   true,
@@ -363,7 +363,7 @@ func TestCalculateTextQuotaSummaryUsesGroupPriceOverrideWithoutGroupRatio(t *tes
 	ctx, _ := gin.CreateTestContext(w)
 
 	relayInfo := &relaycommon.RelayInfo{
-		OriginModelName: "nano-banana-pro",
+		OriginModelName: "example-image",
 		PriceData: types.PriceData{
 			ModelPrice:         0.12,
 			UsePrice:           true,

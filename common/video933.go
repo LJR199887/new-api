@@ -1,5 +1,9 @@
 package common
 
+import "strings"
+
+const Video933DefaultDuration = 5
+
 var video933ModelNames = func() []string {
 	names := []string{
 		"933-video2.0", "933-video2.0-480p", "933-video2.0-1080p",
@@ -18,7 +22,7 @@ var video933ModelNames = func() []string {
 var video933ModelSet = func() map[string]struct{} {
 	models := make(map[string]struct{}, len(video933ModelNames))
 	for _, name := range video933ModelNames {
-		models[normalizeBillingModelName(name)] = struct{}{}
+		models[strings.ToLower(name)] = struct{}{}
 	}
 	return models
 }()
@@ -30,6 +34,18 @@ func Video933ModelNames() []string {
 
 // Is933VideoModel matches the original 933 models and the compatible Video 2.0 variants.
 func Is933VideoModel(name string) bool {
-	_, ok := video933ModelSet[normalizeBillingModelName(name)]
+	_, ok := video933ModelSet[strings.ToLower(strings.TrimSpace(name))]
 	return ok
+}
+
+func Video933Resolution(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case strings.HasSuffix(name, "-480p"):
+		return "480p"
+	case strings.HasSuffix(name, "-1080p"):
+		return "1080p"
+	default:
+		return "720p"
+	}
 }

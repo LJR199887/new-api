@@ -2015,9 +2015,6 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if err != nil {
 		return nil
 	}
-	if isKlingV3VideoModel(info.UpstreamModelName) || isMiniMaxH3VideoModel(info.UpstreamModelName) || isKo3VideoModel(info.UpstreamModelName) {
-		return nil
-	}
 
 	seconds, _ := strconv.Atoi(req.Seconds)
 	if seconds == 0 {
@@ -2035,10 +2032,16 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 				seconds = 5
 			}
 		}
-	} else if isSeedanceVideoModel(info.UpstreamModelName) || common.Is933VideoModel(info.UpstreamModelName) {
+	} else if common.Is933VideoModel(info.UpstreamModelName) {
+		if seconds <= 0 {
+			seconds = common.Video933DefaultDuration
+		}
+	} else if isSeedanceVideoModel(info.UpstreamModelName) || isKlingV3VideoModel(info.UpstreamModelName) || isMiniMaxH3VideoModel(info.UpstreamModelName) {
 		if seconds <= 0 {
 			seconds = 5
 		}
+	} else if isKo3VideoModel(info.UpstreamModelName) && seconds <= 0 {
+		seconds = 3
 	} else if seconds <= 0 {
 		seconds = 4
 	}
@@ -2421,6 +2424,12 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		Code:        0,
 		CreatedAt:   createdAt,
 		CompletedAt: resTask.CompletedAt,
+	}
+	for _, path := range []string{"usage.total_tokens", "data.usage.total_tokens"} {
+		if total := gjson.GetBytes(respBody, path).Int(); total > 0 {
+			taskResult.TotalTokens = int(total)
+			break
+		}
 	}
 
 	status := strings.ToLower(strings.TrimSpace(resTask.Status))

@@ -14,10 +14,11 @@ type Fa2ImageModelSpec struct {
 
 func GetFa2ImageModelSpec(modelName string) (Fa2ImageModelSpec, bool) {
 	commonRatios := []string{"21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16"}
-	switch normalizeBillingModelName(modelName) {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	switch modelName {
 	case "gpt-image-2", "gpt-image-2.5-flare", "gpt-image-2.5-sunburst":
 		maxImages := 16
-		if normalizeBillingModelName(modelName) == "gpt-image-2" {
+		if modelName == "gpt-image-2" {
 			maxImages = 17
 		}
 		return Fa2ImageModelSpec{

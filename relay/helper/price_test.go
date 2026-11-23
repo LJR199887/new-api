@@ -142,7 +142,7 @@ func TestModelPriceHelperUsesGroupPerCallPriceWithoutGroupRatio(t *testing.T) {
 	assert.Equal(t, int(0.02*common.QuotaPerUnit), priceData.QuotaToPreConsume)
 }
 
-func TestModelPriceHelperFallsBackToSecondsMinPrice(t *testing.T) {
+func TestDurationTariffRejectsMissingUsage(t *testing.T) {
 	original := ratio_setting.ModelPriceBySeconds2JSONString()
 	originalQuotaPerUnit := common.QuotaPerUnit
 	defer func() {
@@ -169,29 +169,12 @@ func TestModelPriceHelperFallsBackToSecondsMinPrice(t *testing.T) {
 		Request:         request,
 	}
 
-	priceData, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
+	_, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
 
-	require.NoError(t, err)
-	assert.True(t, priceData.UsePrice)
-	assert.Equal(t, 0.4, priceData.ModelPrice)
-	assert.Equal(t, int(0.4*common.QuotaPerUnit), priceData.QuotaToPreConsume)
+	require.ErrorContains(t, err, "no applicable duration price")
 }
 
-func Test933RequiresExplicitPerSecondPricing(t *testing.T) {
-	original := ratio_setting.ModelPriceBySeconds2JSONString()
-	t.Cleanup(func() { _ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original) })
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	info := &relaycommon.RelayInfo{OriginModelName: "933-video2.0", UsingGroup: "default"}
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{"933-video2.0":{"5":0.5}}`))
-	_, err := ModelPriceHelperPerCall(c, info)
-	require.Error(t, err)
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{"933-video2.0":{"per_second":0.2}}`))
-	price, err := ModelPriceHelperPerCall(c, info)
-	require.NoError(t, err)
-	assert.Equal(t, 0.2, price.ModelPrice)
-}
-
-func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
+func TestConfiguredResolutionTariffsRequireExactTier(t *testing.T) {
 	original := ratio_setting.ModelPriceByResolution2JSONString()
 	originalQuotaPerUnit := common.QuotaPerUnit
 	t.Cleanup(func() {
@@ -252,7 +235,7 @@ func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
 		Request:         &dto.ImageRequest{Model: "seedream-5-0", OutputResolution: "4K"},
 	}
 	_, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
-	require.ErrorContains(t, err, "requires ModelPriceByResolution pricing for 4K")
+	require.ErrorContains(t, err, "no applicable resolution price")
 	// New models must not silently fall back to another model or a lower tier.
 	require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(`{
 		"gpt-image-2":{"4K":0.4},
@@ -262,6 +245,41 @@ func TestFa2ImageModelsRequireExactResolutionPricing(t *testing.T) {
 	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
 		info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default", Request: &dto.ImageRequest{Model: name, OutputResolution: "4K"}}
 		_, err := ModelPriceHelper(c, info, 0, &types.TokenCountMeta{})
-		require.ErrorContains(t, err, "requires ModelPriceByResolution pricing for 4K")
+		require.ErrorContains(t, err, "no applicable resolution price")
+	}
+}
+
+func TestFormerResolutionOnlyModelsUseSavedFixedOrTokenPrice(t *testing.T) {
+	fixed := ratio_setting.ModelPrice2JSONString()
+	resolutions := ratio_setting.ModelPriceByResolution2JSONString()
+	ratios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		_ = ratio_setting.UpdateModelPriceByJSONString(fixed)
+		_ = ratio_setting.UpdateModelPriceByResolutionByJSONString(resolutions)
+		_ = ratio_setting.UpdateModelRatioByJSONString(ratios)
+	})
+	require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-image-2":0.5,"nano-banana-pro":0}`))
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+
+	for name, want := range map[string]float64{"gpt-image-2": 0.5, "nano-banana-pro": 0} {
+		info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default",
+			Request: &dto.ImageRequest{Model: name, OutputResolution: "4K"}}
+		price, err := ModelPriceHelper(c, info, 50, &types.TokenCountMeta{ImagePriceRatio: 7})
+		require.NoError(t, err)
+		require.Equal(t, "per-request", price.BillingType)
+		require.Equal(t, want, price.ModelPrice)
+		require.Equal(t, int(want*common.QuotaPerUnit*price.GroupRatioInfo.GroupRatio), price.QuotaToPreConsume)
+	}
+
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-image-2":2.5,"nano-banana-pro":1.5}`))
+	for name, want := range map[string]float64{"gpt-image-2": 2.5, "nano-banana-pro": 1.5} {
+		info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default"}
+		price, err := ModelPriceHelper(c, info, 50, &types.TokenCountMeta{})
+		require.NoError(t, err)
+		require.Equal(t, "per-token", price.BillingType)
+		require.False(t, price.UsePrice)
+		require.Equal(t, want, price.ModelRatio)
 	}
 }
