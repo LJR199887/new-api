@@ -171,6 +171,11 @@ type RelayInfo struct {
 	*TaskRelayInfo
 }
 
+// TaskPriceFinalizedAtSubmit reports whether polling should keep the submitted price.
+func (info *RelayInfo) TaskPriceFinalizedAtSubmit() bool {
+	return info.PriceData.UsePrice
+}
+
 func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
 	channelType := common.GetContextKeyInt(c, constant.ContextKeyChannelType)
 	paramOverride := common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride)
@@ -654,6 +659,8 @@ type TaskRelayInfo struct {
 	// PublicTaskID 是提交时预生成的 task_xxxx 格式公开 ID，
 	// 供 DoResponse 在返回给客户端时使用（避免暴露上游真实 ID）。
 	PublicTaskID string
+
+	RequestDurationSeconds int
 
 	ConsumeQuota bool
 

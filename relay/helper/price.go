@@ -25,12 +25,14 @@ func normalizeResolutionPriceKey(value string) string {
 
 func extractResolutionKeyFromTaskRequest(req relaycommon.TaskSubmitReq) string {
 	candidates := []string{
-		req.Quality,
+		req.Resolution,
 		req.ResolutionName,
 		common.Interface2String(req.Metadata["output_resolution"]),
 		common.Interface2String(req.Metadata["resolution"]),
 		common.Interface2String(req.Metadata["resolution_name"]),
 		common.Interface2String(req.Metadata["quality"]),
+		req.Quality,
+		req.Size,
 	}
 	for _, candidate := range candidates {
 		if key := normalizeResolutionPriceKey(candidate); key != "" {
@@ -46,6 +48,7 @@ func extractResolutionKeyFromRequest(request dto.Request) string {
 		candidates := []string{
 			req.OutputResolution,
 			req.Resolution,
+			req.Size,
 		}
 		if req.Quality != nil {
 			candidates = append(candidates, *req.Quality)
@@ -56,7 +59,7 @@ func extractResolutionKeyFromRequest(request dto.Request) string {
 			}
 		}
 	case *dto.ImageRequest:
-		for _, candidate := range []string{req.OutputResolution, req.Quality} {
+		for _, candidate := range []string{req.OutputResolution, req.Quality, req.Size} {
 			if key := normalizeResolutionPriceKey(candidate); key != "" {
 				return key
 			}
@@ -200,81 +203,6 @@ func ResolveGroupModelPriceByResolutionMin(info *relaycommon.RelayInfo) (float64
 	return 0, "", false
 }
 
-func resolveSecondsBasedModelPrice(info *relaycommon.RelayInfo) (float64, bool) {
-	if info == nil || info.Request == nil {
-		return 0, false
-	}
-	seconds, ok := extractSecondsFromRequest(info.Request)
-	if !ok {
-		return 0, false
-	}
-	return ratio_setting.GetModelPriceBySeconds(info.OriginModelName, seconds)
-}
-
-func resolveGroupSecondsBasedModelPrice(info *relaycommon.RelayInfo) (float64, string, bool) {
-	if info == nil || info.Request == nil {
-		return 0, "", false
-	}
-	seconds, ok := extractSecondsFromRequest(info.Request)
-	if !ok {
-		return 0, "", false
-	}
-	return ResolveGroupModelPriceBySeconds(info, seconds)
-}
-
-func resolveGroupTaskSecondsBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, string, bool) {
-	if c == nil || info == nil {
-		return 0, "", false
-	}
-	req, err := relaycommon.GetTaskRequest(c)
-	if err != nil {
-		return 0, "", false
-	}
-	seconds, ok := extractSecondsFromTaskRequest(req)
-	if !ok {
-		return 0, "", false
-	}
-	return ResolveGroupModelPriceBySeconds(info, seconds)
-}
-
-func resolveResolutionBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, bool) {
-	if info == nil {
-		return 0, false
-	}
-	if info != nil && info.Request != nil {
-		if resolution := extractResolutionKeyFromRequest(info.Request); resolution != "" {
-			return ratio_setting.GetModelPriceByResolution(info.OriginModelName, resolution)
-		}
-	}
-	if c != nil {
-		if req, err := relaycommon.GetTaskRequest(c); err == nil {
-			if resolution := extractResolutionKeyFromTaskRequest(req); resolution != "" {
-				return ratio_setting.GetModelPriceByResolution(info.OriginModelName, resolution)
-			}
-		}
-	}
-	return 0, false
-}
-
-func resolveGroupResolutionBasedModelPrice(c *gin.Context, info *relaycommon.RelayInfo) (float64, string, bool) {
-	if info == nil {
-		return 0, "", false
-	}
-	if info.Request != nil {
-		if resolution := extractResolutionKeyFromRequest(info.Request); resolution != "" {
-			return ResolveGroupModelPriceByResolution(info, resolution)
-		}
-	}
-	if c != nil {
-		if req, err := relaycommon.GetTaskRequest(c); err == nil {
-			if resolution := extractResolutionKeyFromTaskRequest(req); resolution != "" {
-				return ResolveGroupModelPriceByResolution(info, resolution)
-			}
-		}
-	}
-	return 0, "", false
-}
-
 func fixedPriceQuota(modelPrice float64, groupRatio float64, groupPriceOverride bool) int {
 	if groupPriceOverride {
 		return int(modelPrice * common.QuotaPerUnit)
@@ -290,10 +218,11 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 	}
 
 	// check auto group
-	autoGroup, exists := ctx.Get("auto_group")
-	if exists {
-		logger.LogDebug(ctx, fmt.Sprintf("final group: %s", autoGroup))
-		relayInfo.UsingGroup = autoGroup.(string)
+	if ctx != nil {
+		if autoGroup, exists := ctx.Get("auto_group"); exists {
+			logger.LogDebug(ctx, fmt.Sprintf("final group: %s", autoGroup))
+			relayInfo.UsingGroup = autoGroup.(string)
+		}
 	}
 
 	// check user group special ratio
@@ -313,158 +242,40 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
-	if common.IsFa2ImageModel(info.OriginModelName) {
-		return requiredResolutionModelPrice(c, info, groupRatioInfo)
+	seconds, _ := extractSecondsFromRequest(info.Request)
+	resolution := extractResolutionKeyFromRequest(info.Request)
+	price, usePrice, err := resolveConfiguredModelPrice(info, groupRatioInfo, seconds, resolution)
+	if err != nil {
+		return types.PriceData{}, err
 	}
-
-	var groupPriceOverride bool
-	var groupPriceOverrideGroup string
-	modelPrice, groupPriceOverrideGroup, usePrice := resolveGroupSecondsBasedModelPrice(info)
 	if usePrice {
-		groupPriceOverride = true
-	}
-	if !usePrice {
-		if resolutionPrice, overrideGroup, ok := resolveGroupResolutionBasedModelPrice(c, info); ok {
-			modelPrice = resolutionPrice
-			groupPriceOverrideGroup = overrideGroup
-			usePrice = true
-			groupPriceOverride = true
-		}
-	}
-	if !usePrice {
-		if groupModelPrice, overrideGroup, ok := ResolveGroupModelPrice(info); ok {
-			modelPrice = groupModelPrice
-			groupPriceOverrideGroup = overrideGroup
-			usePrice = true
-			groupPriceOverride = true
-		}
-	}
-	if !usePrice {
-		if secondsPrice, overrideGroup, ok := ResolveGroupModelPriceBySecondsMin(info); ok {
-			modelPrice = secondsPrice
-			groupPriceOverrideGroup = overrideGroup
-			usePrice = true
-			groupPriceOverride = true
-		}
-	}
-	if !usePrice {
-		if resolutionPrice, overrideGroup, ok := ResolveGroupModelPriceByResolutionMin(info); ok {
-			modelPrice = resolutionPrice
-			groupPriceOverrideGroup = overrideGroup
-			usePrice = true
-			groupPriceOverride = true
-		}
-	}
-	if !usePrice {
-		modelPrice, usePrice = ratio_setting.GetModelPrice(info.OriginModelName, false)
-	}
-	if !usePrice {
-		if secondsPrice, ok := resolveSecondsBasedModelPrice(info); ok {
-			modelPrice = secondsPrice
-			usePrice = true
-		}
-	}
-	if !usePrice {
-		if resolutionPrice, ok := resolveResolutionBasedModelPrice(c, info); ok {
-			modelPrice = resolutionPrice
-			usePrice = true
-		}
-	}
-	if !usePrice {
-		if secondsPrice, ok := ratio_setting.GetModelPriceBySecondsMin(info.OriginModelName); ok {
-			modelPrice = secondsPrice
-			usePrice = true
-		}
-	}
-	if !usePrice {
-		if resolutionPrice, ok := ratio_setting.GetModelPriceByResolutionMin(info.OriginModelName); ok {
-			modelPrice = resolutionPrice
-			usePrice = true
-		}
+		info.PriceData = price
+		return price, nil
 	}
 
-	var preConsumedQuota int
-	var modelRatio float64
-	var completionRatio float64
-	var cacheRatio float64
-	var imageRatio float64
-	var cacheCreationRatio float64
-	var cacheCreationRatio5m float64
-	var cacheCreationRatio1h float64
-	var audioRatio float64
-	var audioCompletionRatio float64
-	var freeModel bool
-	if !usePrice {
-		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
-		if meta.MaxTokens != 0 {
-			preConsumedTokens += meta.MaxTokens
-		}
-		var success bool
-		var matchName string
-		modelRatio, success, matchName = ratio_setting.GetModelRatio(info.OriginModelName)
-		if !success {
-			acceptUnsetRatio := false
-			if info.UserSetting.AcceptUnsetRatioModel {
-				acceptUnsetRatio = true
-			}
-			if !acceptUnsetRatio {
-				return types.PriceData{}, fmt.Errorf("模型 %s 倍率或价格未配置，请联系管理员设置或开始自用模式；Model %s ratio or price not set, please set or start self-use mode", matchName, matchName)
-			}
-		}
-		completionRatio = ratio_setting.GetCompletionRatio(info.OriginModelName)
-		cacheRatio, _ = ratio_setting.GetCacheRatio(info.OriginModelName)
-		cacheCreationRatio, _ = ratio_setting.GetCreateCacheRatio(info.OriginModelName)
-		cacheCreationRatio5m = cacheCreationRatio
-		// 固定1h和5min缓存写入价格的比例
-		cacheCreationRatio1h = cacheCreationRatio * claudeCacheCreation1hMultiplier
-		imageRatio, _ = ratio_setting.GetImageRatio(info.OriginModelName)
-		audioRatio = ratio_setting.GetAudioRatio(info.OriginModelName)
-		audioCompletionRatio = ratio_setting.GetAudioCompletionRatio(info.OriginModelName)
-		ratio := modelRatio * groupRatioInfo.GroupRatio
-		preConsumedQuota = int(float64(preConsumedTokens) * ratio)
-	} else {
-		if meta.ImagePriceRatio != 0 {
-			modelPrice = modelPrice * meta.ImagePriceRatio
-		}
-		preConsumedQuota = fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
+	preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
+	if meta != nil && meta.MaxTokens != 0 {
+		preConsumedTokens += meta.MaxTokens
 	}
-
-	// check if free model pre-consume is disabled
-	if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
-		// if model price or ratio is 0, do not pre-consume quota
-		if groupRatioInfo.GroupRatio == 0 {
-			preConsumedQuota = 0
-			freeModel = true
-		} else if usePrice {
-			if modelPrice == 0 {
-				preConsumedQuota = 0
-				freeModel = true
-			}
-		} else {
-			if modelRatio == 0 {
-				preConsumedQuota = 0
-				freeModel = true
-			}
-		}
+	modelRatio, configured, matchName := ratio_setting.GetModelRatio(info.OriginModelName)
+	if !configured && !info.UserSetting.AcceptUnsetRatioModel {
+		return types.PriceData{}, missingModelPriceError(matchName)
 	}
-
+	preConsumedQuota := int(float64(preConsumedTokens) * modelRatio * groupRatioInfo.GroupRatio)
+	cacheRatio, _ := ratio_setting.GetCacheRatio(info.OriginModelName)
+	cacheCreationRatio, _ := ratio_setting.GetCreateCacheRatio(info.OriginModelName)
+	imageRatio, _ := ratio_setting.GetImageRatio(info.OriginModelName)
+	freeModel := !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume &&
+		(groupRatioInfo.GroupRatio == 0 || modelRatio == 0)
 	priceData := types.PriceData{
-		FreeModel:               freeModel,
-		ModelPrice:              modelPrice,
-		ModelRatio:              modelRatio,
-		CompletionRatio:         completionRatio,
-		GroupRatioInfo:          groupRatioInfo,
-		UsePrice:                usePrice,
-		GroupPriceOverride:      groupPriceOverride,
-		GroupPriceOverrideGroup: groupPriceOverrideGroup,
-		CacheRatio:              cacheRatio,
-		ImageRatio:              imageRatio,
-		AudioRatio:              audioRatio,
-		AudioCompletionRatio:    audioCompletionRatio,
-		CacheCreationRatio:      cacheCreationRatio,
-		CacheCreation5mRatio:    cacheCreationRatio5m,
-		CacheCreation1hRatio:    cacheCreationRatio1h,
-		QuotaToPreConsume:       preConsumedQuota,
+		FreeModel: freeModel, ModelRatio: modelRatio, BillingType: "per-token",
+		GroupRatioInfo: groupRatioInfo, QuotaToPreConsume: preConsumedQuota,
+		CompletionRatio: ratio_setting.GetCompletionRatio(info.OriginModelName),
+		CacheRatio:      cacheRatio, ImageRatio: imageRatio,
+		AudioRatio:           ratio_setting.GetAudioRatio(info.OriginModelName),
+		AudioCompletionRatio: ratio_setting.GetAudioCompletionRatio(info.OriginModelName),
+		CacheCreationRatio:   cacheCreationRatio, CacheCreation5mRatio: cacheCreationRatio,
+		CacheCreation1hRatio: cacheCreationRatio * claudeCacheCreation1hMultiplier,
 	}
 
 	if common.DebugEnabled {
@@ -474,184 +285,118 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	return priceData, nil
 }
 
-func requiredResolutionModelPrice(c *gin.Context, info *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
-	resolution := ""
-	if info != nil && info.Request != nil {
-		resolution = extractResolutionKeyFromRequest(info.Request)
-	}
-	if resolution == "" && c != nil {
-		if req, err := relaycommon.GetTaskRequest(c); err == nil {
-			resolution = extractResolutionKeyFromTaskRequest(req)
-		}
-	}
-	if resolution == "" {
-		if spec, ok := common.GetFa2ImageModelSpec(info.OriginModelName); ok {
-			resolution = normalizeResolutionPriceKey(spec.DefaultResolution)
-		}
-	}
-
-	modelPrice, overrideGroup, usePrice := ResolveGroupModelPriceByResolution(info, resolution)
-	groupPriceOverride := usePrice
-	if !usePrice {
-		modelPrice, usePrice = ratio_setting.GetModelPriceByResolution(info.OriginModelName, resolution)
-	}
-	if !usePrice || modelPrice < 0 {
-		return types.PriceData{}, fmt.Errorf("%s requires ModelPriceByResolution pricing for %s", info.OriginModelName, strings.ToUpper(resolution))
-	}
-
-	quota := fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
-	freeModel := !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume &&
-		(modelPrice == 0 || (!groupPriceOverride && groupRatioInfo.GroupRatio == 0))
-	priceData := types.PriceData{
-		FreeModel:               freeModel,
-		ModelPrice:              modelPrice,
-		GroupRatioInfo:          groupRatioInfo,
-		UsePrice:                true,
-		GroupPriceOverride:      groupPriceOverride,
-		GroupPriceOverrideGroup: overrideGroup,
-		QuotaToPreConsume:       quota,
-	}
-	info.PriceData = priceData
-	return priceData, nil
+func missingModelPriceError(name string) error {
+	return fmt.Errorf("模型 %s 倍率或价格未配置，请联系管理员设置或开始自用模式；Model %s ratio or price not set, please set or start self-use mode", name, name)
 }
 
-// ModelPriceHelperPerCall 按次计费的 PriceHelper (MJ、Task)
-func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
-	groupRatioInfo := HandleGroupRatio(c, info)
-	if common.Is933VideoModel(info.OriginModelName) {
-		prices, _ := ratio_setting.GetModelPriceBySecondsMap(info.OriginModelName)
-		overrideGroup := ""
-		for _, group := range GroupPriceCandidateGroups(info) {
-			if groupPrices, ok := ratio_setting.GetGroupModelPriceBySecondsMap(group, info.OriginModelName); ok {
-				prices, overrideGroup = groupPrices, group
-				break
+// resolveConfiguredModelPrice selects a tariff, not a model capability. Model
+// metadata may supply request defaults but never selects the billing mode.
+func resolveConfiguredModelPrice(info *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo, seconds int, resolution string) (types.PriceData, bool, error) {
+	name := info.OriginModelName
+	if spec, ok := common.GetFa2ImageModelSpec(name); ok && (resolution == "" || resolution == "standard" || resolution == "auto") {
+		resolution = spec.DefaultResolution
+	}
+	if seconds <= 0 && common.Is933VideoModel(name) {
+		seconds = common.Video933DefaultDuration
+	}
+	if resolution == "" {
+		switch {
+		case common.Is933VideoModel(name):
+			resolution = common.Video933Resolution(name)
+		case common.IsVideo25Model(name):
+			resolution = common.Video25Resolution(name)
+		}
+	}
+
+	// A group tariff takes priority. Within each scope, use the same order as
+	// the pricing editor: duration, resolution, then a fixed per-request price.
+	for _, group := range append(GroupPriceCandidateGroups(info), "") {
+		var mode string
+		var price float64
+		var ok bool
+		if group == "" {
+			if _, configured := ratio_setting.GetModelPriceBySecondsMap(name); configured {
+				mode = "duration"
+				price, ok = ratio_setting.GetModelPriceBySeconds(name, seconds)
+			} else if _, configured := ratio_setting.GetModelPriceByResolutionMap(name); configured {
+				mode = "resolution"
+				price, ok = ratio_setting.GetModelPriceByResolution(name, resolution)
+			} else if price, ok = ratio_setting.GetModelPrice(name, false); ok {
+				mode = "per-request"
 			}
-		}
-		unitPrice, ok := prices[ratio_setting.ModelPricePerSecondKey]
-		if !ok || unitPrice < 0 {
-			return types.PriceData{}, fmt.Errorf("%s requires ModelPriceBySeconds per_second pricing", info.OriginModelName)
-		}
-		quota := fixedPriceQuota(unitPrice, groupRatioInfo.GroupRatio, overrideGroup != "")
-		return types.PriceData{
-			ModelPrice: unitPrice, Quota: quota, BaseQuota: quota,
-			GroupRatioInfo: groupRatioInfo, GroupPriceOverride: overrideGroup != "",
-			GroupPriceOverrideGroup: overrideGroup,
-			FreeModel:               !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume && (unitPrice == 0 || (overrideGroup == "" && groupRatioInfo.GroupRatio == 0)),
-		}, nil
-	}
-
-	groupPriceOverride := false
-	groupPriceOverrideGroup := ""
-	modelPrice, groupPriceOverrideGroup, success := resolveGroupTaskSecondsBasedModelPrice(c, info)
-	if success {
-		groupPriceOverride = true
-	}
-	if !success {
-		if resolutionPrice, overrideGroup, ok := resolveGroupResolutionBasedModelPrice(c, info); ok {
-			modelPrice = resolutionPrice
-			groupPriceOverrideGroup = overrideGroup
-			success = true
-			groupPriceOverride = true
-		}
-	}
-	if !success {
-		if groupModelPrice, overrideGroup, ok := ResolveGroupModelPrice(info); ok {
-			modelPrice = groupModelPrice
-			groupPriceOverrideGroup = overrideGroup
-			success = true
-			groupPriceOverride = true
-		}
-	}
-	if !success {
-		if secondsPrice, overrideGroup, ok := ResolveGroupModelPriceBySecondsMin(info); ok {
-			modelPrice = secondsPrice
-			groupPriceOverrideGroup = overrideGroup
-			success = true
-			groupPriceOverride = true
-		}
-	}
-	if !success {
-		if resolutionPrice, overrideGroup, ok := ResolveGroupModelPriceByResolutionMin(info); ok {
-			modelPrice = resolutionPrice
-			groupPriceOverrideGroup = overrideGroup
-			success = true
-			groupPriceOverride = true
-		}
-	}
-	if !success {
-		modelPrice, success = ratio_setting.GetModelPrice(info.OriginModelName, true)
-	}
-	if !success {
-		if resolutionPrice, ok := resolveResolutionBasedModelPrice(c, info); ok {
-			modelPrice = resolutionPrice
-			success = true
-		}
-	}
-	// 如果没有配置价格，检查模型倍率配置
-	if !success {
-		if secondsPrice, ok := ratio_setting.GetModelPriceBySecondsMin(info.OriginModelName); ok {
-			modelPrice = secondsPrice
-			success = true
-		}
-	}
-	if !success {
-		if resolutionPrice, ok := ratio_setting.GetModelPriceByResolutionMin(info.OriginModelName); ok {
-			modelPrice = resolutionPrice
-			success = true
-		}
-	}
-	if !success {
-
-		// 没有配置费用，也要使用默认费用,否则按费率计费模型无法使用
-		defaultPrice, ok := ratio_setting.GetDefaultModelPriceMap()[info.OriginModelName]
-		if ok {
-			modelPrice = defaultPrice
 		} else {
-			// 没有配置倍率也不接受没配置,那就返回错误
-			_, ratioSuccess, matchName := ratio_setting.GetModelRatio(info.OriginModelName)
-			acceptUnsetRatio := false
-			if info.UserSetting.AcceptUnsetRatioModel {
-				acceptUnsetRatio = true
+			if _, configured := ratio_setting.GetGroupModelPriceBySecondsMap(group, name); configured {
+				mode = "duration"
+				price, ok = ratio_setting.GetGroupModelPriceBySeconds(group, name, seconds)
+			} else if _, configured := ratio_setting.GetGroupModelPriceByResolutionMap(group, name); configured {
+				mode = "resolution"
+				price, ok = ratio_setting.GetGroupModelPriceByResolution(group, name, resolution)
+			} else if price, ok = ratio_setting.GetGroupModelPrice(group, name); ok {
+				mode = "per-request"
 			}
-			if !ratioSuccess && !acceptUnsetRatio {
-				return types.PriceData{}, fmt.Errorf("模型 %s 倍率或价格未配置，请联系管理员设置或开始自用模式；Model %s ratio or price not set, please set or start self-use mode", matchName, matchName)
+		}
+		if mode == "" {
+			continue
+		}
+		if !ok || price < 0 {
+			return types.PriceData{}, true, fmt.Errorf("%s has no applicable %s price for %d seconds at %s", name, mode, seconds, resolution)
+		}
+		quota := fixedPriceQuota(price, groupRatioInfo.GroupRatio, group != "")
+		result := types.PriceData{
+			ModelPrice: price, Quota: quota, BaseQuota: quota, QuotaToPreConsume: quota, UsePrice: true,
+			GroupRatioInfo: groupRatioInfo, GroupPriceOverride: group != "",
+			GroupPriceOverrideGroup: group, BillingType: mode,
+			FreeModel: !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume && (price == 0 || (group == "" && groupRatioInfo.GroupRatio == 0)),
+		}
+		if mode == "duration" {
+			result.BillingSeconds = seconds
+			if common.QuotaPerUnit > 0 {
+				result.BillingTotalPrice = float64(quota) / common.QuotaPerUnit
+				result.BillingUnitPrice = result.BillingTotalPrice / float64(seconds)
 			}
-			// 未配置价格但配置了倍率，使用默认预扣价格
-			modelPrice = float64(common.PreConsumedQuota) / common.QuotaPerUnit
 		}
-
+		return result, true, nil
 	}
-	quota := fixedPriceQuota(modelPrice, groupRatioInfo.GroupRatio, groupPriceOverride)
+	return types.PriceData{}, false, nil
+}
 
-	// 免费模型检测（与 ModelPriceHelper 对齐）
-	freeModel := false
-	if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
-		if groupRatioInfo.GroupRatio == 0 || modelPrice == 0 {
-			quota = 0
-			freeModel = true
+// ModelPriceHelperPerCall resolves a task tariff. Adaptor-provided duration
+// is a usage measurement, not a multiplier for a fixed or resolution price.
+func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo, usageSeconds ...int) (types.PriceData, error) {
+	groupRatioInfo := HandleGroupRatio(c, info)
+	seconds, _ := extractSecondsFromRequest(info.Request)
+	resolution := extractResolutionKeyFromRequest(info.Request)
+	if c != nil {
+		if req, err := relaycommon.GetTaskRequest(c); err == nil {
+			if value, ok := extractSecondsFromTaskRequest(req); ok {
+				seconds = value
+			}
+			if resolution == "" {
+				resolution = extractResolutionKeyFromTaskRequest(req)
+			}
 		}
 	}
-
-	priceData := types.PriceData{
-		FreeModel:               freeModel,
-		ModelPrice:              modelPrice,
-		Quota:                   quota,
-		BaseQuota:               quota,
-		GroupRatioInfo:          groupRatioInfo,
-		GroupPriceOverride:      groupPriceOverride,
-		GroupPriceOverrideGroup: groupPriceOverrideGroup,
+	if len(usageSeconds) != 0 && usageSeconds[0] > 0 {
+		seconds = usageSeconds[0]
 	}
-	return priceData, nil
+	if price, found, err := resolveConfiguredModelPrice(info, groupRatioInfo, seconds, resolution); found || err != nil {
+		return price, err
+	}
+
+	modelRatio, configured, matchName := ratio_setting.GetModelRatio(info.OriginModelName)
+	if !configured && !info.UserSetting.AcceptUnsetRatioModel {
+		return types.PriceData{}, missingModelPriceError(matchName)
+	}
+	quota := int(float64(common.PreConsumedQuota) * modelRatio * groupRatioInfo.GroupRatio)
+	return types.PriceData{
+		ModelRatio: modelRatio, BillingType: "per-token", GroupRatioInfo: groupRatioInfo,
+		Quota: quota, BaseQuota: quota,
+		FreeModel: !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume &&
+			(modelRatio == 0 || groupRatioInfo.GroupRatio == 0),
+	}, nil
 }
 
 func ContainPriceOrRatio(modelName string) bool {
-	_, ok := ratio_setting.GetModelPrice(modelName, false)
-	if ok {
-		return true
-	}
-	_, ok, _ = ratio_setting.GetModelRatio(modelName)
-	if ok {
-		return true
-	}
-	return false
+	_, _, ok := ratio_setting.GetModelRatioOrPrice(modelName)
+	return ok
 }

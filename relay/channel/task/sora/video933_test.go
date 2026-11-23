@@ -18,7 +18,7 @@ var video933Models = common.Video933ModelNames()
 func Test933ModelRoutingAndBilling(t *testing.T) {
 	for _, name := range video933Models {
 		t.Run(name, func(t *testing.T) {
-			if !common.IsOpenAIVideoModel(name) || !common.IsDurationOnlyBillingModel(name) || !common.StringsContains(ModelList, name) || !isVideoGenerationsTaskModel(name) {
+			if !common.IsOpenAIVideoModel(name) || !common.StringsContains(ModelList, name) || !isVideoGenerationsTaskModel(name) {
 				t.Fatal("model registration missing")
 			}
 			a := &TaskAdaptor{baseURL: "https://upstream.example"}

@@ -249,14 +249,6 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
 
-		otherRatios := common.FilterOtherRatiosForBillingModel(relayInfo.OriginModelName, relayInfo.PriceData.OtherRatios)
-		relayInfo.PriceData.OtherRatios = otherRatios
-		if len(otherRatios) > 0 {
-			for _, otherRatio := range otherRatios {
-				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
-			}
-		}
-
 		if !ratio.IsZero() && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
 			quotaCalculateDecimal = decimal.NewFromInt(1)
 		}
@@ -271,17 +263,11 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(dFileSearchQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
 		quotaCalculateDecimal = quotaCalculateDecimal.Add(dImageGenerationCallQuota)
-		otherRatios := common.FilterOtherRatiosForBillingModel(relayInfo.OriginModelName, relayInfo.PriceData.OtherRatios)
-		relayInfo.PriceData.OtherRatios = otherRatios
-		if len(otherRatios) > 0 {
-			for _, otherRatio := range otherRatios {
-				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
-			}
-		}
 		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
 	}
 
-	if summary.TotalTokens == 0 {
+	relayInfo.PriceData.OtherRatios = nil
+	if summary.TotalTokens == 0 && !relayInfo.PriceData.UsePrice {
 		summary.Quota = 0
 	} else if !ratio.IsZero() && summary.Quota == 0 {
 		summary.Quota = 1
@@ -328,7 +314,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
 	}
 
-	if summary.TotalTokens == 0 {
+	if summary.TotalTokens == 0 && !relayInfo.PriceData.UsePrice {
 		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
 	} else {

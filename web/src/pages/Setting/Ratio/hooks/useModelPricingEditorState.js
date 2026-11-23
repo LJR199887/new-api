@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import { is933VideoModel } from '../../../../constants/video933';
 import {
   getFa2ImageModelSpec,
   isFa2ImageModel,
@@ -197,9 +196,9 @@ const buildModelState = (name, sourceMaps) => {
     ...EMPTY_MODEL,
     name,
     billingMode:
-      is933VideoModel(name) || Object.keys(durationPrices).length > 0
+      Object.keys(durationPrices).length > 0
         ? 'per-duration'
-        : isFa2ImageModel(name) || hasResolutionPricing
+        : hasResolutionPricing
           ? 'per-resolution'
         : hasValue(fixedPrice)
           ? 'per-request'
@@ -1099,7 +1098,7 @@ export function useModelPricingEditorState({
     const nextModel = {
       ...EMPTY_MODEL,
       name: trimmedName,
-      billingMode: fa2Spec ? 'per-resolution' : EMPTY_MODEL.billingMode,
+      billingMode: EMPTY_MODEL.billingMode,
       resolutionPrices: fa2Spec
         ? Object.fromEntries(
             fa2Spec.resolutions.map((resolution) => [resolution, '']),

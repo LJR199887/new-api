@@ -713,6 +713,25 @@ func TestSettle_NonPerCall_AdaptorAdjustWorks(t *testing.T) {
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 }
 
+func TestSettleConfiguredTokenPricingUsesSubmittedRatios(t *testing.T) {
+	truncate(t)
+	const userID, tokenID, channelID = 33, 33, 33
+	const balance, prepaid, tokenBalance = 10000, 5000, 8000
+	seedUser(t, userID, balance)
+	seedToken(t, tokenID, userID, "sk-configured-token-price", tokenBalance)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, prepaid, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.BillingType = "per-token"
+	task.PrivateData.BillingContext.ModelRatio = 2
+	task.PrivateData.BillingContext.GroupRatio = 1.5
+
+	settleTaskBillingOnComplete(context.Background(), &mockAdaptor{adjustReturn: 1234}, task,
+		&relaycommon.TaskInfo{Status: model.TaskStatusSuccess, TotalTokens: 1000})
+
+	require.Equal(t, 3000, task.Quota)
+	require.Equal(t, balance+2000, getUserQuota(t, userID))
+}
+
 func TestPreConsumeTokenQuota_SkipsUnlimitedToken(t *testing.T) {
 	truncate(t)
 

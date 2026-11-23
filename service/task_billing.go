@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -66,7 +64,10 @@ func buildTaskConsumptionLogContent(info *relaycommon.RelayInfo) string {
 	if info.PriceData.BillingType == "duration" && info.PriceData.BillingSeconds > 0 {
 		return fmt.Sprintf("%s，按时长计费（%d 秒）", logContent, info.PriceData.BillingSeconds)
 	}
-	if common.StringsContains(constant.TaskPricePatches, info.OriginModelName) {
+	if info.PriceData.BillingType == "resolution" {
+		return fmt.Sprintf("%s，按画质计费", logContent)
+	}
+	if info.PriceData.BillingType == "per-request" {
 		return fmt.Sprintf("%s，按次计费", logContent)
 	}
 	if len(info.PriceData.OtherRatios) == 0 {
@@ -276,6 +277,14 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 // 与预扣费的差额进行补扣或退还。支持钱包和订阅计费来源。
 func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTokens int) {
 	if totalTokens <= 0 {
+		return
+	}
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.BillingType != "" {
+		if bc.BillingType != "per-token" {
+			return
+		}
+		actualQuota := int(float64(totalTokens) * bc.ModelRatio * bc.GroupRatio)
+		RecalculateTaskQuota(ctx, task, actualQuota, "token usage at the submitted model and group ratios")
 		return
 	}
 

@@ -7,8 +7,8 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
-	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,158 +53,6 @@ func TestExtractTaskClientRequestIDFromCreativeCenterHeader(t *testing.T) {
 	}
 }
 
-func TestCalcTaskQuotaWithRatiosUsesMappedSecondsPrice(t *testing.T) {
-	original := ratio_setting.ModelPriceBySeconds2JSONString()
-	originalQuotaPerUnit := common.QuotaPerUnit
-	defer func() {
-		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original)
-		common.QuotaPerUnit = originalQuotaPerUnit
-	}()
-
-	common.QuotaPerUnit = 500
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{
-		"grok-imagine-video": {
-			"10": 0.2
-		}
-	}`))
-
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-video",
-		PriceData: types.PriceData{
-			BaseQuota: 100,
-			Quota:     100,
-			GroupRatioInfo: types.GroupRatioInfo{
-				GroupRatio: 1,
-			},
-		},
-	}
-
-	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 10,
-		"size":    1.666667,
-	})
-
-	assert.Equal(t, int(0.2*common.QuotaPerUnit), quota)
-	assert.Equal(t, 1.0, ratios["seconds"])
-	_, hasSize := ratios["size"]
-	assert.False(t, hasSize)
-	assert.Equal(t, 0.2, info.PriceData.ModelPrice)
-}
-
-func TestCalcTaskQuotaWithRatiosUsesPerSecondPrice(t *testing.T) {
-	original := ratio_setting.ModelPriceBySeconds2JSONString()
-	originalQuotaPerUnit := common.QuotaPerUnit
-	defer func() {
-		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original)
-		common.QuotaPerUnit = originalQuotaPerUnit
-	}()
-
-	common.QuotaPerUnit = 500
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{
-		"video-2.5": {
-			"per_second": 0.3
-		}
-	}`))
-
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "video-2.5",
-		PriceData: types.PriceData{
-			BaseQuota: 100,
-			Quota:     100,
-			GroupRatioInfo: types.GroupRatioInfo{
-				GroupRatio: 1,
-			},
-		},
-	}
-
-	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 10,
-	})
-
-	assert.Equal(t, int(3.0*common.QuotaPerUnit), quota)
-	assert.Equal(t, 1.0, ratios["seconds"])
-	assert.InDelta(t, 3.0, info.PriceData.ModelPrice, 1e-12)
-	assert.Equal(t, "duration", info.PriceData.BillingType)
-	assert.Equal(t, 10, info.PriceData.BillingSeconds)
-	assert.InDelta(t, 0.3, info.PriceData.BillingUnitPrice, 1e-12)
-	assert.InDelta(t, 3.0, info.PriceData.BillingTotalPrice, 1e-12)
-}
-
-func TestCalcTaskQuotaWithRatiosUsesGroupMappedSecondsPriceWithoutGroupRatio(t *testing.T) {
-	original := ratio_setting.GroupModelPriceBySeconds2JSONString()
-	originalQuotaPerUnit := common.QuotaPerUnit
-	defer func() {
-		_ = ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(original)
-		common.QuotaPerUnit = originalQuotaPerUnit
-	}()
-
-	common.QuotaPerUnit = 500
-	require.NoError(t, ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(`{
-		"vip": {
-			"grok-imagine-video": {
-				"per_second": 0.007
-			}
-		}
-	}`))
-
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-video",
-		UsingGroup:      "default",
-		UserGroup:       "vip",
-		PriceData: types.PriceData{
-			BaseQuota: 100,
-			Quota:     100,
-			GroupRatioInfo: types.GroupRatioInfo{
-				GroupRatio: 0.5,
-			},
-		},
-	}
-
-	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 10,
-		"size":    1.666667,
-	})
-
-	assert.Equal(t, int(0.07*common.QuotaPerUnit), quota)
-	assert.Equal(t, 1.0, ratios["seconds"])
-	_, hasSize := ratios["size"]
-	assert.False(t, hasSize)
-	assert.Equal(t, 0.07, info.PriceData.ModelPrice)
-	assert.True(t, info.PriceData.GroupPriceOverride)
-	assert.Equal(t, "vip", info.PriceData.GroupPriceOverrideGroup)
-	assert.Equal(t, "duration", info.PriceData.BillingType)
-	assert.Equal(t, 10, info.PriceData.BillingSeconds)
-	assert.InDelta(t, 0.007, info.PriceData.BillingUnitPrice, 1e-12)
-	assert.InDelta(t, 0.07, info.PriceData.BillingTotalPrice, 1e-12)
-}
-
-func TestCalcTaskQuotaWithRatiosFallsBackToLinearSeconds(t *testing.T) {
-	original := ratio_setting.ModelPriceBySeconds2JSONString()
-	defer func() {
-		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original)
-	}()
-
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{}`))
-
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "grok-imagine-video",
-		PriceData: types.PriceData{
-			BaseQuota: 100,
-			Quota:     100,
-		},
-	}
-
-	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 12,
-		"size":    1.5,
-	})
-
-	assert.Equal(t, 1200, quota)
-	assert.Equal(t, 12.0, ratios["seconds"])
-	_, hasSize := ratios["size"]
-	assert.False(t, hasSize)
-}
-
 func TestTaskModel2DtoDoesNotExposeFailureReasonAsResultURL(t *testing.T) {
 	task := &model.Task{
 		TaskID:     "task_failed",
@@ -241,79 +89,95 @@ func TestIsSuccessfulTaskSubmitStatusAcceptsAny2xx(t *testing.T) {
 	assert.False(t, isSuccessfulTaskSubmitStatus(300))
 }
 
-func TestCalc933TaskQuotaWithRatiosUsesPerSecondPrice(t *testing.T) {
-	original := ratio_setting.ModelPriceBySeconds2JSONString()
-	originalQuotaPerUnit := common.QuotaPerUnit
-	defer func() {
-		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(original)
-		common.QuotaPerUnit = originalQuotaPerUnit
-	}()
-
-	common.QuotaPerUnit = 500
-	require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(`{
-		"933-video2.0-mini-480p": {
-			"per_second": 0.3
-		}
-	}`))
-
-	info := &relaycommon.RelayInfo{
-		OriginModelName: "933-video2.0-mini-480p",
-		PriceData: types.PriceData{
-			BaseQuota: 100,
-			Quota:     100,
-			GroupRatioInfo: types.GroupRatioInfo{
-				GroupRatio: 1,
-			},
-		},
-	}
-
-	quota, ratios := calcTaskQuotaWithRatios(nil, info, map[string]float64{
-		"seconds": 5, "resolution": 100, "images": 9,
-	})
-
-	assert.Equal(t, int(1.5*common.QuotaPerUnit), quota)
-	assert.Equal(t, 1.0, ratios["seconds"])
-	assert.InDelta(t, 1.5, info.PriceData.ModelPrice, 1e-12)
-	assert.Equal(t, "duration", info.PriceData.BillingType)
-	assert.Equal(t, 5, info.PriceData.BillingSeconds)
-	assert.InDelta(t, 0.3, info.PriceData.BillingUnitPrice, 1e-12)
-	assert.InDelta(t, 1.5, info.PriceData.BillingTotalPrice, 1e-12)
-}
-
-func Test933AllModelsGroupPricingIgnoresResolutionAndReferenceCounts(t *testing.T) {
-	secondsBackup := ratio_setting.ModelPriceBySeconds2JSONString()
-	groupsBackup := ratio_setting.GroupModelPriceBySeconds2JSONString()
-	resolutionBackup := ratio_setting.ModelPriceByResolution2JSONString()
+func TestTaskPricingFollowsSavedConfiguration(t *testing.T) {
+	fixed := ratio_setting.ModelPrice2JSONString()
+	groupFixed := ratio_setting.GroupModelPrice2JSONString()
+	seconds := ratio_setting.ModelPriceBySeconds2JSONString()
+	groupSeconds := ratio_setting.GroupModelPriceBySeconds2JSONString()
+	resolution := ratio_setting.ModelPriceByResolution2JSONString()
+	groupResolution := ratio_setting.GroupModelPriceByResolution2JSONString()
+	modelRatios := ratio_setting.ModelRatio2JSONString()
 	t.Cleanup(func() {
-		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(secondsBackup)
-		_ = ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(groupsBackup)
-		_ = ratio_setting.UpdateModelPriceByResolutionByJSONString(resolutionBackup)
+		_ = ratio_setting.UpdateModelPriceByJSONString(fixed)
+		_ = ratio_setting.UpdateGroupModelPriceByJSONString(groupFixed)
+		_ = ratio_setting.UpdateModelPriceBySecondsByJSONString(seconds)
+		_ = ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(groupSeconds)
+		_ = ratio_setting.UpdateModelPriceByResolutionByJSONString(resolution)
+		_ = ratio_setting.UpdateGroupModelPriceByResolutionByJSONString(groupResolution)
+		_ = ratio_setting.UpdateModelRatioByJSONString(modelRatios)
 	})
-	for _, name := range common.Video933ModelNames() {
-		data, err := common.Marshal(map[string]any{name: map[string]float64{"per_second": 0.2}})
-		require.NoError(t, err)
-		require.NoError(t, ratio_setting.UpdateModelPriceBySecondsByJSONString(string(data)))
-		data, err = common.Marshal(map[string]any{"vip": map[string]any{name: map[string]float64{"per_second": 0.1}}})
-		require.NoError(t, err)
-		require.NoError(t, ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(string(data)))
-		data, err = common.Marshal(map[string]any{name: map[string]float64{"720p": 99}})
-		require.NoError(t, err)
-		require.NoError(t, ratio_setting.UpdateModelPriceByResolutionByJSONString(string(data)))
-		for seconds := 4; seconds <= 15; seconds++ {
-			for _, group := range []string{"default", "vip"} {
-				c, _ := gin.CreateTestContext(httptest.NewRecorder())
-				c.Set("task_request", relaycommon.TaskSubmitReq{ResolutionName: "720p"})
-				info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: group, PriceData: types.PriceData{BaseQuota: 100, GroupRatioInfo: types.GroupRatioInfo{GroupRatio: 2}}}
-				quota, ratios := calcTaskQuotaWithRatios(c, info, map[string]float64{"seconds": float64(seconds), "resolution": 99, "images": 9, "audio": 3})
-				price := 0.2 * float64(seconds) * 2
-				if group == "vip" {
-					price = 0.1 * float64(seconds)
-				}
-				assert.Equal(t, int(price*common.QuotaPerUnit), quota, name)
-				assert.Len(t, ratios, 1)
-				assert.Equal(t, "duration", info.PriceData.BillingType)
-				assert.Equal(t, seconds, info.PriceData.BillingSeconds)
+	require.NoError(t, ratio_setting.UpdateGroupModelPriceByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateGroupModelPriceBySecondsByJSONString(`{}`))
+	require.NoError(t, ratio_setting.UpdateGroupModelPriceByResolutionByJSONString(`{}`))
+
+	for _, name := range []string{"A-video2.0", "A-video2.0-480p", "933-video2.0", "video2.5", "grok-imagine-video", "kling-v3", "ordinary-async-model"} {
+		t.Run(name, func(t *testing.T) {
+			set := func(update func(string) error, value any) {
+				t.Helper()
+				data, err := common.Marshal(value)
+				require.NoError(t, err)
+				require.NoError(t, update(string(data)))
 			}
-		}
+			check := func(group string, duration int, mode string, wantPrice float64, billedSeconds int) {
+				t.Helper()
+				c, _ := gin.CreateTestContext(httptest.NewRecorder())
+				c.Set("task_request", relaycommon.TaskSubmitReq{Duration: duration, Resolution: common.Video933Resolution(name)})
+				info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default", UserGroup: group}
+				requestSeconds := duration
+				if requestSeconds == 0 {
+					requestSeconds = 5
+				}
+				price, err := helper.ModelPriceHelperPerCall(c, info, requestSeconds)
+				require.NoError(t, err)
+				info.PriceData = price
+				require.True(t, info.TaskPriceFinalizedAtSubmit())
+				require.Equal(t, mode, price.BillingType)
+				require.Equal(t, billedSeconds, price.BillingSeconds)
+				require.InDelta(t, wantPrice, price.ModelPrice, 1e-10)
+				multiplier := price.GroupRatioInfo.GroupRatio
+				if group == "vip" {
+					require.True(t, price.GroupPriceOverride)
+					multiplier = 1
+				}
+				require.Equal(t, int(wantPrice*common.QuotaPerUnit*multiplier), price.Quota)
+				require.Empty(t, price.OtherRatios)
+			}
+
+			clear := map[string]any{}
+			set(ratio_setting.UpdateModelPriceBySecondsByJSONString, clear)
+			set(ratio_setting.UpdateModelPriceByResolutionByJSONString, clear)
+			set(ratio_setting.UpdateModelPriceByJSONString, map[string]float64{name: 2.5})
+			check("default", 4, "per-request", 2.5, 0)
+			check("default", 15, "per-request", 2.5, 0)
+
+			set(ratio_setting.UpdateModelPriceByJSONString, clear)
+			set(ratio_setting.UpdateModelRatioByJSONString, map[string]float64{name: 2})
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			info := &relaycommon.RelayInfo{OriginModelName: name, UsingGroup: "default"}
+			price, err := helper.ModelPriceHelperPerCall(c, info, 15)
+			require.NoError(t, err)
+			info.PriceData = price
+			require.Equal(t, "per-token", price.BillingType)
+			require.Equal(t, 2.0, price.ModelRatio)
+			require.False(t, info.TaskPriceFinalizedAtSubmit())
+
+			set(ratio_setting.UpdateModelPriceByJSONString, clear)
+			set(ratio_setting.UpdateModelPriceBySecondsByJSONString, map[string]any{name: map[string]float64{"per_second": 0.25}})
+			check("default", 4, "duration", 1, 4)
+			check("default", 15, "duration", 3.75, 15)
+			check("default", 0, "duration", 1.25, 5)
+
+			set(ratio_setting.UpdateGroupModelPriceByJSONString, map[string]any{"vip": map[string]float64{name: 2}})
+			check("vip", 15, "per-request", 2, 0)
+			set(ratio_setting.UpdateGroupModelPriceByJSONString, clear)
+
+			set(ratio_setting.UpdateModelPriceBySecondsByJSONString, clear)
+			set(ratio_setting.UpdateModelPriceByResolutionByJSONString, map[string]any{name: map[string]float64{common.Video933Resolution(name): 1.5}})
+			check("default", 15, "resolution", 1.5, 0)
+
+			set(ratio_setting.UpdateModelPriceByResolutionByJSONString, clear)
+			set(ratio_setting.UpdateModelPriceByJSONString, map[string]float64{name: 2.5})
+			check("default", 15, "per-request", 2.5, 0)
+		})
 	}
 }

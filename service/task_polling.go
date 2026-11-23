@@ -893,7 +893,11 @@ func truncateBase64(s string) string {
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) {
 	// 0. 按次计费的任务不做差额结算
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
-		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
+		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 已在提交时确定费用，跳过差额结算", task.TaskID))
+		return
+	}
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.BillingType == "per-token" {
+		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens)
 		return
 	}
 	// 1. 优先让 adaptor 决定最终额度

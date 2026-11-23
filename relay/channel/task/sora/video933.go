@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 const video933ImageMaxBytes = 20 << 20
@@ -108,19 +111,13 @@ func normalize933VideoRequest(body map[string]any, modelName string) error {
 		duration = seconds
 	}
 	if duration == "" {
-		duration = "5"
+		duration = strconv.Itoa(common.Video933DefaultDuration)
 	}
 	if err := validateGenerationDuration(modelName, duration, "", 4, 15); err != nil {
 		return err
 	}
 	metadata, _ := body["metadata"].(map[string]any)
-	resolution := "720p"
-	normalizedModelName := strings.ToLower(strings.TrimSpace(modelName))
-	if strings.HasSuffix(normalizedModelName, "-480p") {
-		resolution = "480p"
-	} else if strings.HasSuffix(normalizedModelName, "-1080p") {
-		resolution = "1080p"
-	}
+	resolution := common.Video933Resolution(modelName)
 	for _, raw := range []any{body["resolution"], body["resolution_name"], metadata["resolution"]} {
 		if s := stringifyBodyValue(raw); s != "" && s != resolution {
 			return fmt.Errorf("unsupported resolution: %s requires %s", modelName, resolution)

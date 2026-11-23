@@ -154,46 +154,6 @@ func initConstantEnv() {
 	// 视频轮询遇到泛化 404 Not Found 时的宽限时间（分钟）。0 表示立即失败。
 	constant.TaskNotFoundGraceMinutes = GetEnvOrDefault("TASK_NOT_FOUND_GRACE_MINUTES", 10)
 
-	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
-	if soraPatchStr != "" {
-		var taskPricePatches []string
-		soraPatches := strings.Split(soraPatchStr, ",")
-		for _, patch := range soraPatches {
-			trimmedPatch := strings.TrimSpace(patch)
-			if trimmedPatch != "" {
-				taskPricePatches = append(taskPricePatches, trimmedPatch)
-			}
-		}
-		constant.TaskPricePatches = taskPricePatches
-	}
-	for _, modelName := range []string{
-		"minimax-h3",
-		"minimax-h3-480p",
-		"minimax-h3-768p",
-		"minimax-h3-2k",
-		"minimax-h3-4k",
-		"wan3.0-480p",
-		"wan3.0-720p",
-		"wan3.0-1080p",
-		"ko3",
-		"kling-o3",
-		"kling-video-o-3",
-		"kling-v3",
-		"seedance-2.0",
-		"seedance-2.0-fast",
-		"video-2.0",
-		"video-2.0-fast",
-		"video-2.0-mini",
-		"video-2.0-480p",
-		"video-2.0-fast-480p",
-		"video-2.0-mini-480p",
-	} {
-		appendTaskPricePatchDefault(modelName)
-	}
-	for _, modelName := range Video25ModelNames() {
-		appendTaskPricePatchDefault(modelName)
-	}
-
 	// Initialize trusted redirect domains for URL validation
 	trustedDomainsStr := GetEnvOrDefaultString("TRUSTED_REDIRECT_DOMAINS", "")
 	var trustedDomains []string
@@ -206,10 +166,4 @@ func initConstantEnv() {
 		}
 	}
 	constant.TrustedRedirectDomains = trustedDomains
-}
-
-func appendTaskPricePatchDefault(modelName string) {
-	if !StringsContains(constant.TaskPricePatches, modelName) {
-		constant.TaskPricePatches = append(constant.TaskPricePatches, modelName)
-	}
 }
