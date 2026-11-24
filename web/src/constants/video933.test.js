@@ -30,3 +30,12 @@ test('video2.0 and A-video2.0 variants inherit the 933 options without first/las
   assert.equal(is933VideoModel('video-2.0'), false);
   assert.equal(is933VideoModel('933-video2.0-fast'), false);
 });
+
+test('Creative Center Video 2.0 fast and mini models keep the base 720p parameters', () => {
+  const base = build933VideoParameters({ model: 'video2.0' });
+  assert.deepEqual(base, { duration: 5, aspect_ratio: '16:9', resolution: '720p' });
+  for (const model of ['video2.0-fast', 'video2.0-mini', 'A-video2.0-mini']) {
+    assert.ok(is933VideoModel(model));
+    assert.deepEqual(build933VideoParameters({ model }), base);
+  }
+});

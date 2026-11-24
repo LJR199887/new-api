@@ -63,6 +63,7 @@ import { buildCreativeUpstreamPayload } from './creativeRequestPayload';
 import { planCreativeVideoTaskRefresh } from './creativeVideoPolling';
 import {
   VIDEO_25_MODELS,
+  getVideo25ReferenceLimits,
   video25Resolution,
   video25SupportsFirstLast,
 } from '../../constants/video25';
@@ -1475,11 +1476,7 @@ const getCreativeCenterImageUploadLimit = (modelName, referenceMode = '') => {
         : null;
   }
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
-    return referenceMode === 'first_last' && video25SupportsFirstLast(normalizedModelName)
-      ? 2
-      : ['multi_image', 'multimodal'].includes(referenceMode)
-        ? 30
-        : null;
+    return getVideo25ReferenceLimits(normalizedModelName, referenceMode).images;
   }
   if (SEEDANCE_VIDEO_MODELS.has(normalizedModelName)) {
     return SEEDANCE_REFERENCE_MODE_IMAGE_LIMITS[referenceMode] ?? null;
@@ -1493,7 +1490,7 @@ const getCreativeCenterVideoReferenceLimit = (modelName, referenceMode = '') => 
     return null;
   }
   if (VIDEO_25_MODELS.has(normalizedModelName)) {
-    return ['video_reference', 'multimodal'].includes(referenceMode) ? 10 : null;
+    return getVideo25ReferenceLimits(normalizedModelName, referenceMode).videos;
   }
   if (MINIMAX_H3_VARIANT_MODELS.has(normalizedModelName) || is933VideoModel(normalizedModelName)) {
     return ['video_reference', 'multimodal'].includes(referenceMode) ? 3 : null;
@@ -1509,7 +1506,7 @@ const getCreativeCenterAudioReferencePolicy = (modelName, referenceMode = '') =>
     return null;
   }
   if (VIDEO_25_MODELS.has(modelName)) {
-    return { maxCount: 10 };
+    return { maxCount: getVideo25ReferenceLimits(modelName, referenceMode).audios };
   }
   if (is933VideoModel(modelName)) {
     return { maxCount: 3, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 };
@@ -8368,34 +8365,18 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 payload.image_urls = currentUploadedImageUrls.slice(0, 2);
               }
             } else if (isSeedanceVideoModel) {
-              const seedanceImageLimit = MINIMAX_H3_VARIANT_MODELS.has(currentModelName)
-                ? 9
-                : WAN30_MODELS.has(currentModelName)
-                  ? 10
-                  : VIDEO_25_MODELS.has(currentModelName)
-                    ? 30
-                    : 4;
-              const seedanceVideoLimit = WAN30_MODELS.has(currentModelName)
-                ? 5
-                : VIDEO_25_MODELS.has(currentModelName)
-                  ? 10
-                  : 3;
               const seedanceImageUrls = currentUploadedImageUrls.slice(
                 0,
-                seedanceImageLimit,
+                currentImageUploadLimit ?? 0,
               );
               const seedanceVideoUrls = currentReferenceVideoUrls.slice(
                 0,
-                seedanceVideoLimit,
+                currentVideoReferenceLimit ?? 0,
               );
-              const seedanceVideoItems = currentReferenceVideoItems.slice(
+              const seedanceAudioUrls = currentReferenceAudioUrls.slice(
                 0,
-                seedanceVideoLimit,
+                currentAudioReferencePolicy?.maxCount ?? 0,
               );
-              const seedanceAudioLimit = VIDEO_25_MODELS.has(currentModelName)
-                ? 10
-                : WAN30_MODELS.has(currentModelName) ? 5 : 3;
-              const seedanceAudioItems = currentReferenceAudioItems.slice(0, seedanceAudioLimit);
               if (currentParamsSnapshot.referenceMode === 'first_last') {
                 if (seedanceImageUrls[0]) {
                   payload.start_image_url = seedanceImageUrls[0];
@@ -8411,7 +8392,7 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                 }
               } else if (currentParamsSnapshot.referenceMode === 'video_reference') {
                 if (seedanceVideoUrls.length > 1) {
-                  payload.video_reference = seedanceVideoItems.map(({ url }) => ({ url }));
+                  payload.video_reference = seedanceVideoUrls.map((url) => ({ url }));
                 } else if (seedanceVideoUrls[0]) {
                   payload.video_url = seedanceVideoUrls[0];
                 }
@@ -8422,12 +8403,12 @@ const getCreativeVideoCardObjectFitClass = (record) =>
                   payload.image_url = seedanceImageUrls[0];
                 }
                 if (seedanceVideoUrls.length > 1) {
-                  payload.video_reference = seedanceVideoItems.map(({ url }) => ({ url }));
+                  payload.video_reference = seedanceVideoUrls.map((url) => ({ url }));
                 } else if (seedanceVideoUrls[0]) {
                   payload.video_url = seedanceVideoUrls[0];
                 }
-                if (seedanceAudioItems.length) {
-                  payload.audio_reference = seedanceAudioItems.map(({ url }) => ({ url }));
+                if (seedanceAudioUrls.length) {
+                  payload.audio_reference = seedanceAudioUrls.map((url) => ({ url }));
                 }
               }
             } else if (isAdobeSoraModel && currentUploadedImageUrls[0]) {
